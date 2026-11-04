@@ -192,6 +192,8 @@ unsigned char* materialFieldBytes(void* parameters, unsigned int retail)
     {0x138, offsetof(RaMaterialParameters, texUnpack)},
     {0x140, offsetof(RaMaterialParameters, normalUnpack)}
     };
+    if (retail < 0x08)                  // the block's own vptr and descriptor words
+        return static_cast<unsigned char*>(parameters) + retail * sizeof(void*) / 4;
     unsigned int index = sizeof(members) / sizeof(members[0]);
     while (index > 1 && members[index - 1].retail > retail)
         --index;

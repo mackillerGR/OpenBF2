@@ -16,6 +16,7 @@
 #include "../RendDX9/RendDX9Base.h"        // resourceManagerIsReady
 #include "SkinnedMesh.h"                   // the 0x598 instance this factory builds
 #include "SkinnedMeshTemplate.h"
+#include "SkinnedMeshMaterialLayout.h"
 
 #include <new>
 #include <cstring>
@@ -275,7 +276,7 @@ void skinnedMeshMatrixVectorResize(vc71::vector_layout& v, unsigned int count)
     vectorResizeRaw(v, count, 68, prototype);
 }
 
-enum { kSkinnedMeshMaterialStride = 456 };   // the record skinnedMeshMaterialConstruct builds
+enum { kSkinnedMeshMaterialStride = kSkinnedMaterialRecordBytes };   // the record skinnedMeshMaterialConstruct builds
 
 
 // The shrink/grow body all three share, and the one `skinnedMeshReserveLightRecords` already uses.
@@ -369,31 +370,31 @@ void skinnedMeshMaterialCommit(void* record, const void* scratch)
     const unsigned char* const a = static_cast<const unsigned char*>(scratch);
 
     // +0x04 - the texture vector. 4-byte elements.
-    vectorAssignRaw(*reinterpret_cast<vc71::vector_layout*>(d + 0x04),
-                    *reinterpret_cast<const vc71::vector_layout*>(a + 0x04), 4);
+    vectorAssignRaw(*reinterpret_cast<vc71::vector_layout*>(d + sk(0x04)),
+                    *reinterpret_cast<const vc71::vector_layout*>(a + sk(0x04)), sizeof(void*));
 
     // +0x14 .. +0x24 - five dwords, four of which the draws read back as baseVertex, startIndex,
     // primitive count and vertex count.
-    std::memcpy(d + 0x14, a + 0x14, 0x28 - 0x14);
+    std::memcpy(d + sk(0x14), a + sk(0x14), sk(0x28) - sk(0x14));
 
     // +0x28 - the vertex-element vector. Also 4-byte elements (pointers to RaVertexElementDesc).
-    vectorAssignRaw(*reinterpret_cast<vc71::vector_layout*>(d + 0x28),
-                    *reinterpret_cast<const vc71::vector_layout*>(a + 0x28), 4);
+    vectorAssignRaw(*reinterpret_cast<vc71::vector_layout*>(d + sk(0x28)),
+                    *reinterpret_cast<const vc71::vector_layout*>(a + sk(0x28)), sizeof(void*));
 
-    ::dice::hfe::dx9rend::Ra::raMaterialParametersAssign(d + 0x38, a + 0x38);
+    ::dice::hfe::dx9rend::Ra::raMaterialParametersAssign(d + sk(0x38), a + sk(0x38));
 
-    std::memcpy(d + 0x188, a + 0x188, 5);                                  // the five flag bytes
-    std::memcpy(d + 0x190, a + 0x190, 0x1A0 - 0x190);
+    std::memcpy(d + sk(0x188), a + sk(0x188), 5);                                  // the five flag bytes
+    std::memcpy(d + sk(0x190), a + sk(0x190), sk(0x1A0) - sk(0x190));
 
-    *reinterpret_cast<vc71::string*>(d + 0x1A0) =
-        *reinterpret_cast<const vc71::string*>(a + 0x1A0);
+    *reinterpret_cast<vc71::string*>(d + sk(0x1A0)) =
+        *reinterpret_cast<const vc71::string*>(a + sk(0x1A0));
 
     // The self-assignment guard compares the two map addresses, not the objects.
-    if (d + 0x1BC != a + 0x1BC)
+    if (d + sk(0x1BC) != a + sk(0x1BC))
     {
-        materialMapClear(*reinterpret_cast<vc71::map_layout*>(d + 0x1BC));
-        materialMapCopy(*reinterpret_cast<vc71::map_layout*>(d + 0x1BC),
-                        *reinterpret_cast<const vc71::map_layout*>(a + 0x1BC));
+        materialMapClear(*reinterpret_cast<vc71::map_layout*>(d + sk(0x1BC)));
+        materialMapCopy(*reinterpret_cast<vc71::map_layout*>(d + sk(0x1BC)),
+                        *reinterpret_cast<const vc71::map_layout*>(a + sk(0x1BC)));
     }
 }
 
@@ -401,25 +402,25 @@ void skinnedMeshMaterialDestroy(void* scratch)
 {
     unsigned char* const m = static_cast<unsigned char*>(scratch);
 
-    vc71::map_layout& map = *reinterpret_cast<vc71::map_layout*>(m + 0x1BC);
+    vc71::map_layout& map = *reinterpret_cast<vc71::map_layout*>(m + sk(0x1BC));
     materialMapClear(map);
     if (map.head)
         ::renddx9abi::engineFree(map.head);
     map.head = 0;
     map.size = 0;
 
-    reinterpret_cast<vc71::string*>(m + 0x1A0)->~string();
+    reinterpret_cast<vc71::string*>(m + sk(0x1A0))->~string();
 
-    ::dice::hfe::dx9rend::Ra::raMaterialParametersDestroy(m + 0x38);
+    ::dice::hfe::dx9rend::Ra::raMaterialParametersDestroy(m + sk(0x38));
 
-    vc71::vector_layout& elements = *reinterpret_cast<vc71::vector_layout*>(m + 0x28);
+    vc71::vector_layout& elements = *reinterpret_cast<vc71::vector_layout*>(m + sk(0x28));
     if (elements.first)
         ::renddx9abi::engineFree(elements.first);
     elements.first = 0;
     elements.last  = 0;
     elements.end   = 0;
 
-    vc71::vector_layout& textures = *reinterpret_cast<vc71::vector_layout*>(m + 0x04);
+    vc71::vector_layout& textures = *reinterpret_cast<vc71::vector_layout*>(m + sk(0x04));
     if (textures.first)
         ::renddx9abi::engineFree(textures.first);
     textures.first = 0;
@@ -505,7 +506,7 @@ bool skinnedMeshMaterialApplyStreams(void* material, void* shaderState)
     namespace Ra = ::dice::hfe::dx9rend::Ra;
     unsigned char* const m = static_cast<unsigned char*>(material);
     Ra::RaShader* const shader = static_cast<Ra::RaShader*>(shaderState);
-    vc71::map_layout& declarations = *reinterpret_cast<vc71::map_layout*>(m + 0x1BC);
+    vc71::map_layout& declarations = *reinterpret_cast<vc71::map_layout*>(m + sk(0x1BC));
     const unsigned int key = static_cast<unsigned int>(shader->m_buildSerial);  // +0x174
 
     vc71::map_node_u32* node = vc71::mapFindU32(declarations, key);
@@ -517,7 +518,7 @@ bool skinnedMeshMaterialApplyStreams(void* material, void* shaderState)
         Ra::raDeclarationBuilderConstruct(builder);
 
         const vc71::vector_layout& elements =
-            *reinterpret_cast<const vc71::vector_layout*>(m + 0x28);
+            *reinterpret_cast<const vc71::vector_layout*>(m + sk(0x28));
         if (Ra::raStreamRequirementsConsume(required, elements))
             Ra::raDeclarationBuilderAddStream(builder, elements);
 
@@ -545,12 +546,12 @@ bool skinnedMeshMaterialApplyStreams(void* material, void* shaderState)
     // The bind, in the shipped order: stream 0 from +0x194 at the +0x198 stride, the declaration,
     // then the index buffer at +0x19C.
     ::dice::hfe::dx9rend::stateManagerSetStreamSource(
-        0, *reinterpret_cast<IDirect3DVertexBuffer9**>(m + 0x194), 0,
-        *reinterpret_cast<unsigned int*>(m + 0x198));                           // +0x58
+        0, *reinterpret_cast<IDirect3DVertexBuffer9**>(m + sk(0x194)), 0,
+        *reinterpret_cast<unsigned int*>(m + sk(0x198)));                           // +0x58
     ::dice::hfe::dx9rend::stateManagerSetVertexDeclaration(
         *reinterpret_cast<IDirect3DVertexDeclaration9**>(node->value));         // +0x5C
     ::dice::hfe::dx9rend::stateManagerSetIndices(
-        *reinterpret_cast<IDirect3DIndexBuffer9**>(m + 0x19C));                 // +0x54
+        *reinterpret_cast<IDirect3DIndexBuffer9**>(m + sk(0x19C)));                 // +0x54
     return true;
 }
 
@@ -600,29 +601,29 @@ void skinnedMeshMaterialConstruct(void* storage, bool hasTangent)
     unsigned char* const m = static_cast<unsigned char*>(storage);
 
     *reinterpret_cast<void* const**>(m) = kSkinnedMeshMaterialVtable;
-    std::memset(m + 0x08, 0, 0x28 - 0x08);             // +0x08 .. +0x24
+    std::memset(m + sk(0x08), 0, sk(0x28) - sk(0x08));             // +0x08 .. +0x24
 
     // +0x28: the vertex-element vector. Allocator word untouched; first/last/end zeroed.
-    vc71::vector_layout& elements = *reinterpret_cast<vc71::vector_layout*>(m + 0x28);
+    vc71::vector_layout& elements = *reinterpret_cast<vc71::vector_layout*>(m + sk(0x28));
     elements.first = 0;
     elements.last  = 0;
     elements.end   = 0;
 
-    ::dice::hfe::dx9rend::Ra::raMaterialParametersConstruct(m + 0x38);
+    ::dice::hfe::dx9rend::Ra::raMaterialParametersConstruct(m + sk(0x38));
 
-    m[0x188] = 0;
-    m[0x189] = 0;
-    m[0x18A] = 0;
-    m[0x18B] = 0;
-    m[0x18C] = 0;
+    m[sk(0x188)] = 0;
+    m[sk(0x189)] = 0;
+    m[sk(0x18A)] = 0;
+    m[sk(0x18B)] = 0;
+    m[sk(0x18C)] = 0;
 
-    *reinterpret_cast<unsigned int*>(m + 0x190) = 4;   // four, not zero
-    *reinterpret_cast<unsigned int*>(m + 0x194) = 0;
-    *reinterpret_cast<unsigned int*>(m + 0x198) = 0;
-    *reinterpret_cast<unsigned int*>(m + 0x19C) = 0;
+    *reinterpret_cast<unsigned int*>(m + sk(0x190)) = 4;   // four, not zero
+    *reinterpret_cast<unsigned int*>(m + sk(0x194)) = 0;
+    *reinterpret_cast<unsigned int*>(m + sk(0x198)) = 0;
+    *reinterpret_cast<unsigned int*>(m + sk(0x19C)) = 0;
 
-    new (m + 0x1A0) vc71::string();                    // +0x1A0
-    reinterpret_cast<vc71::map_layout*>(m + 0x1BC)->construct(sizeof(vc71::map_node_u32));
+    new (m + sk(0x1A0)) vc71::string();                    // +0x1A0
+    vc71::mapConstructU32(*reinterpret_cast<vc71::map_layout*>(m + sk(0x1BC)));
 
     pointerVectorPush(elements, &::dice::hfe::dx9rend::Ra::g_desc_1023EF04);   // Vtx_Position
     pointerVectorPush(elements, &::dice::hfe::dx9rend::Ra::g_desc_1023EF7C);   // Vtx_Normal
@@ -716,7 +717,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                 unsigned char scratchMaterial[kSkinnedMeshMaterialStride];
                 skinnedMeshMaterialConstruct(scratchMaterial, true);
                 vc71::vector_layout& textures =
-                    *reinterpret_cast<vc71::vector_layout*>(scratchMaterial + 0x04);
+                    *reinterpret_cast<vc71::vector_layout*>(scratchMaterial + sk(0x04));
 
                 unsigned int skipBytes = 0;
                 stream->read(&skipBytes, 4);
@@ -803,19 +804,19 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                 (void)hasRealSecondTexture;
 
                 // Read draw-range values directly into the material record.
-                stream->read(scratchMaterial + 0x18, 4);          // baseVertex
-                stream->read(scratchMaterial + 0x1C, 4);          // startIndex
+                stream->read(scratchMaterial + sk(0x18), 4);          // baseVertex
+                stream->read(scratchMaterial + sk(0x1C), 4);          // startIndex
 
                 unsigned int indexCount = 0;
                 stream->read(&indexCount, 4);
 
                 // Derive triangle-list/strip counts; other primitive types keep the initialized zero.
                 if (m_primitiveType == 4)                         // D3DPT_TRIANGLELIST
-                    *reinterpret_cast<unsigned int*>(scratchMaterial + 0x20) = indexCount / 3u;
+                    *reinterpret_cast<unsigned int*>(scratchMaterial + sk(0x20)) = indexCount / 3u;
                 else if (m_primitiveType == 5)                    // D3DPT_TRIANGLESTRIP
-                    *reinterpret_cast<unsigned int*>(scratchMaterial + 0x20) = indexCount - 2u;
+                    *reinterpret_cast<unsigned int*>(scratchMaterial + sk(0x20)) = indexCount - 2u;
 
-                stream->read(scratchMaterial + 0x24, 4);          // vertex count
+                stream->read(scratchMaterial + sk(0x24), 4);          // vertex count
                 stream->skip(4);
                 stream->skip(4);
 
@@ -834,7 +835,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                     if (skippedIndices)
                     {
                         unsigned int& startIndex =
-                            *reinterpret_cast<unsigned int*>(record + 0x1C);
+                            *reinterpret_cast<unsigned int*>(record + sk(0x1C));
                         const unsigned int previous = startIndex;
                         startIndex = previous - skippedIndices;
                         std::memmove(m_indexData + startIndex, m_indexData + previous,
@@ -843,11 +844,11 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                     if (skippedVertices)
                     {
                         unsigned int& baseVertex =
-                            *reinterpret_cast<unsigned int*>(record + 0x18);
+                            *reinterpret_cast<unsigned int*>(record + sk(0x18));
                         const unsigned int previous = baseVertex;
                         baseVertex = previous - skippedVertices;
                         const unsigned int vertexCount =
-                            *reinterpret_cast<const unsigned int*>(record + 0x24);
+                            *reinterpret_cast<const unsigned int*>(record + sk(0x24));
                         std::memmove(
                             static_cast<char*>(m_vertexData) + baseVertex * m_vertexStride,
                             static_cast<char*>(m_vertexData) + previous * m_vertexStride,
@@ -878,7 +879,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                             ::dice::hfe::dx9rend::textureReleaseRef(doomed);
                         }
                     }
-                    skippedVertices += *reinterpret_cast<const unsigned int*>(record + 0x24);
+                    skippedVertices += *reinterpret_cast<const unsigned int*>(record + sk(0x24));
                     skippedIndices  += indexCount;
                 }
 
@@ -1184,14 +1185,14 @@ int SkinnedMeshTemplate::getVertexCount(int geom, int lod, int material)
         const unsigned char* record =
             reinterpret_cast<const unsigned char*>(lodCompanion->first);
         const int materials =
-            record ? static_cast<int>((lodCompanion->last - lodCompanion->first) / 456) : 0;
-        for (int m = 0; m < materials; ++m, record += 456)
-            count += *reinterpret_cast<const int*>(record + 36);
+            record ? static_cast<int>((lodCompanion->last - lodCompanion->first) / kSkinnedMaterialRecordBytes) : 0;
+        for (int m = 0; m < materials; ++m, record += kSkinnedMaterialRecordBytes)
+            count += *reinterpret_cast<const int*>(record + sk(36));
         return count;
     }
 
     return *reinterpret_cast<const int*>(
-        reinterpret_cast<const unsigned char*>(lodCompanion->first) + 456 * material + 36);
+        reinterpret_cast<const unsigned char*>(lodCompanion->first) + kSkinnedMaterialRecordBytes * material + 36);
 }
 
 // +0xA0, how many 456-byte material records this lod has, summed over every geom.
@@ -1216,7 +1217,7 @@ int SkinnedMeshTemplate::getMaterialCount(unsigned int lod)
             reinterpret_cast<const vc71::vector_layout*>(
                 reinterpret_cast<const vc71::vector_layout*>(m_vector0CC.first)[geom].first) + lod;
         if (lodCompanion->first)
-            total += static_cast<int>((lodCompanion->last - lodCompanion->first) / 456);
+            total += static_cast<int>((lodCompanion->last - lodCompanion->first) / kSkinnedMaterialRecordBytes);
     }
     return total;
 }
@@ -1247,9 +1248,9 @@ int SkinnedMeshTemplate::getLodPrimitiveCount(unsigned int lod)
             continue;
 
         const int materials =
-            static_cast<int>((lodCompanion->last - lodCompanion->first) / 456);
+            static_cast<int>((lodCompanion->last - lodCompanion->first) / kSkinnedMaterialRecordBytes);
         unsigned char* record = reinterpret_cast<unsigned char*>(lodCompanion->first);
-        for (int m = 0; m < materials; ++m, record += 456)
+        for (int m = 0; m < materials; ++m, record += kSkinnedMaterialRecordBytes)
         {
             typedef int(__fastcall * Fn)(void* BF2_EDX_PARAM);
             total += reinterpret_cast<Fn>(
@@ -1275,7 +1276,7 @@ namespace {
 // Releases the previous texture through a temporary, then replaces the slot.
 void skinnedMeshAssignTextureSlot(unsigned char* record, unsigned int slot, void* texture)
 {
-    void** const held = reinterpret_cast<void**>(record + slot);
+    void** const held = reinterpret_cast<void**>(record + sk(slot));
     if (*held == texture)
         return;                                                // identity guard, as shipped
     ::dice::hfe::dx9rend::EngineTexture* doomed =
@@ -1325,30 +1326,30 @@ void SkinnedMeshTemplate::finalizeMaterials()
                 continue;
 
             const int materials =
-                static_cast<int>((lodCompanion->last - lodCompanion->first) / 456);
+                static_cast<int>((lodCompanion->last - lodCompanion->first) / kSkinnedMaterialRecordBytes);
             unsigned char* record = reinterpret_cast<unsigned char*>(lodCompanion->first);
 
-            for (int m = 0; m < materials; ++m, record += 456)
+            for (int m = 0; m < materials; ++m, record += kSkinnedMaterialRecordBytes)
             {
-                *reinterpret_cast<unsigned int*>(record + 400) = m_primitiveType;          // +0xAC
-                *reinterpret_cast<unsigned int*>(record + 404) =
+                *reinterpret_cast<unsigned int*>(record + sk(400)) = m_primitiveType;          // +0xAC
+                *reinterpret_cast<unsigned int*>(record + sk(404)) =
                     bufferHandleAt(m_vertexBuffer, 8);
-                *reinterpret_cast<unsigned int*>(record + 408) =
+                *reinterpret_cast<unsigned int*>(record + sk(408)) =
                     bufferHandleAt(m_vertexBuffer, 40);
-                *reinterpret_cast<unsigned int*>(record + 412) =
+                *reinterpret_cast<unsigned int*>(record + sk(412)) =
                     bufferHandleAt(m_indexBuffer, 8);
-                *reinterpret_cast<float*>(record + 188) = 64.0f;
+                *reinterpret_cast<float*>(record + sk(188)) = 64.0f;
 
                 if (record[394])
                 {
                     record[84] = 1;
-                    *reinterpret_cast<int*>(record + 220) = 127;
-                    *reinterpret_cast<int*>(record + 212) = 1;
+                    *reinterpret_cast<int*>(record + sk(220)) = 127;
+                    *reinterpret_cast<int*>(record + sk(212)) = 1;
                 }
 
                 // The textures come from the record's OWN texture vector: +0x08 is its `first`,
-                // so `(record + 8)` is texture 0 and `*(*(record + 8) + 4)` is texture 1.
-                void** const textures = *reinterpret_cast<void***>(record + 8);
+                // so `(record + sk(8))` is texture 0 and `*(*(record + sk(8)) + 4)` is texture 1.
+                void** const textures = *reinterpret_cast<void***>(record + sk(8));
                 if (textures)
                 {
                     skinnedMeshAssignTextureSlot(record, 244, textures[0]);

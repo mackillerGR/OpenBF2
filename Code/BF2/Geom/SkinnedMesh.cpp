@@ -6,6 +6,7 @@
 #ifdef BF2_IMAGE_RENDDX9
 
 #include "SkinnedMesh.h"
+#include "SkinnedMeshMaterialLayout.h"
 
 #include "../../RendDX9Abi/BfMemory.h"        // engineAlloc - the 104 bone matrices
 #include "../../RendDX9Abi/Frontier.h"
@@ -96,7 +97,7 @@ enum
 {
     kLodRecordStride       = 132,   // the records inside a geom's nested vector
     kCompanionStride       =  16,   // the records inside the companion's nested vector
-    kMaterialStride        = 456,   // what +0x58 counts out of m_lodMaterials
+    kMaterialStride        = kSkinnedMaterialRecordBytes,   // what +0x58 counts out of m_lodMaterials
     kPartRecordStride      =  68,   // the records +0x58 gathers ids from
     kLodBoundsOffset       =  28,   // MeshBounds inside the 132-byte lod record: the radius
     kLodBoundsDirtyOffset  =  32,   // and its "needs finalising" byte
@@ -1528,17 +1529,17 @@ void SkinnedMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsign
         if (materialIsAlpha)
         {
             shaderParameterSetValue(state->texLayer0,
-                                    **reinterpret_cast<void* const* const*>(material + 8), 0);
+                                    **reinterpret_cast<void* const* const*>(material + sk(8)), 0);
         }
 
-        const unsigned int primitives = *reinterpret_cast<const unsigned int*>(material + 0x20);
+        const unsigned int primitives = *reinterpret_cast<const unsigned int*>(material + sk(0x20));
         dx9rend::rendererDrawIndexedPrimitive(
             primitives,
             t->m_primitiveType,                                          // template +0xAC
-            *reinterpret_cast<const int*>(material + 0x18),
+            *reinterpret_cast<const int*>(material + sk(0x18)),
             0,
-            *reinterpret_cast<const unsigned int*>(material + 0x24),
-            *reinterpret_cast<const unsigned int*>(material + 0x1C));
+            *reinterpret_cast<const unsigned int*>(material + sk(0x24)),
+            *reinterpret_cast<const unsigned int*>(material + sk(0x1C)));
 
         skinnedMeshCountShadowPrimitives(primitives);                    // renderer stats +0x23C
     }
@@ -1941,7 +1942,7 @@ void SkinnedMesh::draw(void*, void*, void*)
         unsigned int bits = shaderMaskTable()[index] & mask;
         if ((bits & 0x1Bu) == 0)
             bits |= 1u;
-        *reinterpret_cast<void**>(material + 0x184) = findShaderForBits(bits);
+        *reinterpret_cast<void**>(material + sk(0x184)) = findShaderForBits(bits);
 
         // The shadow matrices, copied out of the +0x33C object - but only while this instance is a
         // shadow caster on this frame, the same +0xA8/+0xB0 pair buildShaderDefineMask consults.
@@ -1976,10 +1977,10 @@ void SkinnedMesh::draw(void*, void*, void*)
 
         dx9rend::RenderQueueEntry* const entry = dx9rend::renderEntryPoolAcquire();
         entry->material           = material;
-        entry->materialParameters = material + 0x38;
+        entry->materialParameters = material + sk(0x38);
         entry->objectParameters   = ra;
         *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(entry) + 0x138) =
-            *reinterpret_cast<void**>(material + 0x184);
+            *reinterpret_cast<void**>(material + sk(0x184));
         // +0x4C / +0x50 - this material's bone palette and its count. This is where the skinning
         // reaches the shader, and it is why the palettes are per-material rather than per-instance.
         *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(entry) + 0x4C) =
@@ -2023,7 +2024,7 @@ void SkinnedMesh::draw(void*, void*, void*)
         {
             dx9rend::RenderQueueEntry* const lit = dx9rend::renderEntryPoolAcquire();
             lit->material           = material;
-            lit->materialParameters = material + 0x38;
+            lit->materialParameters = material + sk(0x38);
             lit->objectParameters   = ra;
 
             // THE RE-base IS TWO steps AND THE first ONE IS dead: `bits & 0xFFFFFCBF` is computed

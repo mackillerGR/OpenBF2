@@ -623,6 +623,21 @@ struct map_node_u32
 
 static_assert(sizeof(map_node_u32) == 0x28, "sub_100FFB50 allocates 0x28");
 
+// Builds the self-linked nil header of a map of these nodes.
+inline void mapConstructU32(map_layout& m)
+{
+    map_node_u32* const node = static_cast<map_node_u32*>(
+        ::renddx9abi::engineAlloc(sizeof(map_node_u32)));
+    for (unsigned i = 0; i < sizeof(map_node_u32); ++i)
+        reinterpret_cast<unsigned char*>(node)[i] = 0;
+    node->left = node->parent = node->right = node;
+    node->color = 1;
+    node->isNil = 1;
+    m.comp = 0;
+    m.head = reinterpret_cast<map_node*>(node);
+    m.size = 0;
+}
+
 // The lookup half of sub_10102500, and the whole of the `find`-shaped sub_101000E0: returns the
 // node for `key`, or null. The shipped walk descends on `>=` against an unsigned key; the
 // comparison is unsigned here for the same reason.

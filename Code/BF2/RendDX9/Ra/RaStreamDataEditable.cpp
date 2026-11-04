@@ -69,7 +69,7 @@ RaStreamDataEditable::RaStreamDataEditable(unsigned int vertexCapacity, unsigned
     m_vertexCount = 0;
     m_vertexCapacity = vertexCapacity;
     m_indexCapacity = indexCapacity;
-    m_declarations.construct(sizeof(vc71::map_node_u32));                // sub_100493C0's head node
+    vc71::mapConstructU32(m_declarations);                // sub_100493C0's head node
     // sub_10049B80 - m_elements.insert(end, elements.begin(), elements.end()).
     for (const char* p = elements.first; p != elements.last; p += 4)
         vc71::vectorPushBackIn(m_elements, 4u, p);
