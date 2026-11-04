@@ -401,7 +401,7 @@ int __fastcall raApplyLightRecordResolved(void* self BF2_EDX_PARAM, void* effect
     typedef void* (__fastcall* ResolveFn)(void* BF2_EDX_PARAM);
     void** const words = static_cast<void**>(self);
     void* const record = reinterpret_cast<ResolveFn>(words[2])(
-        static_cast<unsigned char*>(words[1]) + 4);
+        static_cast<unsigned char*>(words[1]) + sizeof(void*));
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetValueFn>(effect, 0x50)(
         effect, handle, record, 68u));
 }
