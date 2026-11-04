@@ -1217,7 +1217,7 @@ namespace dice { namespace hfe { namespace dx9rend {
 extern void* g_OverGrowth;
 // ResourceManager's direct calls have no null guard in the PE. The owner exists from DLL load
 // (BF2Render.cpp's g_OverGrowth, the 0x101D22E0 initialiser) and again after every CEPreLoad.
-void overGrowthPreLoadResources() { static_cast<geom::OverGrowth*>(g_OverGrowth)->preLoadResources(); }
-void overGrowthPostLoadResources() { static_cast<geom::OverGrowth*>(g_OverGrowth)->postLoadResources(); }
+void overGrowthPreLoadResources() { if (!g_OverGrowth) return; static_cast<geom::OverGrowth*>(g_OverGrowth)->preLoadResources(); }
+void overGrowthPostLoadResources() { if (!g_OverGrowth) return; static_cast<geom::OverGrowth*>(g_OverGrowth)->postLoadResources(); }
 } } }
 #endif

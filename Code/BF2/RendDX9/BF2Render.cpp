@@ -505,7 +505,14 @@ extern void* g_rendererBase;
 IBase* g_ObjectDrawer = 0;
 
 // Overgrowth exists from DLL initialization. Level unload deletes it; preload recreates it.
+// [CHOSEN, not recovered] [TEMP] OverGrowth writes 32-bit vptrs, so 64-bit hosts run without it;
+// the console and frame paths already test this pointer. No overgrowth trees draw there.
+// [RETIRE-WHEN: overgrowth-typed-layout] Restore once OverGrowth is 64-bit clean.
+#if defined(_M_IX86) || defined(__i386__)
 void* g_OverGrowth = geom::createOverGrowth();
+#else
+void* g_OverGrowth = 0;
+#endif
 
 // byte_10238249 is file-backed 1 and has no writers in the retail image.  Keep it mutable so each
 // of renderFrame's four gates performs the same independent load the PE does.
@@ -568,10 +575,12 @@ void __fastcall renderer_handleECCoreEvent(void* self, void* /*edx, unused*/,
     {
         renderer->handleLevelPreLoad(static_cast<const char*>(userData));
 
+#if defined(_M_IX86) || defined(__i386__)
         if (!g_OverGrowth)
         {
             g_OverGrowth = geom::createOverGrowth();
         }
+#endif
         return;
     }
 
