@@ -747,7 +747,7 @@ void StaticMeshMaterial::destroyMembers()
     {
         // sub_100ED1C0 - free each inner vector's buffer and zero it. The elements are 4-byte PODs,
         // so there is nothing else to destroy.
-        for (char* cursor = m_vector04.first; cursor != m_vector04.last; cursor += 16)
+        for (char* cursor = m_vector04.first; cursor != m_vector04.last; cursor += sizeof(vc71::vector_layout))
         {
             vc71::vector_layout& inner = *reinterpret_cast<vc71::vector_layout*>(cursor);
             if (inner.first)
@@ -788,21 +788,21 @@ void copyPodVector(vc71::vector_layout& dst, const vc71::vector_layout& src, uns
 void copyVectorOfVectors(vc71::vector_layout& dst, const vc71::vector_layout& src)
 {
     const unsigned int count =
-        src.first ? static_cast<unsigned int>((src.last - src.first) >> 4) : 0u;
+        src.first ? static_cast<unsigned int>((src.last - src.first) / sizeof(vc71::vector_layout)) : 0u;
     dst.first = 0;
     dst.last  = 0;
     dst.end   = 0;
     if (!count)
         return;
-    char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(count * 16u));
+    char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(count * sizeof(vc71::vector_layout)));
     for (unsigned int i = 0; i < count; ++i)
     {
-        copyPodVector(*reinterpret_cast<vc71::vector_layout*>(buffer + i * 16u),
-                      *reinterpret_cast<const vc71::vector_layout*>(src.first + i * 16u), 4u);
+        copyPodVector(*reinterpret_cast<vc71::vector_layout*>(buffer + i * sizeof(vc71::vector_layout)),
+                      *reinterpret_cast<const vc71::vector_layout*>(src.first + i * sizeof(vc71::vector_layout)), 4u);
     }
     dst.first = buffer;
-    dst.last  = buffer + count * 16u;
-    dst.end   = buffer + count * 16u;
+    dst.last  = buffer + count * sizeof(vc71::vector_layout);
+    dst.end   = buffer + count * sizeof(vc71::vector_layout);
 }
 
 } // anonymous namespace
@@ -884,34 +884,34 @@ StaticMeshMaterial& StaticMeshMaterial::operator=(const StaticMeshMaterial& othe
 
     for (const char* cursor = other.m_vector04.first;
          cursor != other.m_vector04.last;
-         cursor += 16)
+         cursor += sizeof(vc71::vector_layout))
     {
         vc71::vector_layout scratch = { 0, 0, 0, 0 };
         copyPodVector(scratch, *reinterpret_cast<const vc71::vector_layout*>(cursor), 4u);
 
         // push_back(scratch) - a deep copy of the temporary, then the temporary's buffer is freed.
         const unsigned int size =
-            m_vector04.first ? static_cast<unsigned int>((m_vector04.last - m_vector04.first) >> 4)
+            m_vector04.first ? static_cast<unsigned int>((m_vector04.last - m_vector04.first) / sizeof(vc71::vector_layout))
                              : 0u;
         const unsigned int capacity =
-            m_vector04.first ? static_cast<unsigned int>((m_vector04.end - m_vector04.first) >> 4)
+            m_vector04.first ? static_cast<unsigned int>((m_vector04.end - m_vector04.first) / sizeof(vc71::vector_layout))
                              : 0u;
         if (!m_vector04.first || size >= capacity)
         {
             unsigned int grown = capacity + (capacity >> 1);
             if (grown < size + 1u)
                 grown = size + 1u;
-            char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 16u));
+            char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(vc71::vector_layout)));
             if (size)
-                ::memcpy(buffer, m_vector04.first, size * 16u);
+                ::memcpy(buffer, m_vector04.first, size * sizeof(vc71::vector_layout));
             if (m_vector04.first)
                 ::renddx9abi::engineFree(m_vector04.first);
             m_vector04.first = buffer;
-            m_vector04.last  = buffer + size * 16u;
-            m_vector04.end   = buffer + grown * 16u;
+            m_vector04.last  = buffer + size * sizeof(vc71::vector_layout);
+            m_vector04.end   = buffer + grown * sizeof(vc71::vector_layout);
         }
         copyPodVector(*reinterpret_cast<vc71::vector_layout*>(m_vector04.last), scratch, 4u);
-        m_vector04.last += 16;
+        m_vector04.last += sizeof(vc71::vector_layout);
 
         if (scratch.first)
             ::renddx9abi::engineFree(scratch.first);
@@ -996,7 +996,7 @@ bool StaticMeshMaterial::applyStreams(void* shaderState)
         vc71::vector_layout streamIndices = { 0, 0, 0, 0 };
 
         const unsigned int streamCount =
-            m_vector04.first ? static_cast<unsigned int>(m_vector04.last - m_vector04.first) >> 4 : 0u;
+            m_vector04.first ? static_cast<unsigned int>(m_vector04.last - m_vector04.first) / sizeof(vc71::vector_layout) : 0u;
         for (unsigned int i = 0; i < streamCount; ++i)
         {
             const vc71::vector_layout& descriptors =
@@ -1062,51 +1062,51 @@ int StaticMeshMaterial::getIndexStart() const     { return static_cast<int>(m_in
 void staticMeshMaterialsResize(vc71::vector_layout& materials, unsigned int count)
 {
     const unsigned int size =
-        materials.first ? static_cast<unsigned int>((materials.last - materials.first) / 516) : 0u;
+        materials.first ? static_cast<unsigned int>((materials.last - materials.first) / sizeof(StaticMeshMaterial)) : 0u;
 
     if (size >= count)
     {
         // Shrink: destroy the tail through slot 0 with flags 0, then retract `last`.
         if (materials.first && count < size)
         {
-            for (char* cursor = materials.first + 516 * count;
+            for (char* cursor = materials.first + sizeof(StaticMeshMaterial) * count;
                  cursor != materials.last;
-                 cursor += 516)
+                 cursor += sizeof(StaticMeshMaterial))
             {
                 reinterpret_cast<StaticMeshMaterial*>(cursor)->destroy(0);
             }
-            materials.last = materials.first + 516 * count;
+            materials.last = materials.first + sizeof(StaticMeshMaterial) * count;
         }
         return;
     }
 
     const unsigned int wanted = count - size;
     const unsigned int capacity =
-        materials.first ? static_cast<unsigned int>((materials.end - materials.first) / 516) : 0u;
+        materials.first ? static_cast<unsigned int>((materials.end - materials.first) / sizeof(StaticMeshMaterial)) : 0u;
 
     if (capacity < size + wanted)
     {
         unsigned int grown = capacity + (capacity >> 1);
         if (grown < size + wanted)
             grown = size + wanted;
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 516u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(StaticMeshMaterial)));
         for (unsigned int i = 0; i < size; ++i)
         {
-            new (buffer + i * 516u)
-                StaticMeshMaterial(*reinterpret_cast<StaticMeshMaterial*>(materials.first + i * 516u));
-            reinterpret_cast<StaticMeshMaterial*>(materials.first + i * 516u)->destroy(0);
+            new (buffer + i * sizeof(StaticMeshMaterial))
+                StaticMeshMaterial(*reinterpret_cast<StaticMeshMaterial*>(materials.first + i * sizeof(StaticMeshMaterial)));
+            reinterpret_cast<StaticMeshMaterial*>(materials.first + i * sizeof(StaticMeshMaterial))->destroy(0);
         }
         if (materials.first)
             ::renddx9abi::engineFree(materials.first);
         materials.first = buffer;
-        materials.last  = buffer + size * 516u;
-        materials.end   = buffer + grown * 516u;
+        materials.last  = buffer + size * sizeof(StaticMeshMaterial);
+        materials.end   = buffer + grown * sizeof(StaticMeshMaterial);
     }
 
     for (unsigned int i = 0; i < wanted; ++i)
     {
         new (materials.last) StaticMeshMaterial();
-        materials.last += 516;
+        materials.last += sizeof(StaticMeshMaterial);
     }
 }
 
@@ -1118,35 +1118,35 @@ namespace {
 void resizeVectorOfVectors(vc71::vector_layout& v, unsigned int count,
                            void (*destroyElement)(vc71::vector_layout&))
 {
-    const unsigned int size = v.first ? static_cast<unsigned int>((v.last - v.first) >> 4) : 0u;
+    const unsigned int size = v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(vc71::vector_layout)) : 0u;
 
     if (size >= count)
     {
         if (v.first && count < size)
         {
-            for (char* cursor = v.first + 16u * count; cursor != v.last; cursor += 16)
+            for (char* cursor = v.first + sizeof(vc71::vector_layout) * count; cursor != v.last; cursor += sizeof(vc71::vector_layout))
                 destroyElement(*reinterpret_cast<vc71::vector_layout*>(cursor));
-            v.last = v.first + 16u * count;
+            v.last = v.first + sizeof(vc71::vector_layout) * count;
         }
         return;
     }
 
     const unsigned int wanted   = count - size;
-    const unsigned int capacity = v.first ? static_cast<unsigned int>((v.end - v.first) >> 4) : 0u;
+    const unsigned int capacity = v.first ? static_cast<unsigned int>((v.end - v.first) / sizeof(vc71::vector_layout)) : 0u;
 
     if (capacity < size + wanted)
     {
         unsigned int grown = capacity + (capacity >> 1);
         if (grown < size + wanted)
             grown = size + wanted;
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 16u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(vc71::vector_layout)));
         if (size)
-            ::memcpy(buffer, v.first, size * 16u);     // the moved-from heads are not destroyed
+            ::memcpy(buffer, v.first, size * sizeof(vc71::vector_layout));     // the moved-from heads are not destroyed
         if (v.first)
             ::renddx9abi::engineFree(v.first);
         v.first = buffer;
-        v.last  = buffer + size * 16u;
-        v.end   = buffer + grown * 16u;
+        v.last  = buffer + size * sizeof(vc71::vector_layout);
+        v.end   = buffer + grown * sizeof(vc71::vector_layout);
     }
 
     for (unsigned int i = 0; i < wanted; ++i)
@@ -1156,7 +1156,7 @@ void resizeVectorOfVectors(vc71::vector_layout& v, unsigned int count,
         fresh->first = 0;
         fresh->last  = 0;
         fresh->end   = 0;
-        v.last += 16;
+        v.last += sizeof(vc71::vector_layout);
     }
 }
 
@@ -1164,7 +1164,7 @@ void destroyMaterialVector(vc71::vector_layout& materials)
 {
     if (materials.first)
     {
-        for (char* cursor = materials.first; cursor != materials.last; cursor += 516)
+        for (char* cursor = materials.first; cursor != materials.last; cursor += sizeof(StaticMeshMaterial))
             reinterpret_cast<StaticMeshMaterial*>(cursor)->destroy(0);
         ::renddx9abi::engineFree(materials.first);
     }
@@ -1202,14 +1202,14 @@ void staticMeshMaterialsResizeGeoms(vc71::vector_layout& geoms, unsigned int cou
 // slot 0 with flags 0, free the buffer, and zero the three words.
 void staticMeshMaterialsDestroyLods(unsigned char* first, unsigned char* last)
 {
-    for (unsigned char* cursor = first; cursor != last; cursor += 16)
+    for (unsigned char* cursor = first; cursor != last; cursor += sizeof(vc71::vector_layout))
         destroyMaterialVector(*reinterpret_cast<vc71::vector_layout*>(cursor));
 }
 
 // the same, one level up.
 void staticMeshMaterialsDestroyGeoms(unsigned char* first, unsigned char* last)
 {
-    for (unsigned char* cursor = first; cursor != last; cursor += 16)
+    for (unsigned char* cursor = first; cursor != last; cursor += sizeof(vc71::vector_layout))
         destroyLodVector(*reinterpret_cast<vc71::vector_layout*>(cursor));
 }
 
@@ -1235,12 +1235,12 @@ inline vc71::vector_layout& materialVector(StaticMeshTemplate* t, unsigned int g
 
 inline unsigned int materialCount(const vc71::vector_layout& v)
 {
-    return v.first ? static_cast<unsigned int>((v.last - v.first) / 516) : 0u;
+    return v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(StaticMeshMaterial)) : 0u;
 }
 
 inline StaticMeshMaterial* materialAt(const vc71::vector_layout& v, unsigned int i)
 {
-    return reinterpret_cast<StaticMeshMaterial*>(v.first + 516u * i);
+    return reinterpret_cast<StaticMeshMaterial*>(v.first + sizeof(StaticMeshMaterial) * i);
 }
 
 inline unsigned int geomCount(StaticMeshTemplate* t)
@@ -1332,7 +1332,7 @@ unsigned int StaticMeshTemplate::getMemoryUsage(int mask)
         {
             if (streams[i])
                 total += *reinterpret_cast<const unsigned int*>(
-                    static_cast<const unsigned char*>(streams[i]) + 32);
+                    static_cast<const unsigned char*>(streams[i]) + 32 + 3 * (sizeof(void*) - 4));
         }
     }
 
@@ -1346,7 +1346,7 @@ unsigned int StaticMeshTemplate::getMemoryUsage(int mask)
     {
         std::set<const void*> unique;
         const unsigned int geoms =
-            m_geoms.first ? static_cast<unsigned int>((m_geoms.last - m_geoms.first) >> 5) : 0u;
+            m_geoms.first ? static_cast<unsigned int>((m_geoms.last - m_geoms.first)  / sizeof(StaticMeshGeom)) : 0u;
         for (unsigned int g = 0; g < geoms; ++g)
         {
             const StaticMeshGeom& geomRecord =
@@ -1493,11 +1493,11 @@ void mergeMoveMaterial(StaticMeshTemplate* t, unsigned int geom, unsigned int lo
 
     // sub_1011F810 - erase(first + from): assign the tail down one slot, destroy the duplicate at
     // the end, retract `last`.
-    for (char* k = materials.first + 516u * from + 516; k != materials.last; k += 516)
-        *reinterpret_cast<StaticMeshMaterial*>(k - 516) =
+    for (char* k = materials.first + sizeof(StaticMeshMaterial) * from + sizeof(StaticMeshMaterial); k != materials.last; k += sizeof(StaticMeshMaterial))
+        *reinterpret_cast<StaticMeshMaterial*>(k - sizeof(StaticMeshMaterial)) =
             *reinterpret_cast<const StaticMeshMaterial*>(k);
-    reinterpret_cast<StaticMeshMaterial*>(materials.last - 516)->destroy(0);
-    materials.last -= 516;
+    reinterpret_cast<StaticMeshMaterial*>(materials.last - sizeof(StaticMeshMaterial))->destroy(0);
+    materials.last -= sizeof(StaticMeshMaterial);
 
     // The moved copy takes the slot immediately after `to - 1`.
     scratch.m_vertexStart = previous->m_vertexStart + previous->m_vertexCount;
@@ -1506,35 +1506,35 @@ void mergeMoveMaterial(StaticMeshTemplate* t, unsigned int geom, unsigned int lo
     // sub_101207D0 -> sub_10120360 - insert(first + to, scratch).
     {
         const unsigned int size =
-            static_cast<unsigned int>((materials.last - materials.first) / 516);
+            static_cast<unsigned int>((materials.last - materials.first) / sizeof(StaticMeshMaterial));
         const unsigned int capacity =
             materials.first
-                ? static_cast<unsigned int>((materials.end - materials.first) / 516)
+                ? static_cast<unsigned int>((materials.end - materials.first) / sizeof(StaticMeshMaterial))
                 : 0u;
         if (capacity < size + 1u)
         {
             unsigned int grown = capacity + (capacity >> 1);
             if (grown < size + 1u)
                 grown = size + 1u;
-            char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 516u));
+            char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(StaticMeshMaterial)));
             for (unsigned int k = 0; k < size; ++k)
             {
-                new (buffer + k * 516u) StaticMeshMaterial(
-                    *reinterpret_cast<StaticMeshMaterial*>(materials.first + k * 516u));
-                reinterpret_cast<StaticMeshMaterial*>(materials.first + k * 516u)->destroy(0);
+                new (buffer + k * sizeof(StaticMeshMaterial)) StaticMeshMaterial(
+                    *reinterpret_cast<StaticMeshMaterial*>(materials.first + k * sizeof(StaticMeshMaterial)));
+                reinterpret_cast<StaticMeshMaterial*>(materials.first + k * sizeof(StaticMeshMaterial))->destroy(0);
             }
             if (materials.first)
                 ::renddx9abi::engineFree(materials.first);
             materials.first = buffer;
-            materials.last  = buffer + size * 516u;
-            materials.end   = buffer + grown * 516u;
+            materials.last  = buffer + size * sizeof(StaticMeshMaterial);
+            materials.end   = buffer + grown * sizeof(StaticMeshMaterial);
         }
         new (materials.last) StaticMeshMaterial();
-        materials.last += 516;
-        for (char* k = materials.last - 516; k != materials.first + 516u * to; k -= 516)
+        materials.last += sizeof(StaticMeshMaterial);
+        for (char* k = materials.last - sizeof(StaticMeshMaterial); k != materials.first + sizeof(StaticMeshMaterial) * to; k -= sizeof(StaticMeshMaterial))
             *reinterpret_cast<StaticMeshMaterial*>(k) =
-                *reinterpret_cast<const StaticMeshMaterial*>(k - 516);
-        *reinterpret_cast<StaticMeshMaterial*>(materials.first + 516u * to) = scratch;
+                *reinterpret_cast<const StaticMeshMaterial*>(k - sizeof(StaticMeshMaterial));
+        *reinterpret_cast<StaticMeshMaterial*>(materials.first + sizeof(StaticMeshMaterial) * to) = scratch;
     }
 
     // ... and everything after it slides forward again by the same run.
@@ -1586,10 +1586,10 @@ void StaticMeshTemplate::mergeMaterials()
             const unsigned int mask = staticMeshQualityMask();
 
             unsigned int i = 0;
-            for (char* a = materials.first; a != materials.last; a += 516, ++i)
+            for (char* a = materials.first; a != materials.last; a += sizeof(StaticMeshMaterial), ++i)
             {
                 unsigned int j = i + 1;
-                for (char* b = a + 516; b != materials.last; b += 516, ++j)
+                for (char* b = a + sizeof(StaticMeshMaterial); b != materials.last; b += sizeof(StaticMeshMaterial), ++j)
                 {
                     const StaticMeshMaterial* const left  =
                         reinterpret_cast<const StaticMeshMaterial*>(a);
@@ -1615,11 +1615,11 @@ void StaticMeshTemplate::mergeMaterials()
                         StaticMeshMaterial* const dead = materialAt(materials, j);
                         if (dead->m_shaderMaterial)
                             shaderMaterialRelease(dead->m_shaderMaterial);
-                        for (char* k = materials.first + 516u * j + 516; k != materials.last; k += 516)
-                            *reinterpret_cast<StaticMeshMaterial*>(k - 516) =
+                        for (char* k = materials.first + sizeof(StaticMeshMaterial) * j + sizeof(StaticMeshMaterial); k != materials.last; k += sizeof(StaticMeshMaterial))
+                            *reinterpret_cast<StaticMeshMaterial*>(k - sizeof(StaticMeshMaterial)) =
                                 *reinterpret_cast<const StaticMeshMaterial*>(k);
-                        reinterpret_cast<StaticMeshMaterial*>(materials.last - 516)->destroy(0);
-                        materials.last -= 516;
+                        reinterpret_cast<StaticMeshMaterial*>(materials.last - sizeof(StaticMeshMaterial))->destroy(0);
+                        materials.last -= sizeof(StaticMeshMaterial);
 
                         // Shipped: the inner cursor goes back to `i`, and the ++ below moves it to
                         // the slot the erase just filled.
@@ -1771,7 +1771,7 @@ void StaticMeshTemplate::buildVertexBuffers()
     const unsigned int tangentStrideRaw = 12u * tangentCount;
     m_hasTwoTangentSets = static_cast<unsigned char>(tangentCount == 2);
 
-    const unsigned int stream0Stride = compress ? 16u : 32u;
+    const unsigned int stream0Stride = compress ? sizeof(vc71::vector_layout) : 32u;
 
     // create the buffers
     {
@@ -1785,7 +1785,7 @@ void StaticMeshTemplate::buildVertexBuffers()
     // three is always created, the first three only when the template's used-flag set matches its
     // whole-flag set under that bit.
     {
-        static const unsigned int kUvGateMasks[3] = { 4u, 8u, 16u };
+        static const unsigned int kUvGateMasks[3] = { 4u, 8u, sizeof(vc71::vector_layout) };
         for (unsigned int i = 0; i < texcoordCount - 1u; ++i)
         {
             unsigned int gated = texcoordCount - 2u;
@@ -1834,7 +1834,7 @@ void StaticMeshTemplate::buildVertexBuffers()
             const vc71::vector_layout& geom0 =
                 *reinterpret_cast<const vc71::vector_layout*>(m_materials.first);
             const unsigned int lods =
-                geom0.first ? static_cast<unsigned int>((geom0.last - geom0.first) >> 4) : 0u;
+                geom0.first ? static_cast<unsigned int>((geom0.last - geom0.first) / sizeof(vc71::vector_layout)) : 0u;
             for (unsigned int l = 0; l < lods; ++l)
             {
                 const vc71::vector_layout& materials =
@@ -1893,7 +1893,7 @@ void StaticMeshTemplate::buildVertexBuffers()
             if (m_isVegetation)
             {
                 const unsigned int lods2 =
-                    geom0.first ? static_cast<unsigned int>((geom0.last - geom0.first) >> 4) : 0u;
+                    geom0.first ? static_cast<unsigned int>((geom0.last - geom0.first) / sizeof(vc71::vector_layout)) : 0u;
                 for (unsigned int l = 0; l < lods2; ++l)
                 {
                     const vc71::vector_layout& materials =
@@ -2058,7 +2058,7 @@ void StaticMeshTemplate::buildIndexBuffer()
         int indexCount = 0;      // var_10: the shipped slot is NOT initialised - see the note above
         unsigned int lod = 0;
         while (geom0.first &&
-               lod < static_cast<unsigned int>((geom0.last - geom0.first) >> 4))
+               lod < static_cast<unsigned int>((geom0.last - geom0.first) / sizeof(vc71::vector_layout)))
         {
             const vc71::vector_layout& materials =
                 reinterpret_cast<const vc71::vector_layout*>(geom0.first)[lod];
@@ -2154,23 +2154,23 @@ void pointerVectorPush(vc71::vector_layout& v, const void* value)
 void elementListPush(vc71::vector_layout& v, const vc71::vector_layout& list)
 {
     const unsigned int size =
-        v.first ? static_cast<unsigned int>((v.last - v.first) >> 4) : 0u;
+        v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(vc71::vector_layout)) : 0u;
     const unsigned int capacity =
-        v.first ? static_cast<unsigned int>((v.end - v.first) >> 4) : 0u;
+        v.first ? static_cast<unsigned int>((v.end - v.first) / sizeof(vc71::vector_layout)) : 0u;
 
     if (size == capacity)
     {
         unsigned int grown = capacity + (capacity >> 1);
         if (grown < size + 1u)
             grown = size + 1u;
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 16u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(vc71::vector_layout)));
         if (size)
-            ::memcpy(buffer, v.first, size * 16u);
+            ::memcpy(buffer, v.first, size * sizeof(vc71::vector_layout));
         if (v.first)
             ::renddx9abi::engineFree(v.first);
         v.first = buffer;
-        v.last  = buffer + size * 16u;
-        v.end   = buffer + grown * 16u;
+        v.last  = buffer + size * sizeof(vc71::vector_layout);
+        v.end   = buffer + grown * sizeof(vc71::vector_layout);
     }
 
     vc71::vector_layout* const fresh = reinterpret_cast<vc71::vector_layout*>(v.last);
@@ -2189,7 +2189,7 @@ void elementListPush(vc71::vector_layout& v, const vc71::vector_layout& list)
         fresh->end   = copy + bytes;
     }
 
-    v.last += 16;
+    v.last += sizeof(vc71::vector_layout);
 }
 
 // Builds parallel vertex-element lists and vertex-buffer references for a material.

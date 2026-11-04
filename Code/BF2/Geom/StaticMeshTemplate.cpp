@@ -344,7 +344,7 @@ void occluderGroupDestroy(char* group)
     vc71::vector_layout* firstVec = reinterpret_cast<vc71::vector_layout*>(group);
     if (firstVec->first)
     {
-        for (char* p = firstVec->first; p != firstVec->last; p += 32)
+        for (char* p = firstVec->first; p != firstVec->last; p += sizeof(StaticMeshGeom))
         {
             vc71::vector_layout* inner = reinterpret_cast<vc71::vector_layout*>(p + 0x10);
             if (inner->first)
@@ -1044,11 +1044,11 @@ void staticMeshReleaseShadersAndStreams(StaticMeshTemplate* self)
             if (!materials.first)
                 continue;
             const unsigned int count =
-                static_cast<unsigned int>(materials.last - materials.first) / 516u;
+                static_cast<unsigned int>(materials.last - materials.first) / sizeof(StaticMeshMaterial);
             for (unsigned int i = 0; i < count; ++i)
             {
                 StaticMeshMaterial* material =
-                    reinterpret_cast<StaticMeshMaterial*>(materials.first + 516u * i);
+                    reinterpret_cast<StaticMeshMaterial*>(materials.first + sizeof(StaticMeshMaterial) * i);
                 if (material->m_shaderMaterial)
                     reinterpret_cast<IBase*>(material->m_shaderMaterial)->release();
             }
@@ -1292,9 +1292,9 @@ void StaticMeshTemplate::setLodDistance(int geom, int lod, float distance)
         return;
     }
 
-    if (m_geoms.first && ((m_geoms.last - m_geoms.first) >> 5) != 0)
+    if (m_geoms.first && ((m_geoms.last - m_geoms.first) / sizeof(StaticMeshGeom)) != 0)
     {
-        const int geomCount = static_cast<int>((m_geoms.last - m_geoms.first) >> 5);
+        const int geomCount = static_cast<int>((m_geoms.last - m_geoms.first) / sizeof(StaticMeshGeom));
         if (geom >= geomCount)
         {
             ::renddx9abi::logf("StaticMeshTemplate.cpp:563:  Invalid Subgeometry %s",
@@ -1353,7 +1353,7 @@ void StaticMeshTemplate::setLodDistance(int geom, int lod, float distance)
 // Unlike the setter, the getter does NOT shift by the skipped-lod count.
 float StaticMeshTemplate::getLodDistance(int geom, int lod)
 {
-    if (m_geoms.first && ((m_geoms.last - m_geoms.first) >> 5) != 0)
+    if (m_geoms.first && ((m_geoms.last - m_geoms.first) / sizeof(StaticMeshGeom)) != 0)
     {
         StaticMeshGeom* g = reinterpret_cast<StaticMeshGeom*>(m_geoms.first) + geom;
         return reinterpret_cast<float*>(g->lodDistances.first)[lod];
@@ -1435,7 +1435,7 @@ int StaticMeshTemplate::getMaterialCount(unsigned int lod)
     for (;;)
     {
         if (!m_geoms.first ||
-            geom >= static_cast<unsigned int>((m_geoms.last - m_geoms.first) >> 5))
+            geom >= static_cast<unsigned int>((m_geoms.last - m_geoms.first) / sizeof(StaticMeshGeom)))
             return total;
 
         StaticMeshGeom* g = reinterpret_cast<StaticMeshGeom*>(m_geoms.first) + geom;
@@ -1448,7 +1448,7 @@ int StaticMeshTemplate::getMaterialCount(unsigned int lod)
             vc71::vector_layout& materials = lodVectors[lod];
             if (materials.first)
                 total += static_cast<int>(
-                    static_cast<unsigned int>(materials.last - materials.first) / 516u);
+                    static_cast<unsigned int>(materials.last - materials.first) / sizeof(StaticMeshMaterial));
         }
         ++geom;
     }
@@ -1465,7 +1465,7 @@ int StaticMeshTemplate::getLodPrimitiveCount(unsigned int lod)
     for (;;)
     {
         if (!m_geoms.first ||
-            geom >= static_cast<unsigned int>((m_geoms.last - m_geoms.first) >> 5))
+            geom >= static_cast<unsigned int>((m_geoms.last - m_geoms.first) / sizeof(StaticMeshGeom)))
             return total;
 
         StaticMeshGeom* g = reinterpret_cast<StaticMeshGeom*>(m_geoms.first) + geom;
@@ -1481,10 +1481,10 @@ int StaticMeshTemplate::getLodPrimitiveCount(unsigned int lod)
             {
                 if (!materials.first)
                     break;
-                if (index >= static_cast<unsigned int>(materials.last - materials.first) / 516u)
+                if (index >= static_cast<unsigned int>(materials.last - materials.first) / sizeof(StaticMeshMaterial))
                     break;
                 StaticMeshMaterial* material =
-                    reinterpret_cast<StaticMeshMaterial*>(materials.first + 516u * index);
+                    reinterpret_cast<StaticMeshMaterial*>(materials.first + sizeof(StaticMeshMaterial) * index);
                 total += material->getPrimitiveCount();
                 ++index;
             }
@@ -1549,14 +1549,14 @@ void StaticMeshTemplate::releaseDeviceResources()
     // No null test, exactly as shipped - see resourcePreload's note.
     resourcePreload(m_indexBuffer);
 
-    if (m_materials.first && ((m_materials.last - m_materials.first) >> 4) != 0)
+    if (m_materials.first && ((m_materials.last - m_materials.first) / sizeof(vc71::vector_layout)) != 0)
     {
         vc71::vector_layout* lodVectors =
             reinterpret_cast<vc71::vector_layout*>(
                 reinterpret_cast<vc71::vector_layout*>(m_materials.first)[0].first);
         char* first = lodVectors[0].first;
         char* last  = lodVectors[0].last;
-        for (char* p = first; p != last; p += 516)
+        for (char* p = first; p != last; p += sizeof(StaticMeshMaterial))
         {
             StaticMeshMaterial* material = reinterpret_cast<StaticMeshMaterial*>(p);
             void** textures = material->m_shaderMaterial->textures;      // +0x28, eight slots
@@ -2166,7 +2166,7 @@ void StaticMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* stream
             while (materialCount)
             {
                 StaticMeshMaterial* material =
-                    reinterpret_cast<StaticMeshMaterial*>(lodMaterials.first + 516u * materialIndex);
+                    reinterpret_cast<StaticMeshMaterial*>(lodMaterials.first + sizeof(StaticMeshMaterial) * materialIndex);
 
                 stream->read(&material->m_alphaMode, 4);           // +0x17C
                 if (material->m_alphaMode == 1)
@@ -2284,12 +2284,12 @@ void StaticMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* stream
 
             if (remainingSkips > 0)
             {
-                materialByteOffset -= 16;
+                materialByteOffset -= sizeof(vc71::vector_layout);
                 --remainingSkips;
                 --lodIndex;
                 lodByteOffset -= static_cast<int>(sizeof(StaticMeshLod));
             }
-            materialByteOffset += 16;
+            materialByteOffset += sizeof(vc71::vector_layout);
             lodByteOffset += static_cast<int>(sizeof(StaticMeshLod));
             if (++lodIndex >= lodCount)
                 break;
@@ -2430,7 +2430,7 @@ void StaticMeshTemplate::mergeShadowIndexRanges()
                 if (!first)
                     continue;
                 const unsigned int materialCount =
-                    static_cast<unsigned int>(record.last - record.first) / 516u;
+                    static_cast<unsigned int>(record.last - record.first) / sizeof(StaticMeshMaterial);
                 if (!materialCount)
                     continue;
 

@@ -684,7 +684,7 @@ void staticMeshRefreshSelection(StaticMesh* self)
     const unsigned int lod  = static_cast<unsigned int>(self->getLodIndex());
 
     const unsigned int* const perGeom =
-        *reinterpret_cast<const unsigned int* const*>(objectTemplate + 0x74);
+        *reinterpret_cast<const unsigned int* const*>(objectTemplate + offsetof(MeshTemplate, m_geomInts) + offsetof(vc71::vector_layout, first));
     if (!perGeom)
         return;
 
@@ -1221,14 +1221,14 @@ StaticMesh::~StaticMesh()
     // The template flag controls release of each selected material's +0x14C texture.
     if (m_template && *(static_cast<const unsigned char*>(m_template) + 0x2A4) && m_dword310)
     {
-        unsigned char* const first = *reinterpret_cast<unsigned char**>(m_dword310 + 4);
+        unsigned char* const first = *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, first));
         if (first)
         {
-            unsigned char* const last = *reinterpret_cast<unsigned char**>(m_dword310 + 8);
-            const unsigned int count = static_cast<unsigned int>(last - first) / 516u;
+            unsigned char* const last = *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, last));
+            const unsigned int count = static_cast<unsigned int>(last - first) / sizeof(StaticMeshMaterial);
             for (unsigned int i = 0; i < count; ++i)
             {
-                unsigned char* const material = first + 516u * i;
+                unsigned char* const material = first + sizeof(StaticMeshMaterial) * i;
                 dx9rend::EngineTexture*& slot =
                     *reinterpret_cast<dx9rend::EngineTexture**>(material + 332);
                 if (slot)
@@ -1246,7 +1246,7 @@ StaticMesh::~StaticMesh()
             for (unsigned int inner = 0; inner < 2; ++inner)
             {
                 vc71::vector_layout* const v =
-                    reinterpret_cast<vc71::vector_layout*>(p + 16 * inner);
+                    reinterpret_cast<vc71::vector_layout*>(p + sizeof(vc71::vector_layout) * inner);
                 if (v->first)
                     ::renddx9abi::engineFree(v->first);
                 v->first = 0; v->last = 0; v->end = 0;
@@ -1582,16 +1582,16 @@ void StaticMesh::setGeom(int geom)
         return;
 
     unsigned char* const table16 =
-        *reinterpret_cast<unsigned char**>(objectTemplate + 0xD0);
+        *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_materials) + offsetof(vc71::vector_layout, first));
     unsigned char* const entry =
-        *reinterpret_cast<unsigned char**>(table16 + 16 * geom + 4);
+        *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * geom + offsetof(vc71::vector_layout, first));
 
     unsigned int count = 0;
     if (entry)
     {
         unsigned char* const end =
-            *reinterpret_cast<unsigned char**>(table16 + 16 * geom + 8);
-        count = static_cast<unsigned int>(end - entry) >> 4;
+            *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * geom + offsetof(vc71::vector_layout, last));
+        count = static_cast<unsigned int>(end - entry) / sizeof(vc71::vector_layout);
     }
 
     unsigned int lod = count - 1u;              // see the unsigned note above
@@ -1600,9 +1600,9 @@ void StaticMesh::setGeom(int geom)
     m_dword318 = lod;
 
     unsigned char* const table32 =
-        *reinterpret_cast<unsigned char**>(objectTemplate + 0xE0);
-    m_dword30C = *reinterpret_cast<unsigned char**>(table32 + 32 * geom + 4) + 104 * lod;
-    m_dword310 = *reinterpret_cast<unsigned char**>(table16 + 16 * geom + 4) + 16 * lod;
+        *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
+    m_dword30C = *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * geom + offsetof(vc71::vector_layout, first)) + 104 * lod;
+    m_dword310 = *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * geom + offsetof(vc71::vector_layout, first)) + 16 * lod;
 
     staticMeshRefreshSelection(this);
 }
@@ -1623,14 +1623,14 @@ void StaticMesh::setLod(int lod)
     const unsigned int geom = m_dword314;
 
     unsigned char* const table32 =
-        *reinterpret_cast<unsigned char**>(objectTemplate + 0xE0);
+        *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
     unsigned char* const table16 =
-        *reinterpret_cast<unsigned char**>(objectTemplate + 0xD0);
+        *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_materials) + offsetof(vc71::vector_layout, first));
 
     unsigned char* const lodBase =
-        *reinterpret_cast<unsigned char**>(table32 + 32 * geom + 4);
+        *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * geom + offsetof(vc71::vector_layout, first));
     unsigned char* const recBase =
-        *reinterpret_cast<unsigned char**>(table16 + 16 * geom + 4);
+        *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * geom + offsetof(vc71::vector_layout, first));
 
     if (lod == -1)
     {
@@ -1644,7 +1644,7 @@ void StaticMesh::setLod(int lod)
         m_dword318 = static_cast<unsigned int>(lod);
         m_byte357  = 1;
         m_dword30C = lodBase + 104 * lod;
-        m_dword310 = recBase + 16 * lod;
+        m_dword310 = recBase + sizeof(vc71::vector_layout) * lod;
     }
 
     staticMeshRefreshSelection(this);
@@ -1664,8 +1664,8 @@ void StaticMesh::postLoad()
     if (!objectTemplate)
         return;
 
-    unsigned char* const table32 = *reinterpret_cast<unsigned char**>(objectTemplate + 0xE0);
-    unsigned char* const table16 = *reinterpret_cast<unsigned char**>(objectTemplate + 0xD0);
+    unsigned char* const table32 = *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
+    unsigned char* const table16 = *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_materials) + offsetof(vc71::vector_layout, first));
     if (!table32 || !table16)
         return;
 
@@ -1673,8 +1673,8 @@ void StaticMesh::postLoad()
     {
         const unsigned int geom = m_dword314;
         const unsigned int lod  = m_dword318;
-        m_dword30C = *reinterpret_cast<unsigned char**>(table32 + 32 * geom + 4) + 104 * lod;
-        m_dword310 = *reinterpret_cast<unsigned char**>(table16 + 16 * geom + 4) + 16 * lod;
+        m_dword30C = *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * geom + offsetof(vc71::vector_layout, first)) + 104 * lod;
+        m_dword310 = *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * geom + offsetof(vc71::vector_layout, first)) + 16 * lod;
 
         MeshBounds* const bounds = reinterpret_cast<MeshBounds*>(m_dword30C + 4);
         if (bounds->dirty)
@@ -1686,10 +1686,10 @@ void StaticMesh::postLoad()
         m_byte35A = 1;
 
     // The geom count, from the template's +0xE0 vector.
-    unsigned char* const geomsFirst = *reinterpret_cast<unsigned char**>(objectTemplate + 0xE0);
-    unsigned char* const geomsLast  = *reinterpret_cast<unsigned char**>(objectTemplate + 0xE4);
+    unsigned char* const geomsFirst = *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
+    unsigned char* const geomsLast  = *reinterpret_cast<unsigned char**>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, last));
     const unsigned int geomCount =
-        geomsFirst ? static_cast<unsigned int>(geomsLast - geomsFirst) >> 5 : 0;
+        geomsFirst ? static_cast<unsigned int>(geomsLast - geomsFirst) / sizeof(StaticMeshGeom) : 0;
 
     // Keep the material-count walk even though its result is unused.
     {
@@ -1697,28 +1697,28 @@ void StaticMesh::postLoad()
         for (unsigned int g = 0; g < geomCount; ++g)
         {
             unsigned char* const lodFirst =
-                *reinterpret_cast<unsigned char**>(table32 + 32 * g + 4);
+                *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * g + offsetof(vc71::vector_layout, first));
             if (!lodFirst)
                 continue;
             unsigned char* const lodLast =
-                *reinterpret_cast<unsigned char**>(table32 + 32 * g + 8);
+                *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * g + offsetof(vc71::vector_layout, last));
             const unsigned int lodCount =
                 static_cast<unsigned int>(lodLast - lodFirst) / 104u;
             if (!lodCount)
                 continue;
 
             unsigned char* const recBase =
-                *reinterpret_cast<unsigned char**>(table16 + 16 * g + 4);
+                *reinterpret_cast<unsigned char**>(table16 + sizeof(vc71::vector_layout) * g + offsetof(vc71::vector_layout, first));
             for (unsigned int l = 0; l < lodCount; ++l)
             {
-                unsigned char* const rec = recBase + 16 * l;
-                unsigned char* const matFirst = *reinterpret_cast<unsigned char**>(rec + 4);
+                unsigned char* const rec = recBase + sizeof(vc71::vector_layout) * l;
+                unsigned char* const matFirst = *reinterpret_cast<unsigned char**>(rec + offsetof(vc71::vector_layout, first));
                 unsigned int materials = 0;
                 if (matFirst)
                 {
                     unsigned char* const matLast =
-                        *reinterpret_cast<unsigned char**>(rec + 8);
-                    materials = static_cast<unsigned int>(matLast - matFirst) / 516u;
+                        *reinterpret_cast<unsigned char**>(rec + offsetof(vc71::vector_layout, last));
+                    materials = static_cast<unsigned int>(matLast - matFirst) / sizeof(StaticMeshMaterial);
                 }
                 if (materials >= unusedMaxMaterials)
                     unusedMaxMaterials = materials;
@@ -1737,7 +1737,7 @@ void StaticMesh::postLoad()
     {
         m_dword314 = g;
 
-        unsigned char* const lodBase = *reinterpret_cast<unsigned char**>(table32 + 32 * g + 4);
+        unsigned char* const lodBase = *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * g + offsetof(vc71::vector_layout, first));
         MeshBounds* const bounds = reinterpret_cast<MeshBounds*>(lodBase + 4);
         if (bounds->dirty)
             meshBoundsFinalize(*bounds);
@@ -1767,12 +1767,12 @@ void StaticMesh::postLoad()
         // Pre-populate this geom's lightmap entries with the default (1,1) UV scale - which is
         // exactly what the constructor seeds +0x270/+0x274 with.
         unsigned char* const lodFirst = lodBase;
-        unsigned char* const lodLast  = *reinterpret_cast<unsigned char**>(table32 + 32 * g + 8);
+        unsigned char* const lodLast  = *reinterpret_cast<unsigned char**>(table32 + sizeof(StaticMeshGeom) * g + offsetof(vc71::vector_layout, last));
         const unsigned int lodCount =
             lodFirst ? static_cast<unsigned int>(lodLast - lodFirst) / 104u : 0;
 
         const unsigned int* const perGeom =
-            *reinterpret_cast<const unsigned int* const*>(objectTemplate + 0x74);
+            *reinterpret_cast<const unsigned int* const*>(objectTemplate + offsetof(MeshTemplate, m_geomInts) + offsetof(vc71::vector_layout, first));
 
         for (unsigned int l = 0; l < lodCount; ++l)
         {
@@ -1854,12 +1854,12 @@ int StaticMesh::getGeomCount() const
         static_cast<const unsigned char*>(m_template);
 
     const unsigned char* const first =
-        *reinterpret_cast<const unsigned char* const*>(objectTemplate + 0xE0);
+        *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
     if (!first)
         return 0;
 
     const unsigned char* const last =
-        *reinterpret_cast<const unsigned char* const*>(objectTemplate + 0xE4);
+        *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, last));
     return static_cast<int>(static_cast<unsigned int>(last - first) >> 5);
 }
 
@@ -1872,7 +1872,7 @@ int StaticMesh::getLodCount() const
         static_cast<const unsigned char*>(m_template);
 
     const unsigned char* const geomRecord =
-        *reinterpret_cast<const unsigned char* const*>(objectTemplate + 0xE0)
+        *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first))
         + 32 * m_dword314;
 
     const unsigned char* const first =
@@ -1971,11 +1971,11 @@ int StaticMesh::getMaterialCount() const
 {
     if (!m_dword310)
         return 0;
-    const unsigned char* const first = *reinterpret_cast<const unsigned char* const*>(m_dword310 + 4);
+    const unsigned char* const first = *reinterpret_cast<const unsigned char* const*>(m_dword310 + offsetof(vc71::vector_layout, first));
     if (!first)
         return 0;
-    const unsigned char* const last = *reinterpret_cast<const unsigned char* const*>(m_dword310 + 8);
-    return static_cast<int>((last - first) / 516);
+    const unsigned char* const last = *reinterpret_cast<const unsigned char* const*>(m_dword310 + offsetof(vc71::vector_layout, last));
+    return static_cast<int>((last - first) / sizeof(StaticMeshMaterial));
 }
 
 // +0xE8, the +0x338 records, counted at their 36-byte stride.
@@ -2228,11 +2228,11 @@ void StaticMesh::loadVertexLightLists()
 
     const unsigned char* const objectTemplate = static_cast<const unsigned char*>(m_template);
     const unsigned char* const geomsFirst =
-        *reinterpret_cast<const unsigned char* const*>(objectTemplate + 0xE0);
+        *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first));
     const unsigned char* const geomsLast =
-        *reinterpret_cast<const unsigned char* const*>(objectTemplate + 0xE4);
+        *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, last));
     const unsigned int geomCount =
-        geomsFirst ? static_cast<unsigned int>(geomsLast - geomsFirst) >> 5 : 0u;
+        geomsFirst ? static_cast<unsigned int>(geomsLast - geomsFirst) / sizeof(StaticMeshGeom) : 0u;
 
     for (unsigned int g = 0; g < geomCount; ++g)
     {
@@ -2513,17 +2513,17 @@ void StaticMesh::drawVanilla()
             reinterpret_cast<const unsigned int*>(g_staticMeshQualityMasks.first)[maskIndex];
 
         unsigned char* const materialsFirst =
-            *reinterpret_cast<unsigned char**>(m_dword310 + 4);
+            *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, first));
         const unsigned int materialCount = materialsFirst
-            ? static_cast<unsigned int>(*reinterpret_cast<unsigned char**>(m_dword310 + 8)
-                                        - materialsFirst) / 516u
+            ? static_cast<unsigned int>(*reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, last))
+                                        - materialsFirst) / sizeof(StaticMeshMaterial)
             : 0u;
 
         for (unsigned int i = 0; i < materialCount; ++i)
         {
             m_dword31C = i;
             unsigned char* const material =
-                *reinterpret_cast<unsigned char**>(m_dword310 + 4) + 516u * i;
+                *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, first)) + sizeof(StaticMeshMaterial) * i;
 
             if (smr->m_flags60[0])
             {
@@ -2934,7 +2934,7 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
             for (unsigned int i = 0; i < materialCount; ++i)
             {
                 unsigned char* const material =
-                    *reinterpret_cast<unsigned char**>(m_dword310 + 4) + 516u * i;
+                    *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, first)) + sizeof(StaticMeshMaterial) * i;
                 const ShaderMaterial* const shaderMaterial =
                     *reinterpret_cast<const ShaderMaterial* const*>(material + 0x28);
                 const unsigned int alphaMode =
