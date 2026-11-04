@@ -55,6 +55,7 @@ struct Param
     unsigned cls = PC_SCALAR, type = PT_FLOAT, rows = 1, columns = 1, elements = 0;
     std::vector<unsigned char> data;
     std::vector<std::unique_ptr<Param>> annotations;
+    std::vector<std::unique_ptr<Param>> children;   // the elements of a string array
     std::vector<StateAssign> samplerStates;
     IDirect3DBaseTexture9* texture = nullptr;
     bool isObject() const { return cls == PC_OBJECT; }
@@ -562,9 +563,27 @@ void Parser::setDefault(Param& p, string value)
 {
     if (p.type == PT_STRING)
     {
-        size_t a = value.find('"');
-        size_t b = value.rfind('"');
-        if (a != string::npos && b > a) p.text = value.substr(a + 1, b - a - 1);
+        const bool array = p.elements != 0;
+        size_t at = value.find('"');
+        while (at != string::npos)
+        {
+            const size_t end = value.find('"', at + 1);
+            if (end == string::npos) break;
+            const string text = value.substr(at + 1, end - at - 1);
+            if (!array)
+            {
+                p.text = text;
+                break;
+            }
+            std::unique_ptr<Param> element(new Param);
+            element->cls = PC_OBJECT;
+            element->type = PT_STRING;
+            element->text = text;
+            fx.handles.insert(element.get());
+            p.children.push_back(std::move(element));
+            at = value.find('"', end + 1);
+        }
+        if (array) p.elements = static_cast<unsigned>(p.children.size());
         return;
     }
     if (p.isObject()) return;
@@ -1606,6 +1625,20 @@ void* fxGetParameterByName(void* e, void* parent, const char* name)
     return it == fx->byName.end() ? nullptr : it->second;
 }
 
+void* fxGetParameterElement(void* e, void* handle, unsigned index)
+{
+    Param* const p = self(e)->param(handle);
+    return p && index < p->children.size() ? p->children[index].get() : nullptr;
+}
+
+long fxGetString(void* e, void* handle, const char** out)
+{
+    Param* const p = self(e)->param(handle);
+    if (!p) return kFail;
+    *out = p->text.c_str();
+    return kOk;
+}
+
 void* fxGetTechnique(void* e, unsigned index)
 {
     Effect* const fx = self(e);
@@ -1939,6 +1972,8 @@ void* const* effectVtable()
         set(0x14, reinterpret_cast<void*>(&fxGetTechniqueDesc));
         set(0x20, reinterpret_cast<void*>(&fxGetParameter));
         set(0x24, reinterpret_cast<void*>(&fxGetParameterByName));
+        set(0x2C, reinterpret_cast<void*>(&fxGetParameterElement));
+        set(0xCC, reinterpret_cast<void*>(&fxGetString));
         set(0x30, reinterpret_cast<void*>(&fxGetTechnique));
         set(0x34, reinterpret_cast<void*>(&fxGetTechniqueByName));
         set(0x38, reinterpret_cast<void*>(&fxGetPass));
@@ -2071,6 +2106,14 @@ extern "C" long D3DXCreateEffect(void* device, const void* source, unsigned int 
     std::fflush(stderr);
     *effect = fx;
     return kOk;
+}
+
+// ID3DXEffectCompiler stand-in: only its reflection is used, and that is the effect's own surface.
+extern "C" long portableCreateEffectCompiler(const void* source, unsigned int bytes,
+                                             const PortableMacro* defines, void* include,
+                                             void** compiler, void** errors)
+{
+    return D3DXCreateEffect(nullptr, source, bytes, defines, include, 0, nullptr, compiler, errors);
 }
 
 extern "C" unsigned long D3DXGetShaderVersion(const unsigned long* function)
