@@ -364,7 +364,7 @@ void queryWaitDone(void* query)
 // node or empty, and removing that one node is the whole effect.
 void QueryManager::removeQuery(Query* query)
 {
-    vc71::set_node* const node = m_liveQueries.find(reinterpret_cast<unsigned int>(query));
+    vc71::set_node* const node = m_liveQueries.find(reinterpret_cast<uintptr_t>(query));
     if (node != m_liveQueries.end())
         m_liveQueries.erase(node);
 }

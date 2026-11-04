@@ -85,23 +85,23 @@ namespace {
 // The parallel companion table contains vectors of 16-byte records.
 const vc71::vector_layout* geomRecord(const SkinnedMeshTemplate* t, unsigned int geom)
 {
-    return reinterpret_cast<const vc71::vector_layout*>(t->m_vector0DC.first + 32 * geom);
+    return reinterpret_cast<const vc71::vector_layout*>(t->m_vector0DC.first + kSkinnedGeomBytes * geom);
 }
 
 const vc71::vector_layout* companionRecord(const SkinnedMeshTemplate* t, unsigned int geom)
 {
-    return reinterpret_cast<const vc71::vector_layout*>(t->m_vector0CC.first + 16 * geom);
+    return reinterpret_cast<const vc71::vector_layout*>(t->m_vector0CC.first + kSkinnedVectorBytes * geom);
 }
 
 enum
 {
-    kLodRecordStride       = 132,   // the records inside a geom's nested vector
-    kCompanionStride       =  16,   // the records inside the companion's nested vector
+    kLodRecordStride       = kSkinnedLodBytes,   // the records inside a geom's nested vector
+    kCompanionStride       = kSkinnedVectorBytes,   // the records inside the companion's nested vector
     kMaterialStride        = kSkinnedMaterialRecordBytes,   // what +0x58 counts out of m_lodMaterials
     kPartRecordStride      =  68,   // the records +0x58 gathers ids from
     kLodBoundsOffset       =  28,   // MeshBounds inside the 132-byte lod record: the radius
     kLodBoundsDirtyOffset  =  32,   // and its "needs finalising" byte
-    kLodPartVectorOffset   =  68,   // first/last of the part vector, at +68 / +72
+    kLodPartVectorOffset   =  64 + sizeof(void*),   // first/last of the part vector, at +68 / +72
     kLightRecordStride     =  68    // the records the draw builds at +0x584
 };
 
@@ -1094,12 +1094,12 @@ void SkinnedMesh::gatherVisibleParts(HostIntVector* out)
 
     for (unsigned int i = 0; i < geomCount; ++i)
     {
-        const unsigned int byteOffset = 16 * i;
+        const unsigned int byteOffset = kSkinnedVectorBytes * i;
         const int* part = *reinterpret_cast<int* const*>(
             m_lodRecord + byteOffset + kLodPartVectorOffset);
 
         while (part != *reinterpret_cast<int* const*>(
-                   m_lodRecord + byteOffset + kLodPartVectorOffset + 4))
+                   m_lodRecord + byteOffset + kLodPartVectorOffset + sizeof(void*)))
         {
             if (m_excludedPart != *part)
                 ids.push_back(*part);
@@ -1148,7 +1148,7 @@ int SkinnedMesh::getGeomIndex() const
 int SkinnedMesh::getGeomCount() const
 {
     if (m_template->m_loaded && m_template->m_vector0DC.first)
-        return static_cast<int>((m_template->m_vector0DC.last - m_template->m_vector0DC.first) / 32);
+        return static_cast<int>((m_template->m_vector0DC.last - m_template->m_vector0DC.first) / kSkinnedGeomBytes);
     return 0;
 }
 
@@ -1381,11 +1381,11 @@ void SkinnedMesh::updateBonePalettes()
     {
         m_boneCounts[geom] = 0;
 
-        const unsigned int vectorOffset = 16 * geom + kLodPartVectorOffset;
+        const unsigned int vectorOffset = kSkinnedVectorBytes * geom + kLodPartVectorOffset;
         unsigned char* part = *reinterpret_cast<unsigned char* const*>(m_lodRecord + vectorOffset);
         Mat4** palette = &m_bonePalettes[geom][0];
 
-        if (part != *reinterpret_cast<unsigned char* const*>(m_lodRecord + vectorOffset + 4))
+        if (part != *reinterpret_cast<unsigned char* const*>(m_lodRecord + vectorOffset + sizeof(void*)))
         {
             do
             {
@@ -1412,7 +1412,7 @@ void SkinnedMesh::updateBonePalettes()
                 part += kPartRecordStride;
             }
             // The end pointer is RE-read from the object each iteration, not cached. Preserved.
-            while (part != *reinterpret_cast<unsigned char* const*>(m_lodRecord + vectorOffset + 4));
+            while (part != *reinterpret_cast<unsigned char* const*>(m_lodRecord + vectorOffset + sizeof(void*)));
 
             if (m_boneCounts[geom])
                 continue;
@@ -1457,7 +1457,7 @@ void SkinnedMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsign
         return;
     if (!m_transform)
         return;
-    if (alphaPass && !m_lodRecord[129])
+    if (alphaPass && !m_lodRecord[kSkinnedLodFlags + 1])
         return;
 
     updateLodSelection();
@@ -1688,7 +1688,7 @@ void SkinnedMesh::draw(void*, void*, void*)
 
         if (gathered || skinnedMeshRendererMode() == 2)
         {
-            if (m_lodRecord[128] && skinnedMeshRendererMode() != 2)
+            if (m_lodRecord[kSkinnedLodFlags] && skinnedMeshRendererMode() != 2)
                 skinnedMeshRendererSubmitA(this);
             skinnedMeshRendererSubmitB(this);
         }

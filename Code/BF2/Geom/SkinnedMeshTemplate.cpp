@@ -75,7 +75,7 @@ void instanceSetInsert(vc71::set_layout& set, void* instance)
 
 void instanceSetErase(vc71::set_layout& set, void* instance)
 {
-    if (vc71::set_node* const node = set.find(reinterpret_cast<unsigned int>(instance)))
+    if (vc71::set_node* const node = set.find(reinterpret_cast<uintptr_t>(instance)))
         set.erase(node);
 }
 
@@ -679,7 +679,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
 
         // The geom's own companion entry - the receiver measured at 0x1010FF49.
         vc71::vector_layout* const geomCompanion =
-            reinterpret_cast<vc71::vector_layout*>(m_vector0CC.first + 16 * geom);
+            reinterpret_cast<vc71::vector_layout*>(m_vector0CC.first + kSkinnedVectorBytes * geom);
         skinnedMeshReserveLods(geomCompanion, lodCount);   // sub_10114D00 - one entry per lod
 
         int lodByteOffset       = 0;                   // 132 * destination lod
@@ -693,14 +693,14 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
             unsigned char* const lodRecord =
                 reinterpret_cast<unsigned char*>(
                     reinterpret_cast<const vc71::vector_layout*>(
-                        m_vector0DC.first + 32 * geom)->first) + lodByteOffset;
+                        m_vector0DC.first + kSkinnedGeomBytes * geom)->first) + lodByteOffset;
             vc71::vector_layout* const companion =
                 reinterpret_cast<vc71::vector_layout*>(
                     reinterpret_cast<unsigned char*>(geomCompanion->first) + companionByteOffset);
 
             // Reset per-LOD humanskin and alpha-test flags before scanning materials.
-            lodRecord[0x80] = 0;
-            lodRecord[0x81] = 0;
+            lodRecord[kSkinnedLodFlags] = 0;
+            lodRecord[kSkinnedLodFlags + 1] = 0;
 
             unsigned int materialCount = 0;
             stream->read(&materialCount, 4);
@@ -737,7 +737,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                 if (std::strstr(shaderName, "tangent"))
                     m_byte0FC = 1;                     // +0xFC, the template-wide tangent flag
                 if (std::strstr(shaderName, "humanskin"))
-                    lodRecord[0x80] = 1;
+                    lodRecord[kSkinnedLodFlags] = 1;
 
                 // Gather textures in the temporary material's vector.
                 unsigned int textureCount = 0;
@@ -891,13 +891,13 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
             // Reuse the destination slot after consuming a skipped LOD from the stream.
             if (lodsToSkip > 0)
             {
-                lodByteOffset       -= 132;
-                companionByteOffset -= 16;
+                lodByteOffset       -= kSkinnedLodBytes;
+                companionByteOffset -= kSkinnedVectorBytes;
                 --lodsToSkip;
                 --lod;
             }
-            lodByteOffset       += 132;
-            companionByteOffset += 16;
+            lodByteOffset       += kSkinnedLodBytes;
+            companionByteOffset += kSkinnedVectorBytes;
             if (++lod >= lodCount)
                 break;
         }
@@ -1025,8 +1025,8 @@ void SkinnedMeshTemplate::readLods(::renddx9abi::HostNonlinearStream* stream)
 
     // sub_10115700 - resize the 32-byte geom-record vector. Its prototype is a default record:
     // two empty vectors and the pad.
-    static const unsigned char kEmptyGeomRecord[32] = { 0 };
-    vectorResizeRaw(m_vector0DC, geomCount, 32, kEmptyGeomRecord);
+    static const unsigned char kEmptyGeomRecord[kSkinnedGeomBytes] = { 0 };
+    vectorResizeRaw(m_vector0DC, geomCount, kSkinnedGeomBytes, kEmptyGeomRecord);
     if (!geomCount)
         return;
 
@@ -1050,14 +1050,14 @@ void SkinnedMeshTemplate::readLods(::renddx9abi::HostNonlinearStream* stream)
         reinterpret_cast<int*>(m_lodCounts.first)[geom] = kept;
 
         unsigned char* const geomRecord =
-            reinterpret_cast<unsigned char*>(m_vector0DC.first) + 32 * geom;
+            reinterpret_cast<unsigned char*>(m_vector0DC.first) + kSkinnedGeomBytes * geom;
         vc71::vector_layout& lods =
             *reinterpret_cast<vc71::vector_layout*>(geomRecord);            // +0x00, 132-byte lods
         vc71::vector_layout& distances =
-            *reinterpret_cast<vc71::vector_layout*>(geomRecord + 0x10);     // +0x10, floats
+            *reinterpret_cast<vc71::vector_layout*>(geomRecord + kSkinnedVectorBytes);     // +0x10, floats
 
-        static const unsigned char kEmptyLodRecord[132] = { 0 };
-        vectorResizeRaw(lods, static_cast<unsigned int>(kept), 132, kEmptyLodRecord);
+        static const unsigned char kEmptyLodRecord[kSkinnedLodBytes] = { 0 };
+        vectorResizeRaw(lods, static_cast<unsigned int>(kept), kSkinnedLodBytes, kEmptyLodRecord);
         const float kZeroDistance = 0.0f;
         vectorResizeRaw(distances, static_cast<unsigned int>(kept - 1), 4,
                         &kZeroDistance);
@@ -1102,9 +1102,9 @@ void SkinnedMeshTemplate::readLods(::renddx9abi::HostNonlinearStream* stream)
                 {
                     --remainingSkips;
                     --lodIndex;
-                    byteOffset -= 132;
+                    byteOffset -= kSkinnedLodBytes;
                 }
-                byteOffset += 132;
+                byteOffset += kSkinnedLodBytes;
                 ++lodIndex;
             }
             while (lodIndex < kept);
@@ -1201,16 +1201,16 @@ int SkinnedMeshTemplate::getMaterialCount(unsigned int lod)
     int total = 0;
     const unsigned int geomCount =
         m_vector0DC.first
-            ? static_cast<unsigned int>(m_vector0DC.last - m_vector0DC.first) >> 5
+            ? static_cast<unsigned int>(m_vector0DC.last - m_vector0DC.first) / kSkinnedGeomBytes
             : 0u;
 
     for (unsigned int geom = 0; geom < geomCount; ++geom)
     {
         const vc71::vector_layout* const lods =
             reinterpret_cast<const vc71::vector_layout*>(
-                reinterpret_cast<const unsigned char*>(m_vector0DC.first) + 32 * geom);
+                reinterpret_cast<const unsigned char*>(m_vector0DC.first) + kSkinnedGeomBytes * geom);
         if (!lods->first
-            || lod >= static_cast<unsigned int>((lods->last - lods->first) / 132))
+            || lod >= static_cast<unsigned int>((lods->last - lods->first) / kSkinnedLodBytes))
             continue;
 
         const vc71::vector_layout* const lodCompanion =
@@ -1229,16 +1229,16 @@ int SkinnedMeshTemplate::getLodPrimitiveCount(unsigned int lod)
     int total = 0;
     const unsigned int geomCount =
         m_vector0DC.first
-            ? static_cast<unsigned int>(m_vector0DC.last - m_vector0DC.first) >> 5
+            ? static_cast<unsigned int>(m_vector0DC.last - m_vector0DC.first) / kSkinnedGeomBytes
             : 0u;
 
     for (unsigned int geom = 0; geom < geomCount; ++geom)
     {
         const vc71::vector_layout* const lods =
             reinterpret_cast<const vc71::vector_layout*>(
-                reinterpret_cast<const unsigned char*>(m_vector0DC.first) + 32 * geom);
+                reinterpret_cast<const unsigned char*>(m_vector0DC.first) + kSkinnedGeomBytes * geom);
         if (!lods->first
-            || lod >= static_cast<unsigned int>((lods->last - lods->first) / 132))
+            || lod >= static_cast<unsigned int>((lods->last - lods->first) / kSkinnedLodBytes))
             continue;
 
         const vc71::vector_layout* const lodCompanion =

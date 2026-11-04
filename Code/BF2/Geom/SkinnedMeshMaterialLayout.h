@@ -14,6 +14,15 @@ unsigned char* raMaterialFieldBytes(void* parameters, unsigned int retail);
 
 namespace dice { namespace hfe { namespace geom {
 
+// The lod record: 64 bytes of bounds, four part vectors, two flag bytes, padding.
+enum
+{
+    kSkinnedVectorBytes = 4 * sizeof(void*),
+    kSkinnedLodFlags    = 64 + 4 * kSkinnedVectorBytes,
+    kSkinnedLodBytes    = kSkinnedLodFlags + 2 * sizeof(void*) - (sizeof(void*) == 4 ? 4 : 8),
+    kSkinnedGeomBytes   = 2 * kSkinnedVectorBytes
+};
+
 #if UINTPTR_MAX > 0xFFFFFFFFu
 enum { kSkinnedMaterialRecordBytes = 0x368 };
 

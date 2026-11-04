@@ -857,7 +857,7 @@ void bufferManagerCollectUnused()
                 for (unsigned int candidate = 0; candidate < 2; ++candidate)
                 {
                     vc71::set_layout& owned = pointerSet(manager, firstList - candidate);
-                    vc71::set_node* found = owned.find(reinterpret_cast<unsigned int>(buffer));
+                    vc71::set_node* found = owned.find(reinterpret_cast<uintptr_t>(buffer));
                     if (found == owned.end())
                         continue;
                     if (i < 2)
