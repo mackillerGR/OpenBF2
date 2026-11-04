@@ -68,7 +68,7 @@ inline Fn simpleVslot(void* object, unsigned int byteOffset)
 // offsets and the argument shapes are recovered.
 void setGeometryAnimatedUVTranslation(void* geometry, int index, float first, float second)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int slot = 0x90;
 #else
     const unsigned int slot = 0x94;
@@ -79,7 +79,7 @@ void setGeometryAnimatedUVTranslation(void* geometry, int index, float first, fl
 
 void setGeometryAnimatedUVRotation(void* geometry, int index, const Mat4& transform)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int slot = 0x98;
 #else
     const unsigned int slot = 0x9C;

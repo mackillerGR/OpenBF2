@@ -18,7 +18,7 @@ namespace {
 
 // Passes the bone-matrix pointer and count to the renderer.
 // [PLATFORM] Verified slots are ELF 0x58 and PE 0x54; retain the two-argument calling convention.
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #define BF2_ANTENNA_GEOM_CALL __thiscall
 const unsigned int setBoneTransformsSlot = 0x54;
 #else

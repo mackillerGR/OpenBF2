@@ -120,7 +120,7 @@ typedef void (BF2_VCALL* VFn_geomSet)(void*, int);
 
 // [PLATFORM] Geometry dispatch slots differ between ELF and PE.
 // Use the verified mapping for each operation; a uniform offset adjustment is not valid for the entire interface.
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 const unsigned int kGeomSetSubGeometrySlot   = 0x6C;
 const unsigned int kGeomSubGeometryCountSlot = 0x74;
 const unsigned int kGeomSetLodSlot           = 0x78;

@@ -35,7 +35,7 @@ struct GeometryInstanceData
     // No x86 fastcall dummy register argument may be carried into the native x64 call.
     void setOpacity(float value)
     {
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         typedef void (__thiscall* Function)(void*, float);
         reinterpret_cast<Function>(m_vptr[61])(this, value);
 #else

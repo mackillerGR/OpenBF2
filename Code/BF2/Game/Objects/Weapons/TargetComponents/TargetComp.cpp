@@ -46,7 +46,7 @@ IPlayerControlObject* findPlayerControlObject(IObject* object)
 // read: the same operation is ELF +0xD8 and PE +0xD4 (the Itanium destructor-pair shift).
 void geometrySetConnectionEffect(void* geometry, int enabled)
 {
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef void (__thiscall *Method)(void*, int);
     const unsigned int slot = 0xD4 / sizeof(void*);
 #else

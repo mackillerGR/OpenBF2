@@ -59,7 +59,7 @@ void findTemplateChildsOfType(std::vector<BundleTemplate::TemplateInfo*>& childr
 
 // Geometry selection and LOD selection are different interfaces. Kit indices select geometry records.
 // [PLATFORM] Use the verified per-port geometry slots below.
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 typedef int  (__thiscall *GeometryGetIntFn)(void*);
 typedef void (__thiscall *GeometrySetIntFn)(void*, int);
 typedef void (__thiscall *GeometrySetBoneTransformsFn)(void*, const Mat4*, unsigned int);

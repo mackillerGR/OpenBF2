@@ -111,7 +111,7 @@ float evaluateTransparencyGraph(const Vec4& graph, float t)
 // Both slots are the same in the two images for the whole-geometry transform (+0x50) and one apart
 // for the chain link (PE +0xCC / ELF +0xD0) - the RendDX9 BundledMesh table 0x1021B350 names them
 // setGeometryTransformation (0x10103DB0, keeps the pointer) and getNextGeometry (0x101071C0).
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #define BF2_PARTICLE_GEOMETRY_CALL __thiscall
 #else
 #define BF2_PARTICLE_GEOMETRY_CALL

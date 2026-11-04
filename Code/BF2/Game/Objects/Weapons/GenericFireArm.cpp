@@ -428,7 +428,7 @@ void GenericFireArm::updateGeometry()
         // / client PE 0x5E0610: suppress the original mesh while an
         // alternate display object supplies it. Both ABIs call geometry +0x50;
         // this is the whole-object transform, not the adjacent per-part slot.
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         typedef void (__thiscall* SetTransformation)(void*, const Mat4&);
 #else
         typedef void (*SetTransformation)(void*, const Mat4&);

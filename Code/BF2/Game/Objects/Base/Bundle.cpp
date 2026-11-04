@@ -36,7 +36,7 @@ inline Fn bundleVslot(void* object, unsigned int byteOffset)
 void setGeometryPartTransformation(geom::IGeometry* geometry,
                                    const Mat4& transformation, int part)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int slot = 0x4C;
 #else
     const unsigned int slot = 0x54;

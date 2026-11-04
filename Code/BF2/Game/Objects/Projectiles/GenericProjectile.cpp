@@ -107,7 +107,7 @@ float sampleRandomDistribution(const RandomDistribution& distribution)
 // one more destructor entry. ELF updateTracer 0x82817D2 calls +0x3C; PE 0x5B1941 calls +0x38.
 IObjectTemplate* getGeometryTemplate(IBase* geometry)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     // Retail offsets describe four-byte entries; native MSVC x64 keeps the PE
     // ordinal, including its single destructor slot, with eight-byte entries.
     enum { GetTemplateIndex = 0x38 / 4 };

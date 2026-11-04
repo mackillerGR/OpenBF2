@@ -79,7 +79,7 @@ namespace {
 
 // Geometry-state access uses setGeomIndex/getGeomCount, distinct from the LOD family.
 // PE slots are +0x6C/+0x74; ELF slots are +0x70/+0x78. Geometry records contain LOD records.
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 typedef int  (__thiscall *GeometryGetIntFn)(void*);
 typedef void (__thiscall *GeometrySetIntFn)(void*, int);
 const unsigned int kGeometrySetGeomIndexSlot = 0x6C;
@@ -110,7 +110,7 @@ int geometryGetPartCount(void* geometry)
 // Initializes damage visibility and fade on a valid geometry component.
 // The two fade fields are ELF +0x10/+0x14 and PE +0x28/+0x2C because string layouts differ.
 // Writes 1 to the first field, then passes the second field to setFade; neither helper null-checks.
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 const unsigned int kGeometryShowDamageSlot = 0xC0;
 typedef void (__thiscall *GeometryShowDamageFn)(void*, int, int);
 #else

@@ -1176,7 +1176,7 @@ float Object::getVisualBoundingRadius() const
         candidate = static_cast<ICollisionMesh*>(self->m_collisionMesh)->getMaxBoundingRadius();
     else if (self->m_geometry)
     {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         const unsigned int getTemplateSlot = 0x38;
         const unsigned int getRadiusSlot = 0x44;
 #else
@@ -1364,7 +1364,7 @@ void Object::SetActiveLod(ObjectLodType lod)
     void* geometry = m_geometry;
     if (geometry)
     {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         const unsigned int setSlot = 0x6C;
         const unsigned int countSlot = 0x74;
 #else
@@ -1399,7 +1399,7 @@ void Object::updateGeometry()
         m_geometry, getVisualAbsoluteTransformation());
     m_flags &= ~0x40000000u;
 
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int nextSlot = 0xCC;
 #else
     const unsigned int nextSlot = 0xD0;
@@ -1612,7 +1612,7 @@ void Object::setLightSourceMask(int mask)
 {
     if (!m_geometry)
         return;
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int slot = 0xE0;
 #else
     const unsigned int slot = 0xE4;
@@ -1625,7 +1625,7 @@ int Object::getLightSourceMask() const
 {
     if (!m_geometry)
         return 7;
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int slot = 0xE4;
 #else
     const unsigned int slot = 0xE8;

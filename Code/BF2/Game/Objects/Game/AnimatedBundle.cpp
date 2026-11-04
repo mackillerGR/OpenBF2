@@ -18,7 +18,7 @@ namespace {
 // IGeometry is still unrecovered, so its one pose call remains isolated here. Animation-system
 // calls are typed: PE has one destructor slot where ELF has two, making fixed raw offsets invalid
 // as soon as the formerly-null template pointers become live.
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #  define BF2_AB_VCALL __thiscall
 const unsigned int kGeometryPoseSlot = 0x54;
 #else

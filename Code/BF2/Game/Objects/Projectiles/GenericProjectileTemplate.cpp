@@ -52,7 +52,7 @@ IObjectTemplate* lookupTracerGeometryTemplate(const std::string& name)
     return reinterpret_cast<IObjectTemplate*>(manager->getTemplate(name));
 #else
     // The manager header carries x86 renderer layouts; other builds retain this lookup adapter.
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef IBase* (__thiscall *GetTemplateFn)(void*, const std::string&);
 #else
     typedef IBase* (*GetTemplateFn)(void*, const std::string&);

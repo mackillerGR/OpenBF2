@@ -29,7 +29,7 @@ namespace {
 
 // geom::IGeometry is still unrecovered.  This is the complete bounded surface used by DefaultZoom.
 // Its virtual destructor differs across the two retail ABIs, shifting every geometry slot after it.
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 typedef int (__thiscall *GeometryGetIntFn)(void*);
 typedef void (__thiscall *GeometrySetLodFn)(void*, int);
 typedef void* (__thiscall *GeometryGetTemplateFn)(void*);

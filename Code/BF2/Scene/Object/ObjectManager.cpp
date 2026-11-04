@@ -83,7 +83,7 @@ public:
 // IGeometry remains opaque. Its destructor adds one table entry on Itanium.
 inline geom::IGeometryTemplate* geometryTemplate(IBase* geometry)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     // The MSVC destructor occupies one slot on both x86 and native x64.
     enum { GetTemplateIndex = 14 }; // retail PE +0x38 / four-byte slot
     typedef geom::IGeometryTemplate* (__thiscall *GetTemplateFn)(void*);

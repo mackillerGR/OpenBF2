@@ -18,7 +18,7 @@ namespace world {
 namespace {
 // Selects sharp blades or a blurred disc through the renderer geometry interface.
 // The PE and ELF slot offsets differ; getGeomCount counts geometries, not LODs.
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #define BF2_ROTOR_GEOM_CALL __thiscall
 const unsigned int setGeomSlot = 0x6C, getGeomCountSlot = 0x74;
 #else

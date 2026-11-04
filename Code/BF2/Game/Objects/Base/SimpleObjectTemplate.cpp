@@ -683,7 +683,7 @@ void SimpleObjectTemplate::setAnchorOffset(const Vec3& offset)
 // [PLATFORM] ELF returns the transformed Vec3 by value; keep this separate from the renderer's output-pointer signature.
 Vec3 SimpleObjectTemplate::getAnchorPos() const
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef void* (__thiscall* FindGeometry)(void*, const std::string&);
     typedef Vec3 (__thiscall* TransformAnchor)(void*, const Vec3&);
 #else
@@ -695,7 +695,7 @@ Vec3 SimpleObjectTemplate::getAnchorPos() const
         reinterpret_cast<FindGeometry>(managerVtable[0x18 / 4])(0, m_geometry));
     if (geometry && geometry->getCompressVertexData())
     {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         // [PLATFORM] MSVC evaluates the offset getter before the transformed-anchor operand.
         const Vec3& offset = getAnchorOffset();
         const Vec3 anchor = reinterpret_cast<TransformAnchor>(
@@ -730,7 +730,7 @@ Vec3 SimpleObjectTemplate::getAnchorPos() const
     geom::IGeometryTemplate* const geometry = manager->getTemplate(m_geometry);
 #else
     // The manager header carries x86 renderer layouts; other builds retain this lookup adapter.
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef IBase* (__thiscall* GetTemplateFn)(void*, const std::string&);
 #else
     typedef IBase* (*GetTemplateFn)(void*, const std::string&);

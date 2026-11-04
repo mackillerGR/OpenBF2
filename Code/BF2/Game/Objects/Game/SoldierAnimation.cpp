@@ -61,7 +61,7 @@ typedef object_detail::LayoutAccess L;     // the raw Object offsets, as Soldier
 // images: handleMessage is PE/MSVC +0x60 and ELF/Itanium +0x64 (the destructor-pair shift).
 void geometryHandleMessage(void* geometry, TemplateMessage message, void* payload)
 {
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef void (__thiscall *Method)(void*, TemplateMessage, void*);
     const unsigned int slot = 0x60 / sizeof(void*);
 #else
@@ -74,7 +74,7 @@ void geometryHandleMessage(void* geometry, TemplateMessage message, void* payloa
 
 // Renderer dispatch for field of view, geometry selection and bone palettes.
 // Explicit PE/ELF slot constants account for their differing destructor layouts.
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #define BF2_SOLDIER_GEOM_CALL __thiscall
 const unsigned int kGeometrySetFovSlot            = 0x10;
 const unsigned int kGeometrySetGeomIndexSlot      = 0x6C;

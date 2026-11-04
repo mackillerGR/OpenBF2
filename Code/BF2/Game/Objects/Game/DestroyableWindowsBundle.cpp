@@ -21,7 +21,7 @@ namespace {
 // Names of the secondary-geometry pair are [INFERRED]. Offsets are read on both ports, not derived
 // by subtracting a destructor slot: part transform PE +0x4C / ELF +0x54, secondary getter
 // PE +0xCC / ELF +0xD0, setter PE +0xC8 / ELF +0xCC. All are instance calls.
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 #define BF2_WINDOWS_CALL __thiscall
 const unsigned int partSlot = 0x4C, getSecondarySlot = 0xCC, setSecondarySlot = 0xC8;
 #else

@@ -31,7 +31,7 @@ namespace {
 // getSubgeom            +0x70               +0x74
 // setLod                +0x78               +0x7C
 // getLodCount           +0x80               +0x84
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
 typedef int  (__thiscall *GeometryGetIntFn)(void*);
 typedef void (__thiscall *GeometrySetLodFn)(void*, int);
 const std::size_t kGeometryGetSubgeomSlot = 0x70 / 4;

@@ -93,7 +93,7 @@ float sample(const RandomDistribution& distribution)
 }
 float geometryFov(void* geometry)
 {
-#if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef float (__thiscall* Function)(void*);
 #else
     typedef float (*Function)(void*);

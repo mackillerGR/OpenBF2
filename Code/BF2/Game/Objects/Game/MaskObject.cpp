@@ -72,7 +72,7 @@ void MaskObject::updateGeometryPosition(Soldier* soldier)
         anim::Skeleton* skeleton = soldier->getCollisionSkeleton(soldier->getPose());
         // IGeometry remains undeclared. Keep the proven pose seam isolated and express the
         // genuine ABI difference: PE dispatches +0x54, ELF +0x58 (one versus two destructor slots).
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
         typedef void (__thiscall* GeometryPoseFn)(void*, void*, int);
         const unsigned int slot = 0x54 / 4;
 #else
