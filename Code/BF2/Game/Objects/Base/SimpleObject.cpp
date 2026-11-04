@@ -175,7 +175,7 @@ bool setGeometry(IObject* object, const std::string& geometry)
     // same policy as ObjectDrawer's +0x18 and +0xCC.
     typedef void (__thiscall* SetGeometryOwnerFn)(void*, IObject*);
     reinterpret_cast<SetGeometryOwnerFn>(
-        (*reinterpret_cast<void***>(instance))[0x9C / sizeof(void*)])(instance, object);
+        (*reinterpret_cast<void***>(instance))[0x9C / 4])(instance, object);
 
     instance->release();
     return true;

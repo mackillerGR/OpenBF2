@@ -178,9 +178,17 @@ const void* const kPostProdVtable[24] =
 
 
 // Releases and clears the owned distortion-noise texture on device loss.
-void __fastcall dl_onLost(void* self BF2_EDX_PARAM)
+// The block's retail base for listener-relative offsets. Three pointer-wide vptrs do not fit the
+// retail +0/+4/+8 faces, so on every host the listener face is a separate cell and reads the block
+// through the owner global. [CHOSEN, not recovered]
+inline char* listenerBase()
 {
-    EngineTexture*& noise = *reinterpret_cast<EngineTexture**>(static_cast<char*>(self) + 0x1FC);
+    return reinterpret_cast<char*>(g_PostProductionFrameWorkOwner) + 4;
+}
+
+void __fastcall dl_onLost(void* BF2_EDX_PARAM)
+{
+    EngineTexture*& noise = *reinterpret_cast<EngineTexture**>(listenerBase() + 0x1FC);
     textureReleaseRef(noise);
 }
 
@@ -189,8 +197,9 @@ void __fastcall dl_onLost(void* self BF2_EDX_PARAM)
 // flag to 0 (sub_10017E20), reload the texture BY name (sub_10019260, the string copied by value)
 // into owner+0x200, and restore the flag. The old pointer is not released first - the lost slot
 // already nulled it.
-void __fastcall dl_onReset(void* self BF2_EDX_PARAM)
+void __fastcall dl_onReset(void* BF2_EDX_PARAM)
 {
+    char* const self = listenerBase();
     const vc71::string& name = *reinterpret_cast<const vc71::string*>(static_cast<char*>(self) + 0x200);
     if (name.size() == 0)
         return;
@@ -253,14 +262,16 @@ int __fastcall el_handleEvent(void* self BF2_EDX_PARAM, int a2, int a3, int a4, 
     return result;
 }
 
-int  __fastcall el_addRef (void* self BF2_EDX_PARAM) { return ++U(self, 12); }
-int  __fastcall el_getRc  (void* self BF2_EDX_PARAM) { return   U(self, 12); }
+// The refcount's retail word is under the widened framework vptr, so it lives here.
+int g_ownerRefCount = 1;
+int  __fastcall el_addRef (void* BF2_EDX_PARAM) { return ++g_ownerRefCount; }
+int  __fastcall el_getRc  (void* BF2_EDX_PARAM) { return   g_ownerRefCount; }
 
 // decrement; at zero invoke the PostProductionFrameWork subobject's deleting dtor
 // (owner+8 vtable slot 0), i.e. `(*(*(this+8)))(this+8, 1)`.
 int __fastcall el_release(void* self BF2_EDX_PARAM)
 {
-    int v = --U(self, 12);
+    int v = --g_ownerRefCount;
     if (!v)
     {
         void* sub = static_cast<char*>(self) + 8;
@@ -310,6 +321,8 @@ void applySecondaryDefaults(void* owner)
 // and fullscreen rendering remain deferred; resource fields stay zero until implemented.
 // [RETIRE-WHEN: the post-production render path is recovered]
 
+const void* g_listenerFace = 0;
+
 void* postProductionFrameWorkOwnerCtor(void* mem)
 {
     // The shipped ctor sets every field explicitly; we memset first and then write only the non-zero
@@ -317,11 +330,11 @@ void* postProductionFrameWorkOwnerCtor(void* mem)
     memset(mem, 0, 548);
 
     // The three interface vtables (owner+0 / +4 / +8).
-    U(mem,  0) = ::renddx9abi::addr(kOwnerVtable);
-    U(mem,  4) = ::renddx9abi::addr(kDeviceLostVtable);
-    U(mem,  8) = ::renddx9abi::addr(kPostProdVtable);
+    *static_cast<const void**>(mem) = kOwnerVtable;
+    g_listenerFace = kDeviceLostVtable;
+    *reinterpret_cast<const void**>(static_cast<char*>(mem) + 8) = kPostProdVtable;
 
-    U(mem, 12) = 1u;                      // this+3  refcount
+    g_ownerRefCount = 1;                  // this+3  refcount
 
     // this+10..16 (byte 40..64): the ctor sets these twice; the final values are written here.
     U(mem, 40) = 1065353216u;             // 1.0f
@@ -383,7 +396,7 @@ void* postProductionFrameWorkOwnerCtor(void* mem)
     // `lea eax, [esi+4]` ... 0x1005080E `mov ecx, dword_1023B970; push eax; call sub_10009D60`:
     // RendDX9_registerDeviceLostResetListener(owner + 4, 3). DX9RendModule::init constructs this
     // after the Renderer (pass two of initDll), so the list at dword_1023B970+0x5C exists.
-    registerDeviceLostResetListener(static_cast<char*>(mem) + sizeof(void*), 3);
+    registerDeviceLostResetListener(&g_listenerFace, 3);
 
     ::renddx9abi::logf("PostProductionFrameWork constructed at owner 0x%08X (singleton owner+8) - "
                        "vtables live, state defaulted, device-lost listener registered (priority "
@@ -397,10 +410,9 @@ void* postProductionFrameWorkOwnerCtor(void* mem)
 // [FRONTIER] Remaining destructor work depends on deferred event/resource acquisition.
 void postProductionFrameWorkOwnerDetach(void* owner)
 {
-    U(owner, 0) = ::renddx9abi::addr(kOwnerVtable);
-    U(owner, 4) = ::renddx9abi::addr(kDeviceLostVtable);
-    U(owner, 8) = ::renddx9abi::addr(kPostProdVtable);
-    unregisterDeviceLostResetListener(static_cast<char*>(owner) + sizeof(void*));
+    *static_cast<const void**>(owner) = kOwnerVtable;
+    *reinterpret_cast<const void**>(static_cast<char*>(owner) + 8) = kPostProdVtable;
+    unregisterDeviceLostResetListener(&g_listenerFace);
 }
 
 // Stores 0..255 RGB as normalized fog colour. Requires the post-production owner.

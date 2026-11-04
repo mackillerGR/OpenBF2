@@ -306,7 +306,7 @@ unsigned int BundledMeshTemplate::getMemoryUsage(int mask)
     if(mask==-1)
     { unsigned int result=getMemoryUsage(1); result+=getMemoryUsage(2); result+=getMemoryUsage(4); return result; }
     if((mask&8)&&m_indexBuffer) return m_indexCount/3;
-    if((mask&1)&&m_vertexBuffer) return *reinterpret_cast<unsigned int*>(static_cast<char*>(m_vertexBuffer)+32);
+    if((mask&1)&&m_vertexBuffer) return *reinterpret_cast<unsigned int*>(static_cast<char*>(m_vertexBuffer)+32+3*(sizeof(void*)-4));
     if((mask&2)&&m_indexBuffer) return 2*m_indexCount;
     if(mask&4)
     {
@@ -340,9 +340,9 @@ void BundledMeshTemplate::releaseDeviceResources() //actually preloads
     static std::vector<dx9rend::EngineTexture*> textures;
     textures.clear();
     if(m_vertexBuffer)
-    { IDirect3DResource9* r=*reinterpret_cast<IDirect3DResource9**>(static_cast<char*>(m_vertexBuffer)+8); if(r) r->PreLoad(); }
+    { IDirect3DResource9* r=*reinterpret_cast<IDirect3DResource9**>(static_cast<char*>(m_vertexBuffer)+2*sizeof(void*)); if(r) r->PreLoad(); }
     if(m_indexBuffer)
-    { IDirect3DResource9* r=*reinterpret_cast<IDirect3DResource9**>(static_cast<char*>(m_indexBuffer)+8); if(r) r->PreLoad(); }
+    { IDirect3DResource9* r=*reinterpret_cast<IDirect3DResource9**>(static_cast<char*>(m_indexBuffer)+2*sizeof(void*)); if(r) r->PreLoad(); }
     if(count<vc71::vector_layout>(m_materials)>=2)
     {
         vc71::vector_layout& v=materials(this,1,0);
@@ -439,7 +439,7 @@ void BundledMeshTemplate::buildVertexBuffers()
         UINT n=16;
         D3DVERTEXELEMENT9* elements=static_cast<D3DVERTEXELEMENT9*>(renddx9abi::engineAlloc(128));
         std::memset(elements,0,128);
-        (*reinterpret_cast<IDirect3DVertexDeclaration9**>(static_cast<char*>(m_vertexDeclaration)+8))->GetDeclaration(elements,&n);
+        (*reinterpret_cast<IDirect3DVertexDeclaration9**>(static_cast<char*>(m_vertexDeclaration)+2*sizeof(void*)))->GetDeclaration(elements,&n);
         const unsigned char normalType=(*reinterpret_cast<unsigned int*>(static_cast<char*>(dx9rend::g_deviceCaps)+0xEC)&0x80)?14:4;
         unsigned int removed=0;
         for(unsigned int i=0;i<n&&elements[i].Stream!=255;++i)
@@ -559,7 +559,7 @@ void BundledMeshTemplate::readMaterials(renddx9abi::HostNonlinearStream* stream)
     const unsigned int geoms=count<int>(m_lodCounts); resize(m_materials,geoms,emptyVector());
     D3DVERTEXELEMENT9* elements=static_cast<D3DVERTEXELEMENT9*>(renddx9abi::engineAlloc(128));
     std::memset(elements,0,128); UINT n=16;
-    (*reinterpret_cast<IDirect3DVertexDeclaration9**>(static_cast<char*>(m_vertexDeclaration)+8))->GetDeclaration(elements,&n);
+    (*reinterpret_cast<IDirect3DVertexDeclaration9**>(static_cast<char*>(m_vertexDeclaration)+2*sizeof(void*)))->GetDeclaration(elements,&n);
     bool hasUv1=false,hasTangent=false;
     for(unsigned int i=0;i<n;++i)
     {
@@ -624,9 +624,9 @@ void BundledMeshTemplate::finalizeMaterials()
             for(unsigned int i=0;i<count<BundledMeshMaterial*>(v);++i)
             {
                 BundledMeshMaterial* m=data<BundledMeshMaterial*>(v)[i];
-                m->m_vertexBuffer=*reinterpret_cast<void**>(static_cast<char*>(m_vertexBuffer)+8);
-                m->m_indexBuffer=*reinterpret_cast<void**>(static_cast<char*>(m_indexBuffer)+8);
-                m->m_vertexStride=*reinterpret_cast<unsigned int*>(static_cast<char*>(m_vertexBuffer)+40);
+                m->m_vertexBuffer=*reinterpret_cast<void**>(static_cast<char*>(m_vertexBuffer)+2*sizeof(void*));
+                m->m_indexBuffer=*reinterpret_cast<void**>(static_cast<char*>(m_indexBuffer)+2*sizeof(void*));
+                m->m_vertexStride=*reinterpret_cast<unsigned int*>(static_cast<char*>(m_vertexBuffer)+40+3*(sizeof(void*)-4));
                 m->m_primitiveType=m_primitiveType;
                 if(m->m_kind==2) { materialField<unsigned char>(m,0x2C)=1; materialField<int>(m,0xB4)=m->m_state->m_alphaTest?15:127; }
                 if(m->m_kind==1)

@@ -1697,7 +1697,7 @@ void StaticMeshTemplate::buildVertexBuffers()
     {
         IDirect3DVertexDeclaration9* const decl =
             *reinterpret_cast<IDirect3DVertexDeclaration9* const*>(
-                static_cast<const unsigned char*>(m_vertexDeclaration) + 8);
+                static_cast<const unsigned char*>(m_vertexDeclaration) + 2 * sizeof(void*));
         decl->GetDeclaration(elements, &m_declElementCount);
     }
 

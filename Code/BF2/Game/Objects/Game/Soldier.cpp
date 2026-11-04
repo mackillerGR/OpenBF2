@@ -339,14 +339,14 @@ void geometrySlot10(void* geometry, float fov)
 {
     typedef void(__fastcall* SetFovFn)(void*, void*, float);
     reinterpret_cast<SetFovFn>(
-        (*reinterpret_cast<void***>(geometry))[0x10 / sizeof(void*)])(geometry, 0, fov);
+        (*reinterpret_cast<void***>(geometry))[0x10 / 4])(geometry, 0, fov);
 }
 
 void geometrySlotD8(void* geometry, bool flag)
 {
     typedef void(__fastcall* Fn)(void*, void*, unsigned int);
     reinterpret_cast<Fn>(
-        (*reinterpret_cast<void***>(geometry))[0xD4 / sizeof(void*)])(
+        (*reinterpret_cast<void***>(geometry))[0xD4 / 4])(
             geometry, 0, flag ? 1u : 0u);
 }
 
@@ -366,7 +366,7 @@ void geometrySetBoneTransforms(void* geometry, const Mat4* transforms, int boneC
 {
     typedef void(__fastcall* SetBonesFn)(void*, void*, const Mat4*, unsigned int);
     reinterpret_cast<SetBonesFn>(
-        (*reinterpret_cast<void***>(geometry))[0x54 / sizeof(void*)])(
+        (*reinterpret_cast<void***>(geometry))[0x54 / 4])(
             geometry, 0, transforms, static_cast<unsigned int>(boneCount));
 }
 
@@ -374,7 +374,7 @@ void geometrySlot7C(void* geometry, int a)                                      
 {
     typedef void*(__fastcall* SetLodFn)(void*, void*, int);
     reinterpret_cast<SetLodFn>(
-        (*reinterpret_cast<void***>(geometry))[0x78 / sizeof(void*)])(geometry, 0, a);
+        (*reinterpret_cast<void***>(geometry))[0x78 / 4])(geometry, 0, a);
 }
 
 // AI events are available only when a published AI instance reports a bots game.
