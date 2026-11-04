@@ -1343,8 +1343,7 @@ void StaticMesh::setGeometryTransformation(const Mat4* transform)
 
         void* const objectTemplate = m_template;
         void** const tvtbl = *reinterpret_cast<void***>(objectTemplate);
-        const int partCount = reinterpret_cast<PartCountFn>(
-            tvtbl[0xF0  / 4])(objectTemplate);
+        const int partCount = static_cast<StaticMeshTemplate*>(objectTemplate)->getOccluderGroupCount();
 
         // reached AS sixteen RAW floats, exactly as the shipped body reaches it - every
         // access below is one of its documented byte offsets, not a named Mat4 member.
@@ -1354,8 +1353,8 @@ void StaticMesh::setGeometryTransformation(const Mat4* transform)
         {
             m_byte348 = 0;
 
-            unsigned char* const source = reinterpret_cast<GetPartFn>(
-                tvtbl[0xF4  / 4])(objectTemplate, part);
+            unsigned char* const source = static_cast<unsigned char*>(
+                static_cast<StaticMeshTemplate*>(objectTemplate)->getOccluderGroup(part));
 
             // The 36-byte element, built on the stack exactly as the shipped body builds it.
             // The shipped code leaves both allocator words unwritten (that is how this
