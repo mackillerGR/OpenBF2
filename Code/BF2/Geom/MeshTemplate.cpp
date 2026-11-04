@@ -171,7 +171,7 @@ const unsigned int kMaterialNodeSize = 0x18u;
 
 bool materialNodeIsNil(const vc71::map_node* node)
 {
-    return reinterpret_cast<const unsigned char*>(node)[kMaterialNodeSize - 3] != 0;
+    return reinterpret_cast<const unsigned char*>(node)[kMaterialNodeSize - 3 + vc71::nodeGrowth(kMaterialNodeSize)] != 0;
 }
 
 // sub_100EB100 (_Buynode) followed by the five stores the constructor makes on its result. The
@@ -187,11 +187,11 @@ void materialMapInit(vc71::map_layout& m)
     node->left   = 0;
     node->parent = 0;
     node->right  = 0;
-    raw[kMaterialNodeSize - 4] = 1;   // _Color = _Black
-    raw[kMaterialNodeSize - 3] = 0;   // _Isnil = false ... which the constructor then overrides:
+    raw[kMaterialNodeSize - 4 + vc71::nodeGrowth(kMaterialNodeSize)] = 1;   // _Color = _Black
+    raw[kMaterialNodeSize - 3 + vc71::nodeGrowth(kMaterialNodeSize)] = 0;   // _Isnil = false ... which the constructor then overrides:
 
     m.head = node;
-    raw[kMaterialNodeSize - 3] = 1;   // the header IS the nil node
+    raw[kMaterialNodeSize - 3 + vc71::nodeGrowth(kMaterialNodeSize)] = 1;   // the header IS the nil node
     node->parent = node;
     node->left   = node;
     node->right  = node;
