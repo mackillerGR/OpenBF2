@@ -224,6 +224,10 @@ void copyLighting(RaLightingParameters& dest,const RaLightingParameters& src)
     dest.tail10C=src.tail10C;
 }
 
+} // anonymous namespace
+void raCopyLightingParameters(RaLightingParameters& dest,const RaLightingParameters& src){copyLighting(dest,src);}
+namespace {
+
 // 100CE120 -> 101C6750/101C67F0 -> 101C6C70/101C6E10. The eight corners are
 // emitted in x/y/z bit order; maximum/minimum comparisons retain NaN behavior.
 float worldHeight(const MeshBounds& bounds,const Mat4& world)

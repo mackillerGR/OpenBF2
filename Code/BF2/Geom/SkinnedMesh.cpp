@@ -79,6 +79,7 @@ double lightManagerDouble(unsigned int retailOffset);
 extern LightManager* g_LightManager;      // XpLightManager.cpp, dword_1024B914
 extern IBase*        g_SkinnedMeshRenderer;   // ModuleGeom.cpp, dword_1024B8F8
 
+void raCopyLightingParameters(dx9rend::Ra::RaLightingParameters& dest, const dx9rend::Ra::RaLightingParameters& src); // BundledMeshDraw.cpp
 namespace {
 
 // Per-geometry records contain paired vectors of 132-byte LODs and distance floats.
@@ -2040,8 +2041,7 @@ void SkinnedMesh::draw(void*, void*, void*)
 
             // both operands are the entry + 8: `lea ecx,[edi+8]` / `lea ecx,[ebx+8]` at
             // The payload starts one dword past the entry's own head.
-            renderQueueEntryCopyPayload(reinterpret_cast<unsigned char*>(lit) + 8,
-                                        reinterpret_cast<unsigned char*>(entry) + 8);
+            raCopyLightingParameters(lit->lighting, entry->lighting);
             dx9rend::renderQueueEnqueue(lit, translucent, m_fov != -1.0f, true);
         }
     }

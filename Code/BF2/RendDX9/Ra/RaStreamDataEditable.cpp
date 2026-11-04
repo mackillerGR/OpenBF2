@@ -71,8 +71,8 @@ RaStreamDataEditable::RaStreamDataEditable(unsigned int vertexCapacity, unsigned
     m_indexCapacity = indexCapacity;
     vc71::mapConstructU32(m_declarations);                // sub_100493C0's head node
     // sub_10049B80 - m_elements.insert(end, elements.begin(), elements.end()).
-    for (const char* p = elements.first; p != elements.last; p += 4)
-        vc71::vectorPushBackIn(m_elements, 4u, p);
+    for (const char* p = elements.first; p != elements.last; p += sizeof(void*))
+        vc71::vectorPushBackIn(m_elements, sizeof(void*), p);
     // sub_10048C70 - the two buffers, when a device exists.
     if (m_device)
     {

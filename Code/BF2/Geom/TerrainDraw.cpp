@@ -829,7 +829,7 @@ void Terrain::drawMaskLights()
     if (s_lights.first)                                                   // sub_100E1C20(0, 0)
         s_lights.last = s_lights.first;
     g_LightManager->getVisibleLightsByMask(s_lights, 2313u, 0u);          // +0x18
-    for (char* p = s_lights.first; p != s_lights.last; p += 4)            // the end re-read every pass
+    for (char* p = s_lights.first; p != s_lights.last; p += sizeof(void*))            // the end re-read every pass
     {
         world::LightSource* const light = *reinterpret_cast<world::LightSource**>(p);
         struct PointLightRecord                                           // pointlight, 0x1C bytes
