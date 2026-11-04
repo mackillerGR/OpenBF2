@@ -149,7 +149,7 @@ void StaticMesh::drawSilhouetteSlow(void* unused, int legacyArm)
             unsigned char* const material =
                 *reinterpret_cast<unsigned char**>(m_dword310 + 4) + 516u * i;
             const ShaderMaterial* const shaderMaterial =
-                *reinterpret_cast<const ShaderMaterial* const*>(material + 0x28);
+                reinterpret_cast<const StaticMeshMaterial*>(material)->m_shaderMaterial;
             if (!materialVisible(material, 0))
                 continue;
 

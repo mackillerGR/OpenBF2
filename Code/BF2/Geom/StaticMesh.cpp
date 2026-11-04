@@ -81,9 +81,13 @@ void stateManagerPop();
 
 namespace geom {
 dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset);
+dx9rend::Ra::RaShader* terrainWaterShader(bool far);   // TerrainDraw.cpp
+float terrainWaterShaderDistance();
+dx9rend::EngineTexture* terrainWaterEnvTexture();
 
 extern LightManager* g_LightManager;      // XpLightManager.cpp, dword_1024B914
 extern IBase*        g_StaticMeshRenderer; // StaticMeshRenderer.cpp, dword_1024B8F8
+extern IBase*        g_Terrain;            // dword_1024B930
 
 namespace {
 
@@ -548,7 +552,7 @@ ILightSampling* __fastcall sm_ls_createLightSampler(void* self BF2_EDX_PARAM, fl
     vc71::map_node_u32* const node = vc71::mapInsertU32(mesh->m_map260, key);
     dx9rend::EngineTexture*& slot = *reinterpret_cast<dx9rend::EngineTexture**>(node->value);
     dx9rend::EngineTexture* const cached = slot;
-    mesh->m_dword26C = reinterpret_cast<unsigned int>(cached);
+    mesh->m_dword26C = reinterpret_cast<std::uintptr_t>(cached);
     if (cached)
     {
         if (--cached->refCount == 0)
@@ -578,7 +582,7 @@ bool __fastcall sm_ls_destroyLightSampler(void* self BF2_EDX_PARAM, ILightSampli
     const unsigned int key = static_cast<unsigned int>(mesh->getLodIndex())
                            + 2u * (5u * static_cast<unsigned int>(mesh->getGeomIndex()));
     vc71::map_node_u32* const node = vc71::mapInsertU32(mesh->m_map260, key);
-    mesh->m_dword26C = node ? *reinterpret_cast<unsigned int*>(node->value) : 0u;
+    mesh->m_dword26C = node ? *reinterpret_cast<std::uintptr_t*>(node->value) : 0u;
     mesh->m_byte35A  = 0;
     mesh->loadLightmap();
     return true;
@@ -695,11 +699,11 @@ void staticMeshRefreshSelection(StaticMesh* self)
         return;
 
     const unsigned char* const value = node->value;
-    self->m_dword26C = *reinterpret_cast<const unsigned int*>(value + 0);
-    self->m_float270 = *reinterpret_cast<const float*>(value + 4);
-    self->m_float274 = *reinterpret_cast<const float*>(value + 8);
-    self->m_dword278 = *reinterpret_cast<const unsigned int*>(value + 12);
-    self->m_dword27C = *reinterpret_cast<const unsigned int*>(value + 16);
+    self->m_dword26C = *reinterpret_cast<const std::uintptr_t*>(value + 0);
+    self->m_float270 = *reinterpret_cast<const float*>(value + sizeof(void*));
+    self->m_float274 = *reinterpret_cast<const float*>(value + sizeof(void*) + 4);
+    self->m_dword278 = *reinterpret_cast<const unsigned int*>(value + sizeof(void*) + 8);
+    self->m_dword27C = *reinterpret_cast<const unsigned int*>(value + sizeof(void*) + 12);
 }
 
 // Release every cached lightmap texture in the +0x260 map. Recurse right, iterate left -
@@ -812,10 +816,6 @@ StaticMeshRenderer* staticMeshRenderer()
     return static_cast<StaticMeshRenderer*>(static_cast<void*>(g_StaticMeshRenderer));
 }
 
-// dword_1024B930 - the Terrain singleton.  BF2Render.cpp records that nothing recovered publishes
-// it; the water arm of the draw tests it first and is dead until a Terrain class lands.
-// [FRONTIER] dice::hfe::geom::Terrain - the class that publishes dword_1024B930
-void* const g_terrain = 0;
 
 // sub_1008DD80 - pack a Vec3 and a w into a static Vec4 and answer its address.  The shipped body
 // guards a one-time zeroing of the static with a flag bit; a zero-initialised static is that.
@@ -854,7 +854,12 @@ void staticMeshAssignTexture(void*& slot, dx9rend::EngineTexture* incoming)
 // This shares storage with normalUnpack.value[2]; the shader uses only its first two components.
 dx9rend::Ra::RaShader*& staticMeshMaterialShader(unsigned char* material)
 {
+    #if UINTPTR_MAX > 0xFFFFFFFFu
+    return *reinterpret_cast<dx9rend::Ra::RaShader**>(
+        &reinterpret_cast<StaticMeshMaterial*>(material)->m_boundShaderSlot);
+#else
     return *reinterpret_cast<dx9rend::Ra::RaShader**>(material + 0x178);
+#endif
 }
 
 // The IDirect3DBaseTexture9 the lightmap holder of a render entry keeps, with COM reference
@@ -1807,11 +1812,11 @@ void StaticMesh::postLoad()
             vc71::map_node_u32* const entry = vc71::mapInsertU32(m_map260, key);
             if (entry)
             {
-                *reinterpret_cast<unsigned int*>(entry->value + 0)  = 0;
-                *reinterpret_cast<float*>(entry->value + 4)         = 1.0f;
-                *reinterpret_cast<float*>(entry->value + 8)         = 1.0f;
-                *reinterpret_cast<unsigned int*>(entry->value + 12) = 0;
-                *reinterpret_cast<unsigned int*>(entry->value + 16) = 0;
+                *reinterpret_cast<std::uintptr_t*>(entry->value + 0) = 0;
+                *reinterpret_cast<float*>(entry->value + sizeof(void*))         = 1.0f;
+                *reinterpret_cast<float*>(entry->value + sizeof(void*) + 4)     = 1.0f;
+                *reinterpret_cast<unsigned int*>(entry->value + sizeof(void*) + 8)  = 0;
+                *reinterpret_cast<unsigned int*>(entry->value + sizeof(void*) + 12) = 0;
             }
 
             if (m_transform)
@@ -2171,7 +2176,7 @@ void StaticMesh::loadLightmap()
             m_byte35A  = 1;
             return;
         }
-        m_dword26C = reinterpret_cast<unsigned int>(texture);
+        m_dword26C = reinterpret_cast<std::uintptr_t>(texture);
     }
     else if (smr->m_flags60[4])
     {
@@ -2181,7 +2186,7 @@ void StaticMesh::loadLightmap()
         vc71::string directory("");
         staticMeshLightmapDirectory(directory);
         staticMeshRendererTryLoadLightmapTexture(smr, directory, objectName,
-                                                 reinterpret_cast<float*>(node->value + 4),
+                                                 reinterpret_cast<float*>(node->value + sizeof(void*)),
                                                  &slot);
         dx9rend::textureManagerSwapDefaultMipClass(savedMipClass);
         if (!slot)
@@ -2190,9 +2195,9 @@ void StaticMesh::loadLightmap()
             m_byte35A  = 1;
             return;
         }
-        m_dword26C = reinterpret_cast<unsigned int>(slot);
+        m_dword26C = reinterpret_cast<std::uintptr_t>(slot);
         // sub_1000BDD0(this + 0x270, entry + 4): the four offset floats.
-        const unsigned int* const offset = reinterpret_cast<const unsigned int*>(node->value + 4);
+        const unsigned int* const offset = reinterpret_cast<const unsigned int*>(node->value + sizeof(void*));
         m_float270 = *reinterpret_cast<const float*>(&offset[0]);
         m_float274 = *reinterpret_cast<const float*>(&offset[1]);
         m_dword278 = offset[2];
@@ -2534,7 +2539,7 @@ void StaticMesh::drawVanilla()
             if (smr->m_flags60[0])
             {
                 StaticMeshBoundsCorners corners(
-                    *reinterpret_cast<const MeshBounds*>(material + 0x198), *m_transform);
+                    reinterpret_cast<StaticMeshMaterial*>(material)->m_bounds, *m_transform);
                 const Frustum* const frustum =
                     dx9rend::rendererGetRenderViewDup()->getFrustumPtr();        // +0x50, +0x74
                 if (corners.outside(*frustum))
@@ -2545,7 +2550,7 @@ void StaticMesh::drawVanilla()
             }
 
             dx9rend::RenderQueueEntry* const entry = dx9rend::renderEntryPoolAcquire();
-            entry->materialParameters = material + 0x2C;
+            entry->materialParameters = reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters;
             entry->material           = material;
             entry->objectParameters   = &op;
 
@@ -2561,7 +2566,7 @@ void StaticMesh::drawVanilla()
                 sun->direction[2] = sunDirection[2];
             }
 
-            if (t->m_isWater && g_terrain && m_dword26C)
+            if (t->m_isWater && g_Terrain && m_dword26C)
             {
                 // the water arm
                 std::memcpy(op.world.value, m_transform->m, sizeof(op.world.value));
@@ -2576,12 +2581,9 @@ void StaticMesh::drawVanilla()
                     staticMeshStoreLightMapOffset(entry, this);
                 }
 
-                const unsigned char* const terrain = static_cast<const unsigned char*>(g_terrain);
-                dx9rend::Ra::RaShader* const nearShader =
-                    *reinterpret_cast<dx9rend::Ra::RaShader* const*>(terrain + 0x718);
-                dx9rend::Ra::RaShader* const farShader =
-                    *reinterpret_cast<dx9rend::Ra::RaShader* const*>(terrain + 0x71C);
-                const float threshold = *reinterpret_cast<const float*>(terrain + 0x70C);
+                dx9rend::Ra::RaShader* const nearShader = terrainWaterShader(false);
+                dx9rend::Ra::RaShader* const farShader = terrainWaterShader(true);
+                const float threshold = terrainWaterShaderDistance();
                 MeshBounds* const bounds = reinterpret_cast<MeshBounds*>(m_dword30C + 4);
                 if (bounds->dirty)
                     meshBoundsFinalize(*bounds);
@@ -2590,14 +2592,12 @@ void StaticMesh::drawVanilla()
 
                 // The material block's CubeMap holder (material + 0x148 / +0x14C): the terrain's
                 // +0x6C0 object's texture, else the LightManager's cube at its +0x248.
-                if (!*reinterpret_cast<void**>(material + 0x14C))
+                if (!*reinterpret_cast<void**>(dx9rend::Ra::raMaterialFieldBytes(reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters, 0x120)))
                 {
-                    const unsigned char* const terrainCube =
-                        *reinterpret_cast<const unsigned char* const*>(terrain + 0x6C0);
+                    dx9rend::EngineTexture* const terrainCube = terrainWaterEnvTexture();
                     dx9rend::EngineTexture* const cube = terrainCube
-                        ? *reinterpret_cast<dx9rend::EngineTexture* const*>(terrainCube + 0x10)
-                        : lightManagerTexture(0x248);
-                    staticMeshAssignTexture(*reinterpret_cast<void**>(material + 0x14C), cube);
+                        ? terrainCube : lightManagerTexture(0x248);
+                    staticMeshAssignTexture(*reinterpret_cast<void**>(dx9rend::Ra::raMaterialFieldBytes(reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters, 0x120)), cube);
                 }
                 entry->shader = staticMeshMaterialShader(material);
                 dx9rend::renderQueueAddToSlot(9, entry);                         // RSMTWater, +0x28
@@ -2615,7 +2615,7 @@ void StaticMesh::drawVanilla()
                     staticMeshSwapD3DTexture(entry->lighting.lightMap.value, scratch->baseTexture);
 
                 dx9rend::Ra::RaShader* shader;
-                if (*reinterpret_cast<const void* const*>(material + 0xF0) == 0)   // DetailMap.value
+                if (*reinterpret_cast<const void* const*>(dx9rend::Ra::raMaterialFieldBytes(reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters, 0xC4)) == 0)   // DetailMap.value
                     shader = staticMeshFindShaderBits(0xF1000000u);
                 else if (t->m_roadNoBlend)
                     shader = staticMeshFindShaderBits(0xF4000000u);
@@ -2707,14 +2707,14 @@ void StaticMesh::drawVanilla()
                     else
                     {
                         const ShaderMaterial* const shaderMaterial =
-                            *reinterpret_cast<const ShaderMaterial* const*>(material + 0x28);
+                            reinterpret_cast<StaticMeshMaterial*>(material)->m_shaderMaterial;
                         unsigned int pointBits = g_shaderComboFlags[shaderMaterial->shaderCombo];
                         typedef unsigned int (__fastcall* GetFlagsFn)(const void* BF2_EDX_PARAM);
                         if ((reinterpret_cast<GetFlagsFn>(m_vptr[0xC4  / 4])(this)
                              & 1u) != 0)
                             pointBits &= ~8u;
                         pointBits |= 0x400u;
-                        if (*reinterpret_cast<const unsigned int*>(material + 0x17C) == 2u)
+                        if (reinterpret_cast<StaticMeshMaterial*>(material)->m_alphaMode == 2u)
                             pointBits |= 0x800u;
                         pointShader = staticMeshFindShaderBits(qualityMask & pointBits);
                     }
@@ -2736,7 +2736,7 @@ void StaticMesh::drawVanilla()
                             static_cast<dx9rend::Ra::RaLightRecord*>(
                                 lightEntry->lightArray.lights.value);
                         lightEntry->material           = material;
-                        lightEntry->materialParameters = material + 0x2C;
+                        lightEntry->materialParameters = reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters;
                         lightEntry->objectParameters   = &op;
                         lightEntry->shader             = staticMeshMaterialShader(material);
                         *destination = reinterpret_cast<const dx9rend::Ra::RaLightRecord*>(
@@ -2761,7 +2761,7 @@ namespace {
 bool staticMeshCornersOutside(const void* material, const Mat4& world, const Frustum& frustum)
 {
     StaticMeshBoundsCorners corners(
-        *reinterpret_cast<const MeshBounds*>(static_cast<const unsigned char*>(material) + 0x198),
+        reinterpret_cast<const StaticMeshMaterial*>(material)->m_bounds,
         world);
     return corners.outside(frustum);
 }
@@ -2942,9 +2942,9 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
                 unsigned char* const material =
                     *reinterpret_cast<unsigned char**>(m_dword310 + offsetof(vc71::vector_layout, first)) + sizeof(StaticMeshMaterial) * i;
                 const ShaderMaterial* const shaderMaterial =
-                    *reinterpret_cast<const ShaderMaterial* const*>(material + 0x28);
+                    reinterpret_cast<StaticMeshMaterial*>(material)->m_shaderMaterial;
                 const unsigned int alphaMode =
-                    *reinterpret_cast<const unsigned int*>(material + 0x17C);
+                    reinterpret_cast<StaticMeshMaterial*>(material)->m_alphaMode;
                 int pass;
                 bool skipPassSwitch = false;
                 if (!fromOwnCaster && alphaMode == 2u)

@@ -79,13 +79,13 @@ static_assert(sizeof(RaShaderConstants) == 0xAFC,
 // ID3DXEffect is a COM-style interface: the PE inner calls push the interface pointer as the first
 // stack argument and dispatch with __stdcall, even though these outer record binders are ordinary
 // __thiscall members.
-typedef int (__stdcall* EffectSetFloatFn)(void*, int, unsigned int);
-typedef int (__stdcall* EffectSetIntFn)(void*, int, unsigned int);
-typedef int (__stdcall* EffectSetFloatArrayFn)(void*, int, const float*, unsigned int);
-typedef int (__stdcall* EffectSetVectorFn)(void*, int, const float*);
-typedef int (__stdcall* EffectSetTextureFn)(void*, int, IDirect3DBaseTexture9*);
+typedef int (__stdcall* EffectSetFloatFn)(void*, void*, unsigned int);
+typedef int (__stdcall* EffectSetIntFn)(void*, void*, unsigned int);
+typedef int (__stdcall* EffectSetFloatArrayFn)(void*, void*, const float*, unsigned int);
+typedef int (__stdcall* EffectSetVectorFn)(void*, void*, const float*);
+typedef int (__stdcall* EffectSetTextureFn)(void*, void*, IDirect3DBaseTexture9*);
 
-int __fastcall raBindVec4(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindVec4(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetVectorFn>(table[0x88 / 4])(
@@ -93,7 +93,7 @@ int __fastcall raBindVec4(void* self BF2_EDX_PARAM, void* effect, int handle)
             static_cast<unsigned char*>(self) + sizeof(void*)));
 }
 
-int __fastcall raBindTexture(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindTexture(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     IDirect3DBaseTexture9* const texture = *reinterpret_cast<IDirect3DBaseTexture9**>(
         static_cast<unsigned char*>(self) + sizeof(void*));
@@ -102,7 +102,7 @@ int __fastcall raBindTexture(void* self BF2_EDX_PARAM, void* effect, int handle)
         effect, handle, texture);
 }
 
-int __fastcall raBindFloat(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindFloat(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const unsigned int value = *reinterpret_cast<const unsigned int*>(
         static_cast<unsigned char*>(self) + sizeof(void*));
@@ -111,7 +111,7 @@ int __fastcall raBindFloat(void* self BF2_EDX_PARAM, void* effect, int handle)
         effect, handle, value);
 }
 
-int __fastcall raBindVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindVec3(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetFloatArrayFn>(table[0x80 / 4])(
@@ -119,7 +119,7 @@ int __fastcall raBindVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
             static_cast<unsigned char*>(self) + sizeof(void*)), 3);
 }
 
-int __fastcall raBindVec2(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindVec2(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetFloatArrayFn>(table[0x80 / 4])(
@@ -130,7 +130,7 @@ int __fastcall raBindVec2(void* self BF2_EDX_PARAM, void* effect, int handle)
 void* wordPtr(unsigned int word);
 typedef float* (__fastcall* TransformVec3Fn)(float*, const float*);
 
-int __fastcall raBindTransformedVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindTransformedVec3(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const unsigned int* const fields = reinterpret_cast<const unsigned int*>(
         static_cast<unsigned char*>(self) + sizeof(void*));
@@ -144,7 +144,7 @@ int __fastcall raBindTransformedVec3(void* self BF2_EDX_PARAM, void* effect, int
         effect, handle, transformed, 3);
 }
 
-int __fastcall raBindInt(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindInt(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const unsigned int value = *reinterpret_cast<const unsigned int*>(
         static_cast<unsigned char*>(self) + sizeof(void*));
@@ -153,7 +153,7 @@ int __fastcall raBindInt(void* self BF2_EDX_PARAM, void* effect, int handle)
         effect, handle, value);
 }
 
-int __fastcall raBindEngineTexture(void* self BF2_EDX_PARAM, void* effect, int handle)
+int __fastcall raBindEngineTexture(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     EngineTexture* const texture = *reinterpret_cast<EngineTexture**>(
         static_cast<unsigned char*>(self) + sizeof(void*));

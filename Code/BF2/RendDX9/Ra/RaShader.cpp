@@ -320,7 +320,7 @@ template <typename Fn> inline Fn d3dxFn(void* effect, unsigned int byteOffset)
 
 inline unsigned char* holderPayload(void* self)
 {
-    return static_cast<unsigned char*>(self) + 4;
+    return static_cast<unsigned char*>(self) + sizeof(void*);
 }
 
 // off_101E1480 slot 0 - sub_10037E20: SetVector(handle, &value).

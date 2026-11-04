@@ -1929,6 +1929,24 @@ void* EffectManager::compileEffect(const vc71::string& name, int unused, void** 
 
                 raRelease(errors);
 
+#if defined(BF2_PORTABLE_CLIENT)
+                // [CHOSEN, not recovered] The portable effect runtime compiles source directly,
+                // shader by shader, so there is no blob to build or cache.
+                D3DXCreateEffect(m_device, source, sourceLen, defines, m_sub, flags, m_effectPool,
+                                 &effect, &errors);
+                if (!effect)
+                    continue;
+                ::renddx9abi::d3dxSlot<RaFxFindNextValidTechniqueFn>(effect, 0xF4)(
+                    effect, 0, &technique);
+                ::renddx9abi::d3dxSlot<RaFxOnLostDeviceFn>(effect, 0x114)(effect);
+                if (technique)
+                {
+                    g_anyEffectCompiled = 1;
+                    goto compiled;
+                }
+                raRelease(effect);
+                continue;
+#endif
                 unsigned long passFlags = flags;      // the shipped body passes a copy by pointer
                 void* const blob = compileEffectSource(
                     reinterpret_cast<const char*>(source), sourceLen, defines, &passFlags, &errors);

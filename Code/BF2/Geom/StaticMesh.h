@@ -7,6 +7,7 @@
 #ifndef BF2_GEOM_STATICMESH_H
 #define BF2_GEOM_STATICMESH_H
 
+#include <cstdint>
 #include <stddef.h>   // offsetof - the layout assertions below
 #include "../../RendDX9Abi/Vc71Map.h"
 #include "../../RendDX9Abi/Vc71Vector.h"
@@ -240,7 +241,7 @@ public:
 
     float               m_float25C;             // +0x25C  ctor 1.0f
     vc71::map_layout    m_map260;               // +0x260  the lightmap cache; 0x28 nodes
-    unsigned int        m_dword26C;             // +0x26C  ctor 0
+    std::uintptr_t      m_dword26C;             // +0x26C  ctor 0; the lightmap EngineTexture
     float               m_float270;             // +0x270  ctor 1.0f
     float               m_float274;             // +0x274  ctor 1.0f
     unsigned int        m_dword278;             // +0x278  ctor 0

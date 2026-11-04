@@ -6,6 +6,7 @@
 #ifndef BF2_GEOM_STATICMESHTEMPLATE_H
 #define BF2_GEOM_STATICMESHTEMPLATE_H
 
+#include <cstdint>
 #include "MeshTemplate.h"
 
 namespace dice {
@@ -103,6 +104,9 @@ public:
     vc71::vector_layout m_vector14;          // +0x14  vector of 4-byte elements
     unsigned int        m_flags24;           // +0x24
     ShaderMaterial*     m_shaderMaterial;    // +0x28
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    void*               m_boundShaderSlot;   // retail keeps it in the block's last word, +0x178
+#endif
     unsigned char       m_parameters[0x150 * sizeof(void*) / 4]; // +0x2C  the Ra parameter block, 0x10044270
     unsigned int        m_alphaMode;         // +0x17C
     unsigned int        m_vertexStart;       // +0x180

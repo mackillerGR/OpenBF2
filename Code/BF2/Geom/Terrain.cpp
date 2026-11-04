@@ -525,7 +525,8 @@ Terrain::Terrain()
             block = static_cast<float*>(storage);
         }
         m_materialParameters = block;
-        block[28] = 1.0f; block[29] = 1.0f; block[30] = 1.0f; block[31] = 1.0f;
+        float* const specular = reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(block, 0x70));
+        specular[0] = 1.0f; specular[1] = 1.0f; specular[2] = 1.0f; specular[3] = 1.0f;
         *reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 132)) = 64.0f;
     }
     m_waterTechniqueMargin = 40.0f;
@@ -2062,10 +2063,10 @@ Terrain::~Terrain()
     // The member remains unchanged.
     if (m_waterObjectRing)
     {
-        unsigned char* const block = m_waterObjectRing - 4;
+        unsigned char* const block = m_waterObjectRing - sizeof(void*);
         const int count = *reinterpret_cast<const int*>(block);
         for (int i = count - 1; i >= 0; --i)                                    // `sub eax,1 / js` - signed
-            dx9rend::Ra::raObjectParametersDestroy(m_waterObjectRing + 548 * i);
+            dx9rend::Ra::raObjectParametersDestroy(m_waterObjectRing + sizeof(dx9rend::Ra::RaObjectParameters) * i);
         ::renddx9abi::engineFree(block);
     }
 

@@ -1888,6 +1888,24 @@ long fxValidateTechnique(void* e, void* handle)
     return ok ? kOk : kFail;
 }
 
+// Returns the first technique after `previous` whose passes all build, or null in `found`.
+long fxFindNextValidTechnique(void* e, void* previous, void** found)
+{
+    Effect* const fx = self(e);
+    bool past = previous == nullptr;
+    *found = nullptr;
+    for (auto& technique : fx->techniques)
+    {
+        if (past && fxValidateTechnique(e, technique.get()) == kOk)
+        {
+            *found = technique.get();
+            return kOk;
+        }
+        if (technique.get() == previous) past = true;
+    }
+    return kOk;
+}
+
 int fxIsParameterUsed(void* e, void* handle, void* technique)
 {
     Effect* const fx = self(e);
@@ -2013,6 +2031,7 @@ void* const* effectVtable()
         set(0xE0, reinterpret_cast<void*>(&fxSetArrayRange));
         set(0xE8, reinterpret_cast<void*>(&fxSetTechnique));
         set(0xF0, reinterpret_cast<void*>(&fxValidateTechnique));
+        set(0xF4, reinterpret_cast<void*>(&fxFindNextValidTechnique));
         set(0xF8, reinterpret_cast<void*>(&fxIsParameterUsed));
         set(0xFC, reinterpret_cast<void*>(&fxBegin));
         set(0x100, reinterpret_cast<void*>(&fxBeginPass));

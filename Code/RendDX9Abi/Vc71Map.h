@@ -615,7 +615,7 @@ struct map_node_u32
     map_node_u32* parent;      // +0x04
     map_node_u32* right;       // +0x08
     unsigned int  key;         // +0x0C
-    unsigned char value[20];   // +0x10
+    alignas(void*) unsigned char value[sizeof(void*) + 16];   // +0x10 texture word, then four floats
     unsigned char color;       // +0x24  1 == black
     unsigned char isNil;       // +0x25
     unsigned char pad[2];      // +0x26

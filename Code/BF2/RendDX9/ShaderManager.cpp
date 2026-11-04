@@ -150,7 +150,7 @@ struct ShaderManager
     // A nonzero disable flag bypasses the shared StateManager.
     void*         currentEffect98;
     unsigned int  statesEffect9C;
-    unsigned int  rawEffectA0;
+    void*         rawEffectA0;
     unsigned char disableStateManagerA4;
     unsigned char padA5[3];
 };
@@ -898,7 +898,7 @@ void shaderManagerCommitCurrentEffects()
 
     if (sm->rawEffectA0)
     {
-        void* fx = reinterpret_cast<void*>(sm->rawEffectA0);
+        void* fx = sm->rawEffectA0;
         reinterpret_cast<CommitFn>((*static_cast<void***>(fx))[0x104 / 4])(fx);
     }
     if (sm->currentEffect98)
@@ -926,7 +926,7 @@ void shaderManagerSetActiveRaEffect(void* effect)
     ShaderManager* const sm = static_cast<ShaderManager*>(g_shaderManager);
     if (sm->rawEffectA0 && effect)
         ::renddx9abi::logf("ShaderManager.cpp:119 Previous effect not ended in RaShader.");
-    sm->rawEffectA0 = reinterpret_cast<unsigned int>(effect);
+    sm->rawEffectA0 = effect;
 }
 
 } // namespace dx9rend

@@ -391,7 +391,7 @@ typedef long (__stdcall* D3dxCreateEffectCompilerFn)(const char* srcData,
 HMODULE s_d3dxModule = 0;                       // dword_1023E108
 D3dxCreateEffectCompilerFn s_createEffectCompiler = 0;   // dword_1023E10C
 
-#if !defined(_WIN32)
+#if defined(BF2_PORTABLE_CLIENT)
 } // namespace
 extern "C" long portableCreateEffectCompiler(const void* source, unsigned int bytes,
                                              const void* defines, void* include,
@@ -402,7 +402,7 @@ long createEffectCompiler(const char* srcData, unsigned int srcDataLen,
                           const void* defines, void* include, unsigned long flags,
                           void** compilerOut, void** parseErrorsOut)
 {
-#if !defined(_WIN32)
+#if defined(BF2_PORTABLE_CLIENT)
     // [CHOSEN, not recovered] No d3dx9_24.dll here; the portable effect runtime answers.
     (void)flags;
     return portableCreateEffectCompiler(srcData, srcDataLen, defines, include,

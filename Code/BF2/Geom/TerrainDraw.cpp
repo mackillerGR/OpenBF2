@@ -342,6 +342,23 @@ void Terrain::setWaterRecordConstants()
 // the constants worker: matVIEWPROJ, the camera, the colours and fog, the water
 // colour and maps, then - when the lighting is dirty - the morph limits and the tiling constants.
 
+// The StaticMesh water arm's view of the terrain's water state.
+dx9rend::Ra::RaShader* terrainWaterShader(bool far)
+{
+    const Terrain* const terrain = static_cast<const Terrain*>(static_cast<void*>(g_Terrain));
+    return far ? terrain->m_waterDistantTechnique2 : terrain->m_waterDistantTechnique;
+}
+float terrainWaterShaderDistance()
+{
+    return static_cast<const Terrain*>(static_cast<void*>(g_Terrain))->m_waterTechniqueMargin;
+}
+dx9rend::EngineTexture* terrainWaterEnvTexture()
+{
+    const TerrainEnvMapRecord* const record =
+        static_cast<const Terrain*>(static_cast<void*>(g_Terrain))->m_waterEnvMap;
+    return record ? static_cast<dx9rend::EngineTexture*>(record->texture) : 0;
+}
+
 void Terrain::applyFrameConstants()
 {
     dx9rend::Effect* const fx = static_cast<dx9rend::Effect*>(m_effect);
@@ -1008,7 +1025,7 @@ void Terrain::drawWaterRa(float seaLevel)
         box.cornerLength = 0.0f; box.radius = 0.0f; box.dirty = 1;
         box.extent.x = 0.0f; box.extent.y = 0.0f; box.extent.z = 0.0f;
         box.centre.x = 0.0f; box.centre.y = 0.0f; box.centre.z = 0.0f;
-        *reinterpret_cast<dx9rend::Ra::RaShader**>(static_cast<unsigned char*>(m_materialParameters) + 332) =
+        *reinterpret_cast<dx9rend::Ra::RaShader**>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 332)) =
             pickWaterTechnique(&box.min.x, camera);
         patch->drawWater(it, list, m_materialParameters, m_objectParameters);   // sub_1018D800, advances `it`
     }
@@ -1074,7 +1091,7 @@ void Terrain::drawWaterGrid(float seaLevel)
             if (sphereOk && ((kWaterCellTests & 2) == 0 || terrainFrustumIntersectsBox(frustum, &box.min.x)))
             {
                 dx9rend::Ra::RaShader*& technique = *reinterpret_cast<dx9rend::Ra::RaShader**>(
-                    static_cast<unsigned char*>(m_materialParameters) + 332);
+                    dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 332));
                 technique = pickWaterTechnique(&box.min.x, camera);
                 const int c = m_patchCount / 2 + static_cast<int>(invW * x0);
                 const int r = m_patchCount / 2 + static_cast<int>(invD * z0);
@@ -1111,14 +1128,15 @@ void Terrain::drawWaterCell(float x0, float z0, float x1, float z1, void* lightm
     if (!m_waterGridGeometry)
     {
         // sub_1005F340(140292): a count word, then 256 RaObjectParameters.
-        unsigned char* const ring = static_cast<unsigned char*>(::renddx9abi::engineAlloc(140292u));
+        unsigned char* const ring = static_cast<unsigned char*>(
+            ::renddx9abi::engineAlloc(sizeof(void*) + 256 * sizeof(Ra::RaObjectParameters)));
         unsigned char* objects = 0;
         if (ring)
         {
             *reinterpret_cast<int*>(ring) = 256;
-            objects = ring + 4;
+            objects = ring + sizeof(void*);
             for (int i = 0; i < 256; ++i)
-                Ra::raObjectParametersConstruct(objects + 548 * i);
+                Ra::raObjectParametersConstruct(objects + sizeof(Ra::RaObjectParameters) * i);
         }
         m_waterObjectRing = objects;
         if (!m_waterGridGeometry)
@@ -1187,7 +1205,7 @@ void Terrain::drawWaterCell(float x0, float z0, float x1, float z1, void* lightm
     entry->material = m_waterGridGeometry;
     entry->materialParameters = m_materialParameters;                     // stored twice, as shipped
     Ra::RaObjectParameters& op = *reinterpret_cast<Ra::RaObjectParameters*>(
-        m_waterObjectRing + 548 * m_waterObjectRingCursor);
+        m_waterObjectRing + sizeof(Ra::RaObjectParameters) * m_waterObjectRingCursor);
     m_waterObjectRingCursor = m_waterObjectRingCursor + 1;
 
     ::dice::hfe::world::IHeightmapCluster* const cluster = heightmapClusterByName();
@@ -1241,7 +1259,7 @@ void Terrain::drawWaterCell(float x0, float z0, float x1, float z1, void* lightm
             slot = 0;
         }
     }
-    entry->shader = *reinterpret_cast<Ra::RaShader**>(static_cast<unsigned char*>(m_materialParameters) + 332);
+    entry->shader = *reinterpret_cast<Ra::RaShader**>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 332));
     if (world::LightSource* const sky = g_LightManager->getSkyLight())    // +0x28
     {
         float* const record = static_cast<float*>(entry->lightArray.lights.value);

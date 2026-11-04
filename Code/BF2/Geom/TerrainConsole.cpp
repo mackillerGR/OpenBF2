@@ -7,6 +7,7 @@
 #if BF2_PLUGIN_ABI_NATIVE
 
 #include "Terrain.h"
+#include "../RendDX9/Ra/RaShader.h"
 
 #include "../../RendDX9Abi/HfeAbi.h"
 #include "../../RendDX9Abi/PluginEntry.h"
@@ -76,12 +77,12 @@ void setGIColor(const Vec3& v) { terrain()->setGIColor(v.x, v.y, v.z); }
 float getWaterSunIntensity()
 {
     return *reinterpret_cast<const float*>(
-        static_cast<const unsigned char*>(terrain()->m_materialParameters) + 0x50);
+        dx9rend::Ra::raMaterialFieldBytes(terrain()->m_materialParameters, 0x50));
 }
 void setWaterSunIntensity(float intensity)
 {
     const float record[4] = { 1.0f, intensity, 0.8f, 1.0f };
-    ::memcpy(static_cast<unsigned char*>(terrain()->m_materialParameters) + 0x4C, record, sizeof(record));
+    ::memcpy(dx9rend::Ra::raMaterialFieldBytes(terrain()->m_materialParameters, 0x4C), record, sizeof(record));
 }
 
 #if defined(BF2_IMAGE_EDITOR) && BF2_IMAGE_EDITOR
