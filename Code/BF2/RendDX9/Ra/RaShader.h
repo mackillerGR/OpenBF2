@@ -296,6 +296,7 @@ void raLightingParametersDestroy(void* storage);
 
 // sub_100458E0 / sub_1004D900 - 0x224 bytes.  The per-object transform / wind / hemi block.
 void raObjectParametersConstruct(void* storage);
+unsigned char* raMaterialFieldBytes(void* parameters, unsigned int retail);
 void raObjectParametersDestroy(void* storage);
 
 // sub_10044F70 - 0x1C bytes.  The light-array block; its destructor is inlined at every call site

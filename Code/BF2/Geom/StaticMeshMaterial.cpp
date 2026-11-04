@@ -155,6 +155,51 @@ static_assert(sizeof(RaMaterialParameters) == 0x150,
               "index 83 (+0x14C)");
 #endif
 
+// [CHOSEN, not recovered] Translates a retail byte offset into a material block to this host's
+// layout. Each holder is a vptr then its value, so offsets past a holder's vptr move with it.
+unsigned char* materialFieldBytes(void* parameters, unsigned int retail)
+{
+    static const struct { unsigned int retail; std::size_t native; } members[] = {
+    {0x008, offsetof(RaMaterialParameters, alphaBlendEnable)},
+    {0x010, offsetof(RaMaterialParameters, depthWrite)},
+    {0x018, offsetof(RaMaterialParameters, alphaTest)},
+    {0x020, offsetof(RaMaterialParameters, diffuseColor)},
+    {0x034, offsetof(RaMaterialParameters, ambient)},
+    {0x048, offsetof(RaMaterialParameters, pointColor)},
+    {0x05C, offsetof(RaMaterialParameters, pointSun)},
+    {0x064, offsetof(RaMaterialParameters, disableLightmapShadows)},
+    {0x06C, offsetof(RaMaterialParameters, specularColor)},
+    {0x080, offsetof(RaMaterialParameters, specularPower)},
+    {0x088, offsetof(RaMaterialParameters, opacity)},
+    {0x090, offsetof(RaMaterialParameters, reflectivity)},
+    {0x098, offsetof(RaMaterialParameters, cullMode)},
+    {0x0A0, offsetof(RaMaterialParameters, alphaTestRef)},
+    {0x0A8, offsetof(RaMaterialParameters, srcBlend)},
+    {0x0B0, offsetof(RaMaterialParameters, destBlend)},
+    {0x0B8, offsetof(RaMaterialParameters, diffuseMap)},
+    {0x0C0, offsetof(RaMaterialParameters, detailMap)},
+    {0x0C8, offsetof(RaMaterialParameters, dirtMap)},
+    {0x0D0, offsetof(RaMaterialParameters, crackMap)},
+    {0x0D8, offsetof(RaMaterialParameters, normalMap)},
+    {0x0E0, offsetof(RaMaterialParameters, crackNormalMap)},
+    {0x0E8, offsetof(RaMaterialParameters, giMap)},
+    {0x0F0, offsetof(RaMaterialParameters, staticGloss)},
+    {0x0F8, offsetof(RaMaterialParameters, objRadius)},
+    {0x100, offsetof(RaMaterialParameters, invHemiHeightScale)},
+    {0x108, offsetof(RaMaterialParameters, parallaxScaleBias)},
+    {0x11C, offsetof(RaMaterialParameters, cubeMap)},
+    {0x124, offsetof(RaMaterialParameters, posUnpack)},
+    {0x138, offsetof(RaMaterialParameters, texUnpack)},
+    {0x140, offsetof(RaMaterialParameters, normalUnpack)}
+    };
+    unsigned int index = sizeof(members) / sizeof(members[0]);
+    while (index > 1 && members[index - 1].retail > retail)
+        --index;
+    const unsigned int inner = retail - members[index - 1].retail;
+    return static_cast<unsigned char*>(parameters) + members[index - 1].native
+        + (inner >= 4 ? inner + (sizeof(void*) - 4) : inner);
+}
+
 // Each parameter block stores its own offset-vector address as its descriptor.
 // Apply resolves registry indices through this table before accessing holder data.
 extern vc71::vector_layout g_raParameterOffsets;               // defined a few lines below
@@ -523,6 +568,11 @@ inline const RaMaterialParameters& params(const StaticMeshMaterial* m)
 
 namespace dx9rend {
 namespace Ra {
+
+unsigned char* raMaterialFieldBytes(void* parameters, unsigned int retail)
+{
+    return ::dice::hfe::geom::materialFieldBytes(parameters, retail);
+}
 
 void raMaterialParametersConstruct(void* storage) { ::dice::hfe::geom::raParametersConstruct(storage); }
 void raMaterialParametersDestroy  (void* storage) { ::dice::hfe::geom::raParametersDestroy(storage); }

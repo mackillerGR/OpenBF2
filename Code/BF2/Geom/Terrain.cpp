@@ -136,7 +136,7 @@ inline float bits(unsigned int u)
 void holderSetTexture(void* holder, dx9rend::EngineTexture* texture)
 {
     dx9rend::EngineTexture** const field = reinterpret_cast<dx9rend::EngineTexture**>(
-        static_cast<unsigned char*>(holder) + 4);
+        static_cast<unsigned char*>(holder) + sizeof(void*));
     dx9rend::EngineTexture* const old = *field;
     if (old != texture)
     {
@@ -526,7 +526,7 @@ Terrain::Terrain()
         }
         m_materialParameters = block;
         block[28] = 1.0f; block[29] = 1.0f; block[30] = 1.0f; block[31] = 1.0f;
-        *reinterpret_cast<float*>(static_cast<unsigned char*>(m_materialParameters) + 132) = 64.0f;
+        *reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 132)) = 64.0f;
     }
     m_waterTechniqueMargin = 40.0f;
     m_waterTechnique            = raShaderNamed("Water2D");
@@ -672,25 +672,25 @@ void Terrain::setWaterNormalMap(vc71::string name)
 
 Vec4* Terrain::getWaterSpecularColor(Vec4* out)                                   // material +0x70
 {
-    const float* const v = reinterpret_cast<const float*>(static_cast<unsigned char*>(m_materialParameters) + 112);
+    const float* const v = reinterpret_cast<const float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 112));
     out->x = v[0]; out->y = v[1]; out->z = v[2]; out->w = v[3];
     return out;
 }
 
 void Terrain::setWaterSpecularColor(float r, float g, float b, float a)
 {
-    float* const v = reinterpret_cast<float*>(static_cast<unsigned char*>(m_materialParameters) + 112);
+    float* const v = reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 112));
     v[0] = r; v[1] = g; v[2] = b; v[3] = a;
 }
 
 float Terrain::getWaterSpecularPower()
 {
-    return *reinterpret_cast<const float*>(static_cast<unsigned char*>(m_materialParameters) + 132);
+    return *reinterpret_cast<const float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 132));
 }
 
 void Terrain::setWaterSpecularPower(float v)
 {
-    *reinterpret_cast<float*>(static_cast<unsigned char*>(m_materialParameters) + 132) = v;
+    *reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 132)) = v;
 }
 
 // The unread bodies. Known signatures, so each names itself and stops (the client startup
@@ -908,11 +908,11 @@ void Terrain::load(const vc71::string& path)
         // The pre-0x1A arm: one 400-byte LOD record whose three 64-byte rows are seeded from the
         // LOD range starts (+0x104) and index counts (+0x110) and built by sub_100D87B0. 1.50
         // content never comes here.
-        void* const storage = ::renddx9abi::engineAlloc(0x190);
+        void* const storage = ::renddx9abi::engineAlloc(kTerrainLodRecordBytes);
         unsigned char* table = 0;
         if (storage)
         {
-            ::memset(storage, 0, 0x190u);
+            ::memset(storage, 0, kTerrainLodRecordBytes);
             table = static_cast<unsigned char*>(storage);
         }
         m_lodTables = table;
@@ -1103,19 +1103,19 @@ void Terrain::loadLodTablesAndBaseGrid(TerrainRawReader& reader)
         // 85 records of 400 bytes. The first 21 link to four children each (records 1+4i..4+4i)
         // and read their three 64-byte rows as u32 pairs in the shipped interleaving; records 21..84
         // are read as plain (row, row+192) pairs.
-        m_lodTables = static_cast<unsigned char*>(::renddx9abi::engineAlloc(34000));
+        m_lodTables = static_cast<unsigned char*>(::renddx9abi::engineAlloc(85 * kTerrainLodRecordBytes));
         int record = 0;
         int offset = 0;
-        for (int child = 400; child < 34000; child += 1600)
+        for (int child = kTerrainLodRecordBytes; child < 85 * kTerrainLodRecordBytes; child += 4 * kTerrainLodRecordBytes)
         {
             unsigned int* const table = reinterpret_cast<unsigned int*>(m_lodTables + offset);
-            ::memset(table, 0, 0x190u);
+            ::memset(table, 0, kTerrainLodRecordBytes);
             if (record < 21)
             {
-                table[96] = reinterpret_cast<unsigned int>(m_lodTables + child);
-                table[97] = reinterpret_cast<unsigned int>(m_lodTables + child + 400);
-                table[98] = reinterpret_cast<unsigned int>(m_lodTables + child + 800);
-                table[99] = reinterpret_cast<unsigned int>(m_lodTables + child + 1200);
+                reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(table) + 384)[0] = m_lodTables + child + 0 * kTerrainLodRecordBytes;
+                reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(table) + 384)[1] = m_lodTables + child + 1 * kTerrainLodRecordBytes;
+                reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(table) + 384)[2] = m_lodTables + child + 2 * kTerrainLodRecordBytes;
+                reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(table) + 384)[3] = m_lodTables + child + 3 * kTerrainLodRecordBytes;
             }
             unsigned int* row = table + 1;
             for (int r = 0; r < 3; ++r)
@@ -1136,14 +1136,14 @@ void Terrain::loadLodTablesAndBaseGrid(TerrainRawReader& reader)
                 row += 16;
             }
             ++record;
-            offset += 400;
+            offset += kTerrainLodRecordBytes;
         }
         if (record < 85)
         {
             for (int o = 400 * record; o < 34000; o += 400)
             {
                 unsigned char* const table = m_lodTables + o;
-                ::memset(table, 0, 0x190u);
+                ::memset(table, 0, kTerrainLodRecordBytes);
                 unsigned char* row = table;
                 for (int r = 0; r < 3; ++r)
                 {
@@ -1697,7 +1697,7 @@ void Terrain::setupWater()
         -lowX, static_cast<float>(1.0 / (highX - lowX)), lowZ, static_cast<float>(1.0 / (highZ - lowZ)));
 
     // The material block's +0x24 vec4 to (1, 0, 0, 1).
-    float* const materialVec = reinterpret_cast<float*>(static_cast<unsigned char*>(m_materialParameters) + 36);
+    float* const materialVec = reinterpret_cast<float*>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 36));
     materialVec[0] = 1.0f; materialVec[1] = 0.0f; materialVec[2] = 0.0f; materialVec[3] = 1.0f;
 
     if (m_water3D)
@@ -1735,7 +1735,7 @@ void Terrain::setupWater()
     // "Water" on the expansion pack (Renderer +0xAC), else "WaterBase", into the material's +0x14C.
     {
         vc71::string shaderName(dx9rend::rendererIsExpansionPack() ? "Water" : "WaterBase");
-        *reinterpret_cast<dx9rend::Ra::RaShader**>(static_cast<unsigned char*>(m_materialParameters) + 332) =
+        *reinterpret_cast<dx9rend::Ra::RaShader**>(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 332)) =
             dx9rend::Ra::getShader(raShaderTable(), shaderName, false);
     }
 
@@ -1789,12 +1789,12 @@ void Terrain::setupWater()
         dx9rend::EngineTexture* const cube = m_waterEnvMap
             ? static_cast<dx9rend::EngineTexture*>(m_waterEnvMap->texture)
             : lightManagerTexture(0x248);
-        holderSetTexture(static_cast<unsigned char*>(m_materialParameters) + 0x11C, cube);   // CubeMap
+        holderSetTexture(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 0x11C), cube);   // CubeMap
         if (g_terrainWaterUsesRendererTexture)
         {
             // Dead in the shipped image (nothing writes dword_102592A0): Renderer +0x7B4 into the
             // material's DiffuseMap holder. [UNRESOLVED] both the global and the renderer field.
-            holderSetTexture(static_cast<unsigned char*>(m_materialParameters) + 0xB8,
+            holderSetTexture(dx9rend::Ra::raMaterialFieldBytes(m_materialParameters, 0xB8),
                              *reinterpret_cast<dx9rend::EngineTexture**>(
                                  ::dice::hfe::dx9rend::rendererRetailBytes(0x7B4)));
         }

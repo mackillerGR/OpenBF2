@@ -6,6 +6,9 @@
 #define GEOM_QUADPATCH_H
 
 #include <cstddef>
+
+// A terrain LOD record: 384 bytes of rows, then four child pointers.
+enum { kTerrainLodRecordBytes = 384 + 4 * sizeof(void*) };
 #include "../Math/Vec3.h"
 #include "../../RendDX9Abi/Vc71Vector.h"
 

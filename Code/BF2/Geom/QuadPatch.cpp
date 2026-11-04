@@ -126,7 +126,7 @@ void formatString(vc71::string& out, const char* format, int a, int b, int c)
 
 inline unsigned int layerCount(const vc71::vector_layout& v)
 {
-    return vc71::vectorSizeIn(v, 4u);
+    return vc71::vectorSizeIn(v, sizeof(void*));
 }
 
 } // anonymous namespace
@@ -188,9 +188,9 @@ int QuadPatchDetailLayer::load(TerrainRawReader& reader)
         // reads its three 64-byte rows as (row, row+192) u32 pairs.
         int tableCount = 0;
         reader.readU32(&tableCount);
-        lodTables = static_cast<unsigned char*>(::renddx9abi::engineAlloc(static_cast<unsigned int>(400 * tableCount)));
+        lodTables = static_cast<unsigned char*>(::renddx9abi::engineAlloc(static_cast<unsigned int>(kTerrainLodRecordBytes * tableCount)));
         int offset = 0;
-        int childOffset = 400;
+        int childOffset = kTerrainLodRecordBytes;
         int firstChild = 1;
         for (int record = 0; record < tableCount; ++record)
         {
@@ -203,9 +203,9 @@ int QuadPatchDetailLayer::load(TerrainRawReader& reader)
             else
             {
                 children[0] = lodTables + childOffset;
-                children[1] = lodTables + childOffset + 400;
-                children[2] = lodTables + childOffset + 800;
-                children[3] = lodTables + childOffset + 1200;
+                children[1] = lodTables + childOffset + kTerrainLodRecordBytes;
+                children[2] = lodTables + childOffset + 2 * kTerrainLodRecordBytes;
+                children[3] = lodTables + childOffset + 3 * kTerrainLodRecordBytes;
             }
             unsigned char* row = table;
             for (int r = 0; r < 3; ++r)
@@ -214,8 +214,8 @@ int QuadPatchDetailLayer::load(TerrainRawReader& reader)
                 reader.readU32(row + 192);
                 row += 64;
             }
-            offset += 400;
-            childOffset += 1600;
+            offset += kTerrainLodRecordBytes;
+            childOffset += 4 * kTerrainLodRecordBytes;
             firstChild += 4;
         }
         indexBuffer = dx9rend::bufferManagerCreateIndexBuffer(indexCount, 8u, 101u);
@@ -230,11 +230,11 @@ int QuadPatchDetailLayer::load(TerrainRawReader& reader)
     // count, the legacy table builder, then the upload. 1.50 content never comes here.
     legacyIndices = ::renddx9abi::engineAlloc(2u * indexCount);
     reader.read(legacyIndices, 2u * indexCount);
-    void* const storage = ::renddx9abi::engineAlloc(0x190);
+    void* const storage = ::renddx9abi::engineAlloc(kTerrainLodRecordBytes);
     if (storage)
-        ::memset(storage, 0, 0x190u);
+        ::memset(storage, 0, kTerrainLodRecordBytes);
     lodTables = static_cast<unsigned char*>(storage);
-    ::memset(lodTables, 0, 0x190u);                                               // a second, unguarded clear, as shipped
+    ::memset(lodTables, 0, kTerrainLodRecordBytes);                                               // a second, unguarded clear, as shipped
     *reinterpret_cast<unsigned int*>(lodTables + 192) = indexCount;
     RD9_FRONTIER_AT("dice::hfe::geom::QuadPatchDetailLayer::load (sub_101BB490 - the pre-0x18 LOD "
                     "table builder)", this, 0x00);
@@ -558,7 +558,7 @@ void QuadPatch::loadDetailLayers(TerrainRawReader& reader)
     for (int i = 0; i < t->m_detailTextureCount + 1; ++i)
     {
         QuadPatchDetailLayer* const null = 0;
-        vc71::vectorPushBackIn(detailLayers, 4u, &null);
+        vc71::vectorPushBackIn(detailLayers, sizeof(void*), &null);
     }
     maxDetailLayerIndex = -1;
     int marker = 0;
@@ -1049,7 +1049,7 @@ void TerrainCuller::load(TerrainRawReader& reader)
                 QuadPatchDetailLayer* const layer =
                     reinterpret_cast<QuadPatchDetailLayer**>(patch->detailLayers.first)[i];
                 unsigned char* const table = layer ? layer->lodTables : 0;
-                vc71::vectorPushBackIn(node->layerLodTables, 4u, &table);
+                vc71::vectorPushBackIn(node->layerLodTables, sizeof(void*), &table);
             }
         }
         else if (!node->fileByteEC)
@@ -1060,15 +1060,15 @@ void TerrainCuller::load(TerrainRawReader& reader)
         {
             TerrainCullerNode* const parent = nodes + (k - 1) / 4;
             const int which = (k - 1) % 4;
-            node->lodTable = *reinterpret_cast<unsigned char**>(parent->lodTable + 384 + 4 * which);
+            node->lodTable = *reinterpret_cast<unsigned char**>(parent->lodTable + 384 + sizeof(void*) * which);
             const unsigned int layers = layerCount(node->patch->detailLayers);    // unguarded, as shipped
             for (unsigned int i = 0; i < layers; ++i)
             {
                 unsigned char* const parentTable =
                     reinterpret_cast<unsigned char**>(parent->layerLodTables.first)[i];
                 unsigned char* const table =
-                    parentTable ? *reinterpret_cast<unsigned char**>(parentTable + 384 + 4 * which) : 0;
-                vc71::vectorPushBackIn(node->layerLodTables, 4u, &table);
+                    parentTable ? *reinterpret_cast<unsigned char**>(parentTable + 384 + sizeof(void*) * which) : 0;
+                vc71::vectorPushBackIn(node->layerLodTables, sizeof(void*), &table);
             }
         }
     }
@@ -1329,7 +1329,7 @@ void TerrainCuller::walkMode3(TerrainCullerNode* parent)
             child->lod = 0;
         }
         if (child->fileByteEE)
-            vc71::vectorPushBackIn(visible, 4u, &child);
+            vc71::vectorPushBackIn(visible, sizeof(void*), &child);
         else
             walkMode3(child);
         ++parent->childrenWalked;
@@ -1544,7 +1544,7 @@ void TerrainCuller::gatherNode(TerrainCullerNode* node)
     if (static_cast<double>(radius) + gatherRadius > std::sqrt(dz * dz + dx * dx + dy * dy))
     {
         if (node->patch)
-            vc71::vectorPushBackIn(gathered, 4u, &node);
+            vc71::vectorPushBackIn(gathered, sizeof(void*), &node);
     }
 }
 
@@ -1586,7 +1586,7 @@ void TerrainCuller::gatherVisibleNode(TerrainCullerNode* node)
     const float distance = std::sqrt(dz * dz + dx * dx + dy * dy);          // the float overload
     const float reach = radius + gatherRadius;
     if (reach > distance && node->patch)
-        vc71::vectorPushBackIn(gathered, 4u, &node);
+        vc71::vectorPushBackIn(gathered, sizeof(void*), &node);
 }
 
 
