@@ -5,7 +5,10 @@
 
 #include "Core/X87Emu.h"
 #include "Core/X87Emu.h"
+#include <cstdint>
+#include <unordered_map>
 #include "ParticleSystemManager.h"
+#include "ParticlePointerSlots.h"
 #include "../XpLightManager.h"
 #include "../StaticMesh.h"
 #include "../HemiMapManager/HemiMapManager.h"
@@ -79,6 +82,12 @@ void indexBufferRelease(void* wrapper);
 }
 
 namespace geom {
+
+void*& psmPointerSlot(const void* address)
+{
+    static std::unordered_map<const void*, void*> slots;
+    return slots[address];
+}
 
 extern LightManager* g_LightManager;                 // ModuleGeom.cpp, dword_1024B914
 extern IBase* g_ParticleSystemManager;               // ModuleGeom.cpp, dword_1024B900
@@ -288,10 +297,36 @@ void* constructParticleSystemType4(void* mem, const void* nameString);          
 
 namespace {
 
+// Maps a retail manager offset to this build's offset. On 32-bit hosts the struct is the retail
+// layout; on 64-bit hosts each pointer member grows, so offsets are taken relative to the nearest
+// preceding member that the accessors below reach. [CHOSEN, not recovered]
+inline unsigned int psmManagerOffset(unsigned int retail)
+{
+#if UINTPTR_MAX > 0xFFFFFFFFu
+#define PSM_ANCHOR(base, member) { base, static_cast<unsigned int>(offsetof(ParticleSystemManager, member)) }
+    static const struct { unsigned int retail, native; } anchors[] = {
+        PSM_ANCHOR(0x5F20, m_type0FreeList),   PSM_ANCHOR(0x5F24, m_type0PoolCount),
+        PSM_ANCHOR(0x5F28, m_pad5F28),         PSM_ANCHOR(0x7CC0, m_type1FreeList),
+        PSM_ANCHOR(0x7CC4, m_type1PoolCount),  PSM_ANCHOR(0x85E0, m_type2FreeList),
+        PSM_ANCHOR(0x85E4, m_type2PoolCount),  PSM_ANCHOR(0x85EC, m_type3FreeList),
+        PSM_ANCHOR(0x85F0, m_type3PoolCount),  PSM_ANCHOR(0x8B98, m_type4FreeList),
+        PSM_ANCHOR(0x8B9C, m_type4PoolCount),  PSM_ANCHOR(0x8BA0, m_opaque8BA0),
+        PSM_ANCHOR(0x8BA8, m_forceSortedParticleType), PSM_ANCHOR(0x8C0C, m_windManager),
+        PSM_ANCHOR(0x8C10, m_windEnabled),     PSM_ANCHOR(0x8C14, m_heightmapCluster),
+        PSM_ANCHOR(0x8C18, m_opaque8C18),      PSM_ANCHOR(0x8CB4, m_textureAtlasHelper),
+    };
+#undef PSM_ANCHOR
+    for (unsigned int i = sizeof(anchors) / sizeof(anchors[0]); i-- > 0;)
+        if (retail >= anchors[i].retail)
+            return anchors[i].native + (retail - anchors[i].retail);
+#endif
+    return retail;
+}
+
 template <typename T>
 T& psmField(ParticleSystemManager* self, unsigned int offset)
 {
-    return *reinterpret_cast<T*>(reinterpret_cast<unsigned char*>(self) + offset);
+    return *reinterpret_cast<T*>(reinterpret_cast<unsigned char*>(self) + psmManagerOffset(offset));
 }
 
 // The complete 18-slot primary vtable (0x10219978). Slots 0-3 are the reference spine and slot 17
@@ -333,7 +368,7 @@ void __fastcall psm_reserved10(void* self BF2_EDX_PARAM)
 {
     reinterpret_cast<IParticleSystemManager*>(self)->resetStats();
     renddx9abi::HostString name("WindManager");
-    *reinterpret_cast<IBase**>(static_cast<unsigned char*>(self) + 0x8C0C) =
+    static_cast<ParticleSystemManager*>(self)->m_windManager =
         classManager->getSingleton(name);
 }
 
@@ -520,16 +555,16 @@ bool psmHasUnrecoveredOwnedState(const ParticleSystemManager* self)
     // Constructed renderers own allocations, declaration/effect handles and Trail's registered
     // listener even before pool allocation. They must reach the existing teardown frontier too.
     if (*reinterpret_cast<void* const*>(self->m_trailRenderer)
-        || *reinterpret_cast<void* const*>(self->m_particleSystemRenderer + 0x0C)
-        || *reinterpret_cast<void* const*>(self->m_particleSystemRenderer + 0x1DC0)
-        || *reinterpret_cast<void* const*>(self->m_particleSystemRenderer + 0x1DC8)
-        || *reinterpret_cast<void* const*>(self->m_particleSystemRenderer + 0x1E0C)
-        || *reinterpret_cast<void* const*>(self->m_particleSystemRenderer + 0x1DD0)
-        || *reinterpret_cast<void* const*>(self->m_nsaParticleSystemRenderer + 0x10)
-        || *reinterpret_cast<void* const*>(self->m_nsaParticleSystemRenderer + 0x55C)
-        || *reinterpret_cast<void* const*>(self->m_nsaParticleSystemRenderer + 0x564)
-        || *reinterpret_cast<void* const*>(self->m_nsaParticleSystemRenderer + 0x59C)
-        || *reinterpret_cast<void* const*>(self->m_nsaParticleSystemRenderer + 0x56C))
+        || reinterpret_cast<const vc71::vector_layout*>(self->m_particleSystemRenderer + 8)->first
+        || PsmSlot<void*>::at((unsigned char*)self->m_particleSystemRenderer + 0x1DC0)
+        || PsmSlot<void*>::at((unsigned char*)self->m_particleSystemRenderer + 0x1DC8)
+        || PsmSlot<void*>::at((unsigned char*)self->m_particleSystemRenderer + 0x1E0C)
+        || PsmSlot<void*>::at((unsigned char*)self->m_particleSystemRenderer + 0x1DD0)
+        || reinterpret_cast<const vc71::vector_layout*>(self->m_nsaParticleSystemRenderer + 0xC)->first
+        || PsmSlot<void*>::at((unsigned char*)self->m_nsaParticleSystemRenderer + 0x55C)
+        || PsmSlot<void*>::at((unsigned char*)self->m_nsaParticleSystemRenderer + 0x564)
+        || PsmSlot<void*>::at((unsigned char*)self->m_nsaParticleSystemRenderer + 0x59C)
+        || PsmSlot<void*>::at((unsigned char*)self->m_nsaParticleSystemRenderer + 0x56C))
         return true;
 
     for (unsigned int i = 0; i < 10; ++i)
@@ -746,7 +781,7 @@ void psmAllocatePool(void*& backing, void*& freeList, int& count,
 template <typename T>
 T& psmRendererField(unsigned char* renderer, unsigned int offset)
 {
-    return *reinterpret_cast<T*>(renderer + offset);
+    return PsmSlot<T>::at(renderer + offset);
 }
 
 // Direct TrailRenderer helper the index count is in 16-bit index units. Its buffer

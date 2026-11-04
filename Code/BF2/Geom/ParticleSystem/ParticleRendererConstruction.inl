@@ -4,7 +4,7 @@
 template<class T>
 static T& psmCtorField(unsigned char* renderer, unsigned int offset)
 {
-    return *reinterpret_cast<T*>(renderer + offset);
+    return PsmSlot<T>::at(renderer + offset);
 }
 
 static void psmCtorZeroWords(unsigned char* renderer, unsigned int offset, unsigned int count)

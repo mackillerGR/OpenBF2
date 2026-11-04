@@ -3,7 +3,7 @@
 // the dedicated ELF exposes the caller interface, not these simulation bodies.
 
 template<class T> T& psmRuntimeField(void* object, unsigned int offset)
-{ return *reinterpret_cast<T*>(static_cast<unsigned char*>(object) + offset); }
+{ return PsmSlot<T>::at(static_cast<unsigned char*>(object) + offset); }
 
 vc71::set_layout& psmReclassification(ParticleSystemManager* self)
 { return *reinterpret_cast<vc71::set_layout*>(self->m_pendingReclassificationTree); }

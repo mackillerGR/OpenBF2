@@ -5,7 +5,7 @@
 template<typename T>
 static T& psmDrawField(unsigned char* renderer, unsigned int offset)
 {
-    return *reinterpret_cast<T*>(renderer + offset);
+    return PsmSlot<T>::at(renderer + offset);
 }
 
 // VC7.1 vector<T*>::resize(0), used by 10172890, 1016F4F0 and 10174410. These
