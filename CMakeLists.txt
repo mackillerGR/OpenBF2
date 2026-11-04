@@ -247,6 +247,9 @@ list(REMOVE_ITEM bf2_engine_sources "${BF2_ROOT}/VoipServer/BF2VoipServerShell.c
 # under #if !DEDICATED, and bf2_set_image() below is what selects them per target.
 set(bf2_client_only_sources
     "${BF2_ROOT}/PortShim/Win32OnSdl.cpp"
+    "${BF2_ROOT}/PortShim/ClientFrontiers.cpp"
+    "${BF2_ROOT}/PortShim/ClientHaptics.cpp"
+    "${BF2_ROOT}/PortShim/EngineFrontiers.cpp"
     "${BF2_ROOT}/Math/Mat4Inverse.cpp" # client PE inverse; explicitly reused by x86 bf2_aidll below
     "${BF2_ROOT}/Game/Main/BF2Window.cpp"    # the game window (2026-09-02); its body is #if !DEDICATED as well
     "${BF2_ROOT}/Game/Main/BF2FrameInterpolator.cpp"    # attested client-only TU; ctor recovered 2026-09-03

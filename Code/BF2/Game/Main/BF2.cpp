@@ -23,7 +23,7 @@ namespace memory { void memory_update_modules(const char*) { } }
 #include <iostream>
 #include <cstdio>                                    // setvbuf/stdout - unbuffered server logging
 
-#if defined(_WIN32)
+#if defined(_WIN32) || !DEDICATED
 #  include <windows.h>
 #  include <cstring>                                 // strstr, memset - the Win32 entry chain
 #  include <cstdlib>                                 // exit(0) on WM_QUIT
@@ -34,8 +34,10 @@ namespace memory { void memory_update_modules(const char*) { } }
 #  include "../Utility/Vars.h"                       // Vars::enableProfiling around the main loop
 #  include "BF2Window.h"                             // the game window at BF2Engine+0x10
 #  if !DEDICATED
+#    if defined(_WIN32)
 #    include <dbghelp.h>                             // EnumerateLoadedModules (client only)
 #    include <psapi.h>                               // EnumProcesses / EmptyWorkingSet (client only)
+#    endif
 #    include "../../Sound/BfSound.h"                 // g_bfSound - the focus-loss mute
 #    include "../../Sound/NullSound.h"               // ISoundEngine::setMasterVolume
 #    include "../../Menu/IMenuLogic.h"               // menuLogic - the active menu
@@ -79,7 +81,7 @@ extern SettingsRepostitory* settings;               // _ZN4dice3hfe8settingsE  @
                                                     // the misspelling is dice's, it is in the
                                                     // mangled name (SettingsRepostitory)
 
-#if defined(_WIN32)
+#if defined(_WIN32) || !DEDICATED
 class IBase;
 namespace io { extern IBase* inputManager; }        // ds:0x8AC8CA4 - Core/Globals.cpp defines it as IBase*
 
@@ -88,8 +90,10 @@ namespace io { extern IBase* inputManager; }        // ds:0x8AC8CA4 - Core/Globa
 static void allowAccessibilityShortcutKeys(bool allow);
 static void restoreDesktopSettings();
 #  if !DEDICATED
+#    if defined(_WIN32)
 static BOOL CALLBACK lockLoadedModule(PCSTR moduleName, ULONG moduleBase, ULONG moduleSize, PVOID userContext);
 static void trimOtherProcessesAndFileCache();
+#    endif
 static int  bf2MessageHandler(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 #  endif
 #endif
@@ -117,12 +121,14 @@ bool BF2::init(const std::string& commandLine)
     if (!m_engine->init(commandLine))
         return false;
 
-#if defined(_WIN32) && !DEDICATED
+#if !DEDICATED
     // Client only (BF2.exe 0x401E9A; the dedicated PE imports neither EnumerateLoadedModules nor
     // EnumProcesses): lock every loaded module's pages, then empty every other process's working
     // set and flush the system file cache. Unconditional: the `lockMemory 0` option does not gate this.
+#  if defined(_WIN32)
     EnumerateLoadedModules(GetCurrentProcess(), lockLoadedModule, 0);
     trimOtherProcessesAndFileCache();
+#  endif
 #endif
     memory::memory_update_modules();
 
@@ -148,7 +154,7 @@ bool BF2::init(const std::string& commandLine)
         m_engine->startGame(false, true);           // TWO bools: 0x8052979 xor eax,eax -> [esp+4];
                                                     // mov edx,1 -> [esp+8]; call at 0x805298B
 
-#if defined(_WIN32) && !DEDICATED
+#if !DEDICATED
     // BF2.exe 0x401FE5: hand the window BF2's message handler (slot +0x30). The window exists only
     // when BF2Engine::init ran with isDedicated() false; `+dedicated 1` leaves it null.
     if (Window* window = m_engine->getWindow())
@@ -181,7 +187,7 @@ void BF2::startDemo(const std::string& demoName)
 // [PLATFORM] Win32 pumps messages, handles quit and focus, and updates client input/audio focus. Linux is empty.
 void BF2::handleInGameWinMessages()
 {
-#if defined(_WIN32)
+#if defined(_WIN32) || !DEDICATED
     MSG msg;
     while (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE | PM_NOYIELD))            // 3
     {
@@ -224,7 +230,7 @@ void BF2::handleInGameWinMessages()
 } // namespace dice
 
 
-#if defined(_WIN32)
+#if defined(_WIN32) || !DEDICATED
 
 // Windows GUI entry and desktop-state handling shared by both images. The dedicated
 // build uses the [CHOSEN] console main below; client startup uses this WinMain chain.
@@ -232,6 +238,7 @@ void BF2::handleInGameWinMessages()
 namespace dice {
 namespace hfe {
 
+#if defined(_WIN32)
 // the desktop state saved around the game
 // .data in both PEs and initialised there: BF2.exe 0x96E264 / 0x96E26C / 0x96E274 hold 8, 8 and
 // 0x18 - the cbSize members - so the source carried the initialisers below. Mouse trails at 0x986F10
@@ -291,7 +298,14 @@ static void restoreDesktopSettings()
     allowAccessibilityShortcutKeys(true);
 }
 
+#else
+// [CHOSEN, not recovered] No desktop accessibility state to save on this port.
+static void allowAccessibilityShortcutKeys(bool) {}
+static void restoreDesktopSettings() {}
+#endif
+
 #if !DEDICATED
+#if defined(_WIN32)
 // the memory-locking trio of BF2::init (client only)
 
 // . The IDB named it after its use: every loaded module's pages get locked.
@@ -389,6 +403,8 @@ static void trimOtherProcessesAndFileCache()
     flushSystemFileCache();
 }
 
+#endif
+
 // the two key rings (declared in BF2.h)
 // The console ring's four definitions moved to BF2Console.cpp - ONE ring for both
 // images, drained there by BF2Console::updateConsole; pushConsoleChar below still fills it.
@@ -426,6 +442,7 @@ static int pushMenuKey(char key)
 // The Caps Lock trick the handler uses twice: while the LED is on, press and release VK_CAPITAL
 // through SendInput so the game never runs with Caps Lock engaged. Both INPUTs are zeroed, both
 // are VK_CAPITAL, the second carries KEYEVENTF_KEYUP (the `mov [ebp+var_20], 2`).
+#if defined(_WIN32)
 static void toggleCapsLockOff()
 {
     INPUT inputs[2];
@@ -437,6 +454,10 @@ static void toggleCapsLockOff()
     inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
     SendInput(2, inputs, sizeof(INPUT));
 }
+
+#else
+static void toggleCapsLockOff() {}
+#endif
 
 // 0x2D0 B. Added to the window by BF2::init and called by Window::wndProc for every
 // message; the return value is ignored there. Every arm re-reads "GSDedicated" from the settings
@@ -531,6 +552,7 @@ static int bf2MessageHandler(HWND /*hwnd*/, UINT message, WPARAM wParam, LPARAM 
 }
 #endif // !dedicated
 
+#if defined(_WIN32)
 // Crash-dump helpers create the output directory and write through a joined worker.
 // [INFERRED] Helper names.
 const wchar_t* getCrashDumpDirectory();
@@ -545,6 +567,8 @@ static const wchar_t* crashDumpFileName(const wchar_t* dumpDirectory)
                    + toWideString(BuildNrUtil::getBuildNrString()) + L".dmp";
     return s_fileName.c_str();
 }
+
+#endif
 
 // bf2Main: create BF2, run it, tear it down (0x402910 / 0x401590)
 // `int __stdcall (HINSTANCE, HINSTANCE, LPSTR)` in both PEs (`retn 0Ch`) - the WinMain triple
@@ -586,6 +610,7 @@ static int __stdcall bf2Main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
     return 0;
 }
 
+#if defined(_WIN32)
 // Desktop entry wrapper and SEH frame. Do not create objects with C++ destructors
 // in this function because it contains __try. [INFERRED] name.
 static int bf2WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine)
@@ -640,9 +665,12 @@ static int bf2WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
     return result;
 }
 
+#endif
+
 } // namespace hfe
 } // namespace dice
 
+#if defined(_WIN32)
 //  / 0x401890, 83 B in both. The System singleton is constructed first and destroyed last,
 // through its deleting destructor (slot +0x10 in the PE), exactly as the Linux main does.
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int /*nShowCmd*/)
@@ -653,6 +681,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         delete dice::hfe::g_system;
     return result;
 }
+
+#else
+// [CHOSEN, not recovered] The portable client's entry: the WinMain chain without the
+// Windows working-set, desktop and SEH handling. SDL_main.h renames this on Android.
+int main(int argc, char** argv)
+{
+    dice::hfe::g_system = new dice::hfe::System();
+    std::string commandLine;
+    for (int i = 1; i < argc; ++i)
+        appendCommandLineArg(commandLine, argv[i], i == 1);
+    const int result = dice::hfe::bf2Main(0, 0, const_cast<char*>(commandLine.c_str()));
+    if (dice::hfe::g_system)
+        delete dice::hfe::g_system;
+    return result;
+}
+#endif
 
 #if DEDICATED
 // [PLATFORM] The rebuilt Windows dedicated server uses a console entry point.
