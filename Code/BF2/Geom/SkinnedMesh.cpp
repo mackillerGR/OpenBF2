@@ -2178,7 +2178,7 @@ int  __fastcall skm_three(void*, void*) { return 3; }
 
 // 0x10082D30 - `m_name = value` through MSVCP71's string operator=. Writes +0x04.
 void __fastcall skm_setName(void* self, void*, const vc71::string& name)
-{ static_cast<SkinnedMesh*>(self)->m_name = name; }
+{ static_cast<SkinnedMesh*>(self)->m_name = name.c_str(); }
 
 // 0x10103AD0 - `[ecx+24h] = rendererFrameOrdinal()`. Writes +0x24, valid in both classes.
 void __fastcall skm_stampFrameOrdinal(void* self, void*)

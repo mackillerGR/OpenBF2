@@ -440,7 +440,7 @@ void __fastcall bm_shadow(BundledMesh* s,void*,void* a,void* b,void* c,void* d,v
 void* __fastcall bm_destroy(void* s,void*,unsigned char flags) { return bundledMeshDestroyFlags(s,flags); }
 void __fastcall bm_setPart(BundledMesh* s,void*,const Mat4* value,int part) { s->setPartTransformation(value,part); }
 void __fastcall bm_setBones(BundledMesh* s,void*,const Mat4* value,int count) { s->setBoneTransforms(value,count); }
-void __fastcall bm_setName(BundledMesh* s,void*,const vc71::string& value) { s->m_name=value; }
+void __fastcall bm_setName(BundledMesh* s,void*,const vc71::string& value) { s->m_name=value.c_str(); }
 void __fastcall bm_uvTranslate(BundledMesh* s,void*,int i,float x,float y) { s->setUvTranslation(i,x,y); }
 void __fastcall bm_uvRotate(BundledMesh* s,void*,int i,float angle) { s->setUvRotation(i,angle); }
 void __fastcall bm_uvTransform(BundledMesh* s,void*,int i,const Mat4* value) { s->setUvTransformation(i,value); }

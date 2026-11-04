@@ -3,6 +3,8 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include "Core/X87Emu.h"
+#include "Core/X87Emu.h"
 #include "ParticleSystemManager.h"
 #include "../XpLightManager.h"
 #include "../StaticMesh.h"
@@ -566,6 +568,7 @@ void psmRecomputeDerivedSettings(ParticleSystemManager* self)
         // PE 100D3468..100D357A uses FST, not fstp: the products remain at the
         // caller's x87 precision even though rounded copies are published to the fields.
         // The inverse denominators reload the rounded base and subtract the retained product.
+#if defined(_M_IX86)
         __asm {
             fld lodScale
             fmul view
@@ -591,6 +594,34 @@ void psmRecomputeDerivedSettings(ParticleSystemManager* self)
             fstp dword ptr [edx]
             fstp st(0)
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(lodScale);
+            c.s(0) *= view;
+            c.eax = x87::toReg(base);
+            x87::f32(c.eax) = float(c.s(0));
+            c.s(0) *= nearRatio;
+            c.ecx = x87::toReg(nearDistance);
+            x87::f32(c.ecx) = float(c.s(0));
+            c.push(x87::f32(c.eax));
+            c.s(0) -= c.s(1);
+            c.s(0) = one / c.s(0);
+            c.edx = x87::toReg(inverseNear);
+            x87::f32(c.edx) = float(c.s(0)); c.pop();
+            c.s(0) = c.s(0); c.pop();
+            c.push(farRatio);
+            c.s(0) *= x87::f32(c.eax);
+            c.ecx = x87::toReg(farDistance);
+            x87::f32(c.ecx) = float(c.s(0));
+            c.push(x87::f32(c.eax));
+            c.s(0) -= c.s(1);
+            c.s(0) = one / c.s(0);
+            c.edx = x87::toReg(inverseFar);
+            x87::f32(c.edx) = float(c.s(0)); c.pop();
+            c.s(0) = c.s(0); c.pop();
+        }
+#endif
     }
 
     if (!g_LightManager)
@@ -1106,6 +1137,7 @@ void __fastcall psm_onPathDraw(void* rawSelf, void*, bool firstPerson, bool seco
     float effective;
     // PE 100D49B9..100D49DA keeps both products at the current x87 precision and
     // selects 200 for unordered as well as <=200. Do not spill an intermediate to double.
+#if defined(_M_IX86)
     __asm {
         fld rendererDistance
         fmul globalViewDistance
@@ -1120,6 +1152,23 @@ void __fastcall psm_onPathDraw(void* rawSelf, void*, bool firstPerson, bool seco
     psm_distance_selected:
         fstp effective
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(rendererDistance);
+        c.s(0) *= globalViewDistance;
+        c.s(0) *= distanceFactor;
+        c.push(minimumDistance);
+        c.compare(c.s(0), c.s(1)); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (!c.pf) goto psm_distance_selected;
+        c.s(0) = c.s(0); c.pop();
+        c.push(minimumDistance);
+        psm_distance_selected: ;
+        effective = static_cast<std::remove_reference<decltype(effective)>::type>(c.s(0)); c.pop();
+    }
+#endif
     self->m_effectiveViewDistance = effective;
 
     bool underwater = psmCameraIsUnderWater();

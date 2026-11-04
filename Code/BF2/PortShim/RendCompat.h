@@ -42,3 +42,13 @@ inline BOOL GetProcessAffinityMask(HANDLE, DWORD_PTR* a, DWORD_PTR* b) { *a = *b
 inline BOOL SetProcessAffinityMask(HANDLE, DWORD_PTR) { return 1; }
 inline void Sleep(DWORD ms) { usleep(ms * 1000); }
 void GlobalMemoryStatus(MEMORYSTATUS*);
+inline BOOL InflateRect(RECT* r, int x, int y) { r->left -= x; r->right += x; r->top -= y; r->bottom += y; return 1; }
+#ifndef _TRUNCATE
+#define _TRUNCATE ((size_t)-1)
+#endif
+inline int strncpy_s(char* d, size_t n, const char* s, size_t c) { if (!n) return 22; size_t l = strnlen(s, c); if (l >= n) l = n - 1; memcpy(d, s, l); d[l] = 0; return 0; }
+template <size_t N> inline int strncpy_s(char (&d)[N], const char* s, size_t c) { return strncpy_s(d, N, s, c); }
+inline DWORD GetModuleFileNameA(HMODULE, char* b, DWORD n) { if (n) b[0] = 0; return 0; }
+inline DWORD GetCurrentDirectoryA(DWORD n, char* b) { return getcwd(b, n) ? (DWORD)strlen(b) : 0; }
+#include <sys/stat.h>
+inline BOOL CreateDirectoryA(const char* p, void*) { return mkdir(p, 0755) == 0; }

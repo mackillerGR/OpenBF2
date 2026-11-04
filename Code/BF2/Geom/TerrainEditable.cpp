@@ -1717,6 +1717,12 @@ void TerrainEditable::importColorMap(TerrainEditableString tga)
 // number) into an 80-byte buffer by sprintf - unbounded, as shipped - and never reported.
 void TerrainEditable::runTool(vc71::string executable, vc71::string arguments)
 {
+#if !defined(_WIN32)
+    // [CHOSEN, not recovered] The external tgasplit/nvdxt tools do not exist on this port.
+    std::fprintf(stderr, "[FRONTIER] TerrainEditable::runTool reached\n");
+    std::fflush(stderr);
+    std::abort();
+#else
     STARTUPINFOA startup;
     std::memset(&startup, 0, sizeof(startup));
     PROCESS_INFORMATION process;
@@ -1758,6 +1764,7 @@ void TerrainEditable::runTool(vc71::string executable, vc71::string arguments)
     {
         std::sprintf(message, "GetLastError returned %u\n", static_cast<unsigned int>(error));
     }
+#endif
 }
 
 // (`retn 38h`) - "tgasplit <tga> -w512 -h512 -b -s -R0 -G0 -B0 <outputDirectory> tx".

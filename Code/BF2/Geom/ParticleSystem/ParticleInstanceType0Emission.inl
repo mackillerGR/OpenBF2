@@ -135,13 +135,22 @@ void psmEmissionRotation(Mat4& matrix, float degrees, unsigned int axis)
 {
     const float radians=degrees*0.01745329238474369f;
     float sine,cosine;
-    __asm
-    {
+#if defined(_M_IX86)
+    __asm {
         fld radians
         fsincos
         fstp cosine
         fstp sine
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(radians);
+        { double t = c.s(0); c.s(0) = std::sin(t); c.push(std::cos(t)); }
+        cosine = static_cast<std::remove_reference<decltype(cosine)>::type>(c.s(0)); c.pop();
+        sine = static_cast<std::remove_reference<decltype(sine)>::type>(c.s(0)); c.pop();
+    }
+#endif
     matrix=Mat4::getIdentity();
     if(axis==0){matrix.m[5]=cosine;matrix.m[6]=sine;matrix.m[9]=-sine;matrix.m[10]=cosine;}
     else if(axis==1){matrix.m[0]=cosine;matrix.m[2]=-sine;matrix.m[8]=sine;matrix.m[10]=cosine;}

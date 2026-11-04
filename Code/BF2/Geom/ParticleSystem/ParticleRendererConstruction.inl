@@ -124,7 +124,26 @@ static void psmCtorTrigPair(unsigned int index, short& sine, short& cosine)
         fldcw originalControl
     }
 #else
-#error Particle renderer reconstruction requires the supported MSVC x86 target.
+    {
+        x87::Cpu c;
+        c.push(double(index));
+        c.s(0) *= step;
+        c.push(c.s(0));
+        c.s(0) = std::sin(c.s(0));
+        c.s(0) *= amplitude;
+        originalControl = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(originalControl) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncateControl, (c.eax & 0xFFFF));
+        c.cw = truncateControl;
+        sineValue = static_cast<std::remove_reference<decltype(sineValue)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = originalControl;
+        c.s(0) = std::cos(c.s(0));
+        c.s(0) *= amplitude;
+        c.cw = truncateControl;
+        cosineValue = static_cast<std::remove_reference<decltype(cosineValue)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = originalControl;
+    }
 #endif
     sine = sineValue;
     cosine = cosineValue;

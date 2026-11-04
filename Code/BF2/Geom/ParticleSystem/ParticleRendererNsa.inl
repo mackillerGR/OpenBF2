@@ -8,6 +8,7 @@ static void psmNsaPackRotation(float angle, short& sine, short& cosine)
     const float scale = 32767.0f;
     unsigned short savedControl, truncateControl;
     __int64 sinValue, cosValue;
+#if defined(_M_IX86)
     __asm {
         fnstcw savedControl
         mov ax, savedControl
@@ -26,6 +27,27 @@ static void psmNsaPackRotation(float angle, short& sine, short& cosine)
         fistp cosValue
         fldcw savedControl
     }
+#else
+    {
+        x87::Cpu c;
+        savedControl = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(savedControl) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncateControl, (c.eax & 0xFFFF));
+        c.push(angle);
+        c.s(0) = std::sin(c.s(0));
+        c.s(0) *= scale;
+        c.cw = truncateControl;
+        sinValue = static_cast<std::remove_reference<decltype(sinValue)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = savedControl;
+        c.push(angle);
+        c.s(0) = std::cos(c.s(0));
+        c.s(0) *= scale;
+        c.cw = truncateControl;
+        cosValue = static_cast<std::remove_reference<decltype(cosValue)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = savedControl;
+    }
+#endif
     sine = static_cast<short>(sinValue);
     cosine = static_cast<short>(cosValue);
 }

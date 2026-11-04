@@ -1948,7 +1948,7 @@ void StaticMesh::setDynamicPartTransformation(unsigned int part, const Mat4* tra
 // +0x68, 0x10082D30 - `add ecx, 4; jmp basic_string::operator=(const basic_string&)`.
 void StaticMesh::setName(const vc71::string& value)
 {
-    m_name = value;
+    m_name = value.c_str();
 }
 
 // +0x84, 0x100FC010.  -1 clears the override; anything else selects that one material and

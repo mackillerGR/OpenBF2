@@ -226,9 +226,8 @@ void __fastcall rg_setTransform(void* self, void*, const Mat4* transform)
 // (object +0x08). The shared body StaticMesh's +0x68 is; it answers the string.
 vc71::string* __fastcall rg_setName(void* self, void*, const vc71::string& value)
 {
-    vc71::string& name = static_cast<GeometryInstanceData*>(self)->m_name;
-    name = value;
-    return &name;
+    static_cast<GeometryInstanceData*>(self)->m_name = value.c_str();
+    return const_cast<vc71::string*>(&value);
 }
 
 void* const kRoadGeometryVtable[62] =

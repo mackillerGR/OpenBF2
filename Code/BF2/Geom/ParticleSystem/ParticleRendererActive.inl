@@ -6,11 +6,20 @@
 static int psmParticleRound(float value)
 {
     int rounded;
+#if defined(_M_IX86)
     __asm {
         fld value
         frndint
         fistp rounded
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(value);
+        c.s(0) = c.round(c.s(0));
+        rounded = static_cast<std::remove_reference<decltype(rounded)>::type>(c.round(c.s(0))); c.pop();
+    }
+#endif
     return rounded;
 }
 

@@ -507,7 +507,7 @@ void  __fastcall mpm_setPartTransformation(void* s, void*, const Mat4* v, int pa
 { self(s)->setPartTransformation(v, part); }
 void  __fastcall mpm_setGeometryTransformation(void* s, void*, const Mat4* v)
 { self(s)->setGeometryTransformation(v); }
-void  __fastcall mpm_setName(void* s, void*, const vc71::string& name) { self(s)->m_name = name; }
+void  __fastcall mpm_setName(void* s, void*, const vc71::string& name) { self(s)->m_name = name.c_str(); }
 void  __fastcall mpm_setGeomIndex(void* s, void*, int g)      { self(s)->setGeomIndex(g); }
 int   __fastcall mpm_getGeomIndex(void* s, void*)             { return self(s)->getGeomIndex(); }
 int   __fastcall mpm_getGeomCount(void* s, void*)             { return self(s)->getGeomCount(); }
