@@ -1889,6 +1889,7 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     "${BF2_ROOT}/PortShim/D3dxPortable.cpp"
     "${BF2_ROOT}/PortShim/D3dxTextures.cpp"
     "${BF2_ROOT}/PortShim/D3dxEffectPortable.cpp"
+    "${BF2_ROOT}/PortShim/D3dxMeshPortable.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/Packer.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlas.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlasConfiguration.cpp"

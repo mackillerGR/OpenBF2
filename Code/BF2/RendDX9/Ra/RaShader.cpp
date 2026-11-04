@@ -32,6 +32,8 @@ namespace dice {
 namespace hfe {
 namespace dx9rend {
 
+void* raConstantsRegistry();
+void raConstantsUnpackHolder(const unsigned char* holder, unsigned char* out);
 extern void* g_raShaderConstants;    // RenderQueues.cpp - dword_1023DDBC, the process-wide block
 
 // RendDX9Init.cpp - dword_1023B970, the base object.  Two bytes of it are read from this file:
@@ -207,6 +209,41 @@ void raCopyInt(void* destination, const void* source)
 struct RaParameterName { const char* name; int offset; };
 
 // Register while offsets is empty, including when it has reserved but unused capacity.
+// [CHOSEN, not recovered] Registered holder offsets are retail bytes; a 64-bit host needs its own.
+template <typename Block>
+unsigned int raNativeOffset(unsigned int retail);
+
+template <>
+unsigned int raNativeOffset<RaLightingParameters>(unsigned int retail)
+{
+    static const struct { unsigned int retail; std::size_t native; } members[] = { {0, offsetof(RaLightingParameters, vptr)}, {8, offsetof(RaLightingParameters, unnamed008)}, {28, offsetof(RaLightingParameters, terrainLightMap)}, {36, offsetof(RaLightingParameters, lightMap)}, {44, offsetof(RaLightingParameters, lightMapOffset)}, {64, offsetof(RaLightingParameters, matBones)}, {76, offsetof(RaLightingParameters, overGrowthAmbient)}, {96, offsetof(RaLightingParameters, shadowViewProj)}, {164, offsetof(RaLightingParameters, shadowViewProjArray)}, {184, offsetof(RaLightingParameters, clampViewProjArray)}, {204, offsetof(RaLightingParameters, shadowPosArray)}, {224, offsetof(RaLightingParameters, shadowSizeArray)}, {244, offsetof(RaLightingParameters, shadowCount)}, {252, offsetof(RaLightingParameters, tail0FC)} };
+    for (const auto& member : members)
+        if (member.retail == retail)
+            return static_cast<unsigned int>(member.native);
+    return retail;
+}
+
+template <>
+unsigned int raNativeOffset<RaObjectParameters>(unsigned int retail)
+{
+    static const struct { unsigned int retail; std::size_t native; } members[] = { {0, offsetof(RaObjectParameters, vptr)}, {8, offsetof(RaObjectParameters, world)}, {76, offsetof(RaObjectParameters, viewProjection)}, {144, offsetof(RaObjectParameters, worldViewProjection)}, {212, offsetof(RaObjectParameters, shadowProjMat)}, {280, offsetof(RaObjectParameters, shadowOccProjMat)}, {348, offsetof(RaObjectParameters, shadowTrapMat)}, {416, offsetof(RaObjectParameters, geomBones)}, {428, offsetof(RaObjectParameters, transparency)}, {436, offsetof(RaObjectParameters, objectSpaceCamPos)}, {456, offsetof(RaObjectParameters, windSpeed)}, {464, offsetof(RaObjectParameters, windDir)}, {480, offsetof(RaObjectParameters, userData)}, {500, offsetof(RaObjectParameters, heightOverTerrain)}, {508, offsetof(RaObjectParameters, hemiMapSkyColor)}, {528, offsetof(RaObjectParameters, objectSpaceWorldUp)} };
+    for (const auto& member : members)
+        if (member.retail == retail)
+            return static_cast<unsigned int>(member.native);
+    return retail;
+}
+
+template <>
+unsigned int raNativeOffset<RaLightArrayParameters>(unsigned int retail)
+{
+    static const struct { unsigned int retail; std::size_t native; } members[] = { {0, offsetof(RaLightArrayParameters, vptr)}, {8, offsetof(RaLightArrayParameters, lights)}, {16, offsetof(RaLightArrayParameters, lights1xVptr)}, {20, offsetof(RaLightArrayParameters, lights1xSelf)}, {24, offsetof(RaLightArrayParameters, lights1xFn)} };
+    for (const auto& member : members)
+        if (member.retail == retail)
+            return static_cast<unsigned int>(member.native);
+    return retail;
+}
+
+template <typename Block>
 void raRegisterNames(vc71::vector_layout& offsets, vc71::vector_layout& names,
                      const RaParameterName* table, unsigned int count)
 {
@@ -220,7 +257,8 @@ void raRegisterNames(vc71::vector_layout& offsets, vc71::vector_layout& names,
         // string - in that order, which is why the temporary is scoped this tightly.
         vc71::string name(table[i].name);
         raRegistryPush(names, &name, sizeof(vc71::string), &raCopyString);
-        raRegistryPush(offsets, &table[i].offset, 4, &raCopyInt);
+        const unsigned int offset = raNativeOffset<Block>(table[i].offset);
+        raRegistryPush(offsets, &offset, 4, &raCopyInt);
     }
 }
 
@@ -882,7 +920,7 @@ void raLightingParametersConstruct(void* storage)
     p->tail0FC.end   = 0;
     p->tail10C       = 0;
 
-    raRegisterNames(g_raLightingOffsets, g_raLightingNames, kRaLightingNames, 11);
+    raRegisterNames<RaLightingParameters>(g_raLightingOffsets, g_raLightingNames, kRaLightingNames, 11);
 
     // The last instruction of the shipped body.  Priority 3, the same one RaShaderConstants and
     // BufferManager register with.  The matching detach is the first thing sub_10044120 does, so a
@@ -1033,7 +1071,7 @@ void raObjectParametersConstruct(void* storage)
     p->objectSpaceWorldUp.value[2] = 0.0f;
     p->tail220 = 0;
 
-    raRegisterNames(g_raObjectOffsets, g_raObjectNames, kRaObjectNames, 15);
+    raRegisterNames<RaObjectParameters>(g_raObjectOffsets, g_raObjectNames, kRaObjectNames, 15);
 }
 
 
@@ -1087,7 +1125,7 @@ void raLightArrayParametersConstruct(void* storage)
     p->lights1xSelf = &p->lights;            // this + 8
     p->lights1xFn   = reinterpret_cast<void*>(&raLightArrayUpdate);
 
-    raRegisterNames(g_raLightArrayOffsets, g_raLightArrayNames, kRaLightArrayNames, 2);
+    raRegisterNames<RaLightArrayParameters>(g_raLightArrayOffsets, g_raLightArrayNames, kRaLightArrayNames, 2);
 }
 
 // The one-instruction inlined destructor: republish the +0x08 holder's vptr and nothing else.
@@ -1458,14 +1496,23 @@ void RaShader::applyParameterVector(void* block, const vc71::vector_layout& para
 
     typedef int (__fastcall* ApplyFn)(void* BF2_EDX_PARAM, void*, void*);
     unsigned char* const bytes = static_cast<unsigned char*>(block);
-    const vc71::vector_layout* const registry =
-        *reinterpret_cast<const vc71::vector_layout* const*>(bytes + 4);
+    const bool packed = block == g_raShaderConstants;
+    const vc71::vector_layout* const registry = packed
+        ? static_cast<const vc71::vector_layout*>(raConstantsRegistry())
+        : *reinterpret_cast<const vc71::vector_layout* const*>(bytes + sizeof(void*));
     const unsigned int* const offsets = reinterpret_cast<const unsigned int*>(registry->first);
     for (unsigned int i = 0; i < count; ++i)
     {
         const RaBoundParameter& bound =
             reinterpret_cast<const RaBoundParameter*>(parameters.first)[i];
-        unsigned char* const holder = bytes + offsets[bound.offset];
+        unsigned char* holder = bytes + offsets[bound.offset];
+        // The shared constants block keeps its retail packing, so a holder is unpacked first.
+        unsigned char unpacked[160];
+        if (packed)
+        {
+            raConstantsUnpackHolder(holder, unpacked);
+            holder = unpacked;
+        }
         reinterpret_cast<ApplyFn>((*reinterpret_cast<void***>(holder))[0])(
             holder, m_effect, bound.handle);
     }

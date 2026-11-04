@@ -9,8 +9,8 @@
 
 #define FRONTIER(name) extern "C" long name() { std::fprintf(stderr, "[FRONTIER] " #name " reached\n"); std::fflush(stderr); std::abort(); }
 FRONTIER(D3DXAssembleShader) FRONTIER(D3DXComputeBoundingBox) FRONTIER(D3DXComputeBoundingSphere)
-FRONTIER(D3DXCreateBox)  FRONTIER(D3DXCreateCylinder)
-FRONTIER(D3DXCreateMeshFVF) FRONTIER(D3DXCreateRenderToSurface) FRONTIER(D3DXCreateSphere)
+
+FRONTIER(D3DXCreateMeshFVF) FRONTIER(D3DXCreateRenderToSurface)
   
  
 FRONTIER(D3DXSaveSurfaceToFileA) FRONTIER(D3DXSaveTextureToFileA)

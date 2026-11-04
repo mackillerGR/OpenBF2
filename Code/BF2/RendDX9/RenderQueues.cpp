@@ -2,6 +2,8 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include <cstdint>
+#include <vector>
 #include "../../RendDX9Abi/HfeAbi.h"
 #include "../../RendDX9Abi/ModuleCommon.h"
 #include "../../RendDX9Abi/BfMemory.h"
@@ -125,13 +127,16 @@ int __fastcall raBindVec2(void* self BF2_EDX_PARAM, void* effect, int handle)
             static_cast<unsigned char*>(self) + sizeof(void*)), 2);
 }
 
+void* wordPtr(unsigned int word);
 typedef float* (__fastcall* TransformVec3Fn)(float*, const float*);
 
 int __fastcall raBindTransformedVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
-    const unsigned int* const fields = static_cast<const unsigned int*>(self);
-    const float* const source = reinterpret_cast<const float*>(fields[1] + 4);
-    const TransformVec3Fn transform = reinterpret_cast<TransformVec3Fn>(fields[2]);
+    const unsigned int* const fields = reinterpret_cast<const unsigned int*>(
+        static_cast<unsigned char*>(self) + sizeof(void*));
+    const float* const source = reinterpret_cast<const float*>(
+        static_cast<unsigned char*>(wordPtr(fields[0])) + 4);
+    const TransformVec3Fn transform = reinterpret_cast<TransformVec3Fn>(wordPtr(fields[1]));
     float transformed[3];
     transform(transformed, source);
     void* const* const table = *static_cast<void* const* const*>(effect);
@@ -241,9 +246,37 @@ void* __fastcall raDeleteIntRecord(void* self BF2_EDX_PARAM, unsigned int flags)
     return deleteRaRecord(self, flags, kRaIntVtable);
 }
 
+// [CHOSEN, not recovered] The block keeps its retail 32-bit packing, so on 64-bit hosts a pointer
+// word is a handle into this table. [RETIRE-WHEN: ra-constants-typed] Remove with typed records.
+std::vector<const void*>& pointerWords()
+{
+    static std::vector<const void*> table;
+    return table;
+}
+
 inline unsigned int ptrWord(const void* p)
 {
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    if (!p)
+        return 0;
+    std::vector<const void*>& table = pointerWords();
+    for (unsigned int i = 0; i < table.size(); ++i)
+        if (table[i] == p)
+            return i + 1;
+    table.push_back(p);
+    return static_cast<unsigned int>(table.size());
+#else
     return reinterpret_cast<unsigned int>(p);
+#endif
+}
+
+void* wordPtr(unsigned int word)
+{
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    return word ? const_cast<void*>(pointerWords()[word - 1]) : 0;
+#else
+    return reinterpret_cast<void*>(word);
+#endif
 }
 
 inline unsigned int floatWord(float f)
@@ -256,13 +289,14 @@ inline unsigned int floatWord(float f)
 void setTextureRecord(RaShaderConstants* constants, unsigned int holderOffset,
                       IDirect3DBaseTexture9* texture)
 {
-    IDirect3DBaseTexture9** const field = reinterpret_cast<IDirect3DBaseTexture9**>(
+    unsigned int* const field = reinterpret_cast<unsigned int*>(
         reinterpret_cast<unsigned char*>(constants) + holderOffset + 4);
-    if (*field == texture)
+    IDirect3DBaseTexture9* const old = static_cast<IDirect3DBaseTexture9*>(wordPtr(*field));
+    if (old == texture)
         return;
-    if (*field)
-        (*field)->Release();
-    *field = texture;
+    if (old)
+        old->Release();
+    *field = ptrWord(texture);
     if (texture)
         texture->AddRef();
 }
@@ -270,16 +304,17 @@ void setTextureRecord(RaShaderConstants* constants, unsigned int holderOffset,
 void setEngineTextureRecord(RaShaderConstants* constants, unsigned int holderOffset,
                             EngineTexture* texture)
 {
-    EngineTexture** const field = reinterpret_cast<EngineTexture**>(
+    unsigned int* const field = reinterpret_cast<unsigned int*>(
         reinterpret_cast<unsigned char*>(constants) + holderOffset + 4);
-    if (*field == texture)
+    EngineTexture* const old = static_cast<EngineTexture*>(wordPtr(*field));
+    if (old == texture)
         return;
-    if (*field && !--(*field)->refCount)
+    if (old && !--old->refCount)
     {
-        textureDtor(*field);
-        ::renddx9abi::engineFree(*field);
+        textureDtor(old);
+        ::renddx9abi::engineFree(old);
     }
-    *field = texture;
+    *field = ptrWord(texture);
     if (texture)
         textureAddRef(texture);
 }
@@ -535,8 +570,8 @@ RaShaderConstants* constructRaShaderConstants(void* storage, IDirect3DDevice9* d
 void releaseEngineTextureRecord(RaShaderConstants* constants, unsigned int recordWord)
 {
     constants->words[recordWord] = ptrWord(kRaEngineTextureVtable);
-    EngineTexture* const texture = reinterpret_cast<EngineTexture*>(
-        constants->words[recordWord + 1]);
+    EngineTexture* const texture = static_cast<EngineTexture*>(
+        wordPtr(constants->words[recordWord + 1]));
     if (texture && !--texture->refCount)
     {
         textureDtor(texture);
@@ -547,8 +582,8 @@ void releaseEngineTextureRecord(RaShaderConstants* constants, unsigned int recor
 void releaseRawTextureRecord(RaShaderConstants* constants, unsigned int recordWord)
 {
     constants->words[recordWord] = ptrWord(kRaTextureVtable);
-    IDirect3DBaseTexture9* const texture = reinterpret_cast<IDirect3DBaseTexture9*>(
-        constants->words[recordWord + 1]);
+    IDirect3DBaseTexture9* const texture = static_cast<IDirect3DBaseTexture9*>(
+        wordPtr(constants->words[recordWord + 1]));
     if (texture)
         texture->Release();
 }
@@ -578,7 +613,7 @@ void destroyRaShaderConstantsObject(RaShaderConstants* constants)
 
     for (unsigned int i = 38; i <= 40; ++i)
     {
-        IUnknown* const value = reinterpret_cast<IUnknown*>(constants->words[i]);
+        IUnknown* const value = static_cast<IUnknown*>(wordPtr(constants->words[i]));
         if (value)
             value->Release();
     }
@@ -1307,8 +1342,26 @@ void raShaderConstantsSetUvLevel(float addX, float mulX, float addY, float mulY)
 // volume into it.
 EngineTexture* raShaderConstantsGetEngineTexture(unsigned int holderOffset)
 {
-    return *reinterpret_cast<EngineTexture**>(
-        static_cast<unsigned char*>(g_raShaderConstants) + holderOffset + 4);
+    return static_cast<EngineTexture*>(wordPtr(*reinterpret_cast<unsigned int*>(
+        static_cast<unsigned char*>(g_raShaderConstants) + holderOffset + 4)));
+}
+
+// The block's offset registry, stored as a handle in the record header.
+void* raConstantsRegistry()
+{
+    return wordPtr(static_cast<RaShaderConstants*>(g_raShaderConstants)->words[1]);
+}
+
+// Rebuilds a packed record as a native holder: vptr, then payload, with a texture word widened.
+void raConstantsUnpackHolder(const unsigned char* holder, unsigned char* out)
+{
+    const unsigned int* const words = reinterpret_cast<const unsigned int*>(holder);
+    void* const vtable = wordPtr(words[0]);
+    *reinterpret_cast<void**>(out) = vtable;
+    ::memcpy(out + sizeof(void*), holder + 4, 160 - sizeof(void*));
+    if (vtable == static_cast<const void*>(kRaTextureVtable)
+        || vtable == static_cast<const void*>(kRaEngineTextureVtable))
+        *reinterpret_cast<void**>(out + sizeof(void*)) = wordPtr(words[1]);
 }
 
 // sub_1003AD10 -> sub_100388E0.  RendDX9_shutdownD3DSubsystems calls this at 0x1000AE5D,

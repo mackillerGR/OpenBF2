@@ -267,6 +267,8 @@ void raCopyInt(void* dst, const void* src)
 }
 
 // sub_10044270's one-time tail.
+unsigned char* materialFieldBytes(void* parameters, unsigned int retail);
+
 void raRegisterParameterNames()
 {
     if (g_raParameterOffsets.first &&
@@ -277,7 +279,9 @@ void raRegisterParameterNames()
     {
         vc71::string name(kRaParameterNames[i].name);
         raRegistryPush(g_raParameterNames, &name, sizeof(vc71::string), &raCopyString);
-        raRegistryPush(g_raParameterOffsets, &kRaParameterNames[i].offset, 4, &raCopyInt);
+        const unsigned int offset = static_cast<unsigned int>(
+            materialFieldBytes(nullptr, kRaParameterNames[i].offset) - static_cast<unsigned char*>(nullptr));
+        raRegistryPush(g_raParameterOffsets, &offset, 4, &raCopyInt);
     }
 }
 
