@@ -10,6 +10,7 @@
 #include "../../RendDX9/Texture.h"                    // EngineTexture, textureDims, textureAddRef
 #include "../../RendDX9/TextureAtlas/TextureAtlas.h"  // TextureAtlasEntry
 
+#include "IMemeTexture.h"
 #include <new>
 
 namespace dice {
@@ -175,11 +176,20 @@ int __fastcall meme_s64(void* s BF2_EDX_PARAM)
 
 // +0x68 / +0x70 take a 16-byte vector<pair<float,float>> by value (alloc/first/last/end) plus a
 // colour byte - five stack dwords, matching the shipped retn 0x14.
+#if UINTPTR_MAX > 0xFFFFFFFFu
+// The span travels by value, which the 64-bit calling conventions do not spread over registers.
+void meme_s68(void* s, IMemeTexture::CanvasPointSpan span, unsigned char color)
+{
+    static_cast<MemeTexture*>(s)->plotOutline(reinterpret_cast<float*>(span.first),
+                                              reinterpret_cast<float*>(span.last), color);
+}
+#else
 void __fastcall meme_s68(void* s BF2_EDX_PARAM, void* /*alloc*/, float* first, float* last,
                          float* /*end*/, unsigned char color)
 {
     static_cast<MemeTexture*>(s)->plotOutline(first, last, color);
 }
+#endif
 
 void __fastcall meme_s6C(void* s BF2_EDX_PARAM, unsigned char color)
 {
@@ -188,6 +198,25 @@ void __fastcall meme_s6C(void* s BF2_EDX_PARAM, unsigned char color)
 
 // +0x70, 0x10089480 - copy the caller's point pairs, run the outline plot (its OWN vslot +0x68,
 // which frees the copy), run the fill (vslot +0x6C), then free the caller's buffer.
+#if UINTPTR_MAX > 0xFFFFFFFFu
+void meme_s70(void* s, IMemeTexture::CanvasPointSpan span, unsigned char color)
+{
+    MemeTexture* self = static_cast<MemeTexture*>(s);
+    float* copy = 0;
+    float* copyLast = 0;
+    if (span.first)
+    {
+        const size_t bytes = reinterpret_cast<char*>(span.last) - reinterpret_cast<char*>(span.first);
+        copy = static_cast<float*>(::renddx9abi::engineAlloc(static_cast<unsigned int>(bytes)));
+        ::memcpy(copy, span.first, bytes);
+        copyLast = reinterpret_cast<float*>(reinterpret_cast<char*>(copy) + bytes);
+    }
+    self->plotOutline(copy, copyLast, color);   // frees the copy
+    self->fillCanvas(color);
+    if (span.first)
+        ::renddx9abi::engineFree(span.first);
+}
+#else
 void __fastcall meme_s70(void* s BF2_EDX_PARAM, void* alloc, float* first, float* last,
                          float* end, unsigned char color)
 {
@@ -215,6 +244,7 @@ void __fastcall meme_s70(void* s BF2_EDX_PARAM, void* alloc, float* first, float
     if (first)
         ::renddx9abi::engineFree(first);                   // the shipped body frees the original
 }
+#endif
 
 void __fastcall meme_s74(void* s BF2_EDX_PARAM, unsigned char clearValue)
 {

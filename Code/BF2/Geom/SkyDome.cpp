@@ -219,6 +219,9 @@ const Vec3* raShaderConstantsFogColor()
 // Layout facts used below are that file's own: +0x08 IDirect3DQuery9*, +0x0C type, +0x10 the frame
 // ordinal of the last accepted result, +0x14 the result itself, +0x18/+0x19 the two state bytes.
 
+// Query fields from the d3d pointer on sit past the wider vptr and reference count.
+const unsigned int kQueryShift = sizeof(void*) == 8 ? 8u : 0u;
+
 // sub_10004050 - read the occlusion result. Only a type-9 query with a live D3D object and the
 // "issued" byte set actually calls GetData; on S_OK it stamps the renderer's frame ordinal at +0x10,
 // clears "issued", and returns the new sample count. Otherwise the previous value at +0x14 is
@@ -226,18 +229,18 @@ const Vec3* raShaderConstantsFogColor()
 int queryReadOcclusionResult(void* query)
 {
     unsigned char* const self = static_cast<unsigned char*>(query);
-    IDirect3DQuery9* const d3d = *reinterpret_cast<IDirect3DQuery9**>(self + 0x08);
-    int* const samples = reinterpret_cast<int*>(self + 0x14);
-    if (!d3d || *reinterpret_cast<int*>(self + 0x0C) != 9)
+    IDirect3DQuery9* const d3d = *reinterpret_cast<IDirect3DQuery9**>(self + kQueryShift + 0x08);
+    int* const samples = reinterpret_cast<int*>(self + kQueryShift + 0x14);
+    if (!d3d || *reinterpret_cast<int*>(self + kQueryShift + 0x0C) != 9)
         return -1;
-    if (self[0x19])
+    if (self[kQueryShift + 0x19])
     {
         const int previous = *samples;
         if (d3d->GetData(samples, 4, 0) == D3D_OK)
         {
-            *reinterpret_cast<unsigned int*>(self + 0x10) = dx9rend::rendererFrameOrdinal();
+            *reinterpret_cast<unsigned int*>(self + kQueryShift + 0x10) = dx9rend::rendererFrameOrdinal();
             const int result = *samples;
-            self[0x19] = 0;
+            self[kQueryShift + 0x19] = 0;
             return result;
         }
         *samples = previous;
@@ -248,7 +251,7 @@ int queryReadOcclusionResult(void* query)
 // sub_10004120 - the frame ordinal stamped by the read above.
 unsigned int queryResultFrame(void* query)
 {
-    return *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(query) + 0x10);
+    return *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(query) + kQueryShift + 0x10);
 }
 
 // sub_100041A0 - the begin/end toggle. It reads the pending result first, then, if nothing is
@@ -258,16 +261,16 @@ void queryToggleBeginEnd(void* query)
 {
     unsigned char* const self = static_cast<unsigned char*>(query);
     queryReadOcclusionResult(query);
-    if (self[0x19])
+    if (self[kQueryShift + 0x19])
         return;
-    IDirect3DQuery9* const d3d = *reinterpret_cast<IDirect3DQuery9**>(self + 0x08);
+    IDirect3DQuery9* const d3d = *reinterpret_cast<IDirect3DQuery9**>(self + kQueryShift + 0x08);
     if (!d3d)
         return;
-    const bool wasEnd = (self[0x18] != 0);
+    const bool wasEnd = (self[kQueryShift + 0x18] != 0);
     d3d->Issue(static_cast<DWORD>((wasEnd ? 0 : 1) + 1));
-    self[0x18] = static_cast<unsigned char>(wasEnd ? 0 : 1);
+    self[kQueryShift + 0x18] = static_cast<unsigned char>(wasEnd ? 0 : 1);
     if (wasEnd)
-        self[0x19] = 1;
+        self[kQueryShift + 0x19] = 1;
 }
 
 // Returns the sky light's stored direction.
