@@ -89,7 +89,7 @@ public:
     virtual const std::map<unsigned int, IObject*>&
                   getAllRegisteredGamePlayObjects() const;                      // +0x38
     // The second vector in direction queries is a delta, not an absolute endpoint.
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(BF2_PORTABLE_CLIENT)
     // [PLATFORM] MSVC reverses declarations within same-name overload groups. Keep this
     // query family in its current source order so emitted PE slots match the interface;
     // PE and ELF tables rejoin at intersectLine.

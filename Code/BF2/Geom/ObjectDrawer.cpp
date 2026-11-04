@@ -5,6 +5,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include "../Scene/Object/ObjectManager.h"
 #include "ObjectDrawer.h"
 #include "MeshTemplate.h"                     // meshBoundsFinalize (sub_101C5EB0) - slot +0x3C
 
@@ -376,6 +377,17 @@ void objectDrawerQueryGrid(unsigned int slot, const void* frustum, ObjectDrawerS
     if (!::dice::hfe::objectManager)
         return;
 
+#if defined(BF2_PORTABLE_CLIENT)
+    // The host's table is in Itanium order, so the retail offsets below do not apply.
+    world::ObjectManager* const typed = reinterpret_cast<world::ObjectManager*>(::dice::hfe::objectManager);
+    world::ObjectPredicator* const filter = reinterpret_cast<world::ObjectPredicator*>(predicator);
+    const Frustum& view = *static_cast<const Frustum*>(frustum);
+    if (slot == 0x40)
+        typed->getObjectsFromGrid(view, out, filter, true, 0.0f, time);
+    else
+        typed->getNoCollisionObjectsFromGrid(view, out, filter, true, 0.0f, time);
+    return;
+#endif
     // In the native build, out is the host's std::vector; the plugin ABI uses its own layout.
     typedef void (__fastcall* QueryFn)(void* BF2_EDX_PARAM, const void*, void*,
                                        void*, int, float, float);

@@ -1287,7 +1287,7 @@ void* SkinnedMesh::getShadowCasterFrame()
 // flags "is translucent" below 1.0f.
 void SkinnedMesh::setTransparency(float alpha)
 {
-    *reinterpret_cast<float*>(m_objectParameters + (0x510 - 0x360)) = alpha;
+    reinterpret_cast<dx9rend::Ra::RaObjectParameters*>(m_objectParameters)->transparency.value = alpha;
 }
 
 
@@ -1624,7 +1624,7 @@ void SkinnedMesh::draw(void*, void*, void*)
     // nothing; below 1.0f he is merely flagged translucent and takes a different queue later.
     if (!rendererFlagAt(0x6A3))
         return;
-    const float transparency = *reinterpret_cast<const float*>(m_objectParameters + (0x510 - 0x360));
+    const float transparency = reinterpret_cast<const dx9rend::Ra::RaObjectParameters*>(m_objectParameters)->transparency.value;
     if (transparency < 0.0000099999997f)
         return;
 
@@ -1650,7 +1650,7 @@ void SkinnedMesh::draw(void*, void*, void*)
     const float distance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
     m_distanceToCamera = distance;                                    // +0x344
     // The same value is also written into the Ra block at +0x580, where the shader reads it.
-    *reinterpret_cast<float*>(m_objectParameters + (0x580 - 0x360)) = distance;
+    *reinterpret_cast<float*>(&reinterpret_cast<dx9rend::Ra::RaObjectParameters*>(m_objectParameters)->tail220) = distance;
 
     updateLodSelection();
 
@@ -1684,7 +1684,7 @@ void SkinnedMesh::draw(void*, void*, void*)
                                                 0x1B09u, 0u, true);           // +0x20
         const unsigned int gathered =
             m_lights.first
-                ? static_cast<unsigned int>((m_lights.last - m_lights.first) >> 2) : 0u;
+                ? static_cast<unsigned int>((m_lights.last - m_lights.first) / sizeof(void*)) : 0u;
 
         if (gathered || skinnedMeshRendererMode() == 2)
         {
@@ -1802,7 +1802,7 @@ void SkinnedMesh::draw(void*, void*, void*)
 
     // -- 10. build one 68-byte record per gathered light
     const unsigned int lightCount =
-        m_lights.first ? static_cast<unsigned int>((m_lights.last - m_lights.first) >> 2) : 0u;
+        m_lights.first ? static_cast<unsigned int>((m_lights.last - m_lights.first) / sizeof(void*)) : 0u;
     skinnedMeshReserveLightRecords(this, lightCount);
 
     for (unsigned int i = 0; i < lightCount; ++i)
@@ -1842,22 +1842,23 @@ void SkinnedMesh::draw(void*, void*, void*)
 
     // Fill the per-object shader parameters.
     unsigned char* const ra = m_objectParameters;
+    dx9rend::Ra::RaObjectParameters& block = *reinterpret_cast<dx9rend::Ra::RaObjectParameters*>(ra);
 
     // +0x3F4 = world x viewProjection -> WorldViewProjection.
-    reinterpret_cast<Mat4*>(ra + (0x3F4 - 0x360))
+    reinterpret_cast<Mat4*>(reinterpret_cast<unsigned char*>(block.worldViewProjection.value))
         ->fullMult(*m_transform, *viewSlot<const Mat4*>(view, 0x84));
     // +0x36C = the transform verbatim -> World. The same store StaticMesh.cpp makes.
-    std::memcpy(ra + (0x36C - 0x360), m_transform->m, sizeof(Mat4));
+    std::memcpy(reinterpret_cast<unsigned char*>(block.world.value), m_transform->m, sizeof(Mat4));
     // +0x518 = the camera's translation through m_matrix60 (= fullInvert(*m_transform)), w = 1
     // -> ObjectSpaceCamPos. Settled from `lea ecx, [esi+60h]` at 0x101A801B, not from the
     // decompiler, which rendered the receiver as an operand.
     mat4TransformPointVec4(m_matrix60, &viewSlot<const Mat4*>(view, 0x64)->m[12],
-                           ra + (0x518 - 0x360), 0x3F800000u);
+                           reinterpret_cast<unsigned char*>(block.objectSpaceCamPos.value), 0x3F800000u);
     // ObjectSpaceWorldUp retains multiplication by zero to preserve NaN/infinity behavior.
     const float* const inv = m_matrix60.m;
-    *reinterpret_cast<float*>(ra + (0x574 - 0x360)) = (inv[8] + inv[0]) * 0.0f + inv[4];
-    *reinterpret_cast<float*>(ra + (0x578 - 0x360)) = (inv[9] + inv[1]) * 0.0f + inv[5];
-    *reinterpret_cast<float*>(ra + (0x57C - 0x360)) = (inv[10] + inv[2]) * 0.0f + inv[6];
+    *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.objectSpaceWorldUp.value[0])) = (inv[8] + inv[0]) * 0.0f + inv[4];
+    *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.objectSpaceWorldUp.value[1])) = (inv[9] + inv[1]) * 0.0f + inv[5];
+    *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.objectSpaceWorldUp.value[2])) = (inv[10] + inv[2]) * 0.0f + inv[6];
 
     const unsigned int materials =
         m_lodMaterials && m_lodMaterials->first
@@ -1892,7 +1893,7 @@ void SkinnedMesh::draw(void*, void*, void*)
     }
 
     // +0x558 = the height probe's first output -> HeightOverTerrain.
-    *reinterpret_cast<unsigned int*>(ra + (0x558 - 0x360)) = m_dword48;
+    *reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(&block.heightOverTerrain.value)) = m_dword48;
 
     // The shader quality, from IRenderer::getVideoOptions()'s +0x04 with 4.
     void* const videoOptions = viewSlot<void*>(base, 0x74);
@@ -1953,9 +1954,9 @@ void SkinnedMesh::draw(void*, void*, void*)
             if (m_dword33C)
             {
                 const unsigned char* const caster = static_cast<const unsigned char*>(m_dword33C);
-                std::memcpy(ra + (0x438 - 0x360), caster + 0x2F8, sizeof(Mat4));
-                std::memcpy(ra + (0x4C0 - 0x360), caster + 0x3B8, sizeof(Mat4));
-                std::memcpy(ra + (0x47C - 0x360), caster + 0x338, sizeof(Mat4));
+                std::memcpy(reinterpret_cast<unsigned char*>(block.shadowProjMat.value), caster + 0x2F8, sizeof(Mat4));
+                std::memcpy(reinterpret_cast<unsigned char*>(block.shadowTrapMat.value), caster + 0x3B8, sizeof(Mat4));
+                std::memcpy(reinterpret_cast<unsigned char*>(block.shadowOccProjMat.value), caster + 0x338, sizeof(Mat4));
             }
         }
 
@@ -1964,32 +1965,29 @@ void SkinnedMesh::draw(void*, void*, void*)
         const Vec3& skyColor = g_LightManager->getSkyColor();                  // +0x30
         if (viewSlot<unsigned char>(base, 0xAC))
         {
-            *reinterpret_cast<float*>(ra + (0x560 - 0x360)) = ambientScale * skyColor.x;
-            *reinterpret_cast<float*>(ra + (0x564 - 0x360)) = ambientScale * skyColor.y;
-            *reinterpret_cast<float*>(ra + (0x568 - 0x360)) = ambientScale * skyColor.z;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[0])) = ambientScale * skyColor.x;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[1])) = ambientScale * skyColor.y;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[2])) = ambientScale * skyColor.z;
         }
         else
         {
-            *reinterpret_cast<float*>(ra + (0x560 - 0x360)) = skyColor.x;
-            *reinterpret_cast<float*>(ra + (0x564 - 0x360)) = skyColor.y;
-            *reinterpret_cast<float*>(ra + (0x568 - 0x360)) = skyColor.z;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[0])) = skyColor.x;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[1])) = skyColor.y;
+            *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(&block.hemiMapSkyColor.value[2])) = skyColor.z;
         }
 
         dx9rend::RenderQueueEntry* const entry = dx9rend::renderEntryPoolAcquire();
         entry->material           = material;
         entry->materialParameters = material + sk(0x38);
         entry->objectParameters   = ra;
-        *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(entry) + 0x138) =
-            *reinterpret_cast<void**>(material + sk(0x184));
+        entry->shader = *reinterpret_cast<dx9rend::Ra::RaShader**>(material + sk(0x184));
         // +0x4C / +0x50 - this material's bone palette and its count. This is where the skinning
         // reaches the shader, and it is why the palettes are per-material rather than per-instance.
-        *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(entry) + 0x4C) =
-            &m_bonePalettes[i][0];
-        *reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(entry) + 0x50) =
-            m_boneCounts[i];
+        entry->lighting.matBones.a = reinterpret_cast<std::uintptr_t>(&m_bonePalettes[i][0]);
+        entry->lighting.matBones.b = m_boneCounts[i];
 
         unsigned char* const params =
-            *reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(entry) + 0x128);
+            static_cast<unsigned char*>(entry->lightArray.lights.value);
         {
             const Vec3& sun = g_LightManager->getSunColor();                   // +0x1AC
             float* const dst = reinterpret_cast<float*>(params + 24);
@@ -2032,11 +2030,11 @@ void SkinnedMesh::draw(void*, void*, void*)
             // shipped pair rather than folded to the value it actually yields.
             unsigned int rebased = bits & 0xFFFFFCBFu;
             rebased = (rebased & 0xFFFFFF00u) | ((bits & 0x3Fu) | 0x80u);
-            *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(lit) + 0x138) =
+            *reinterpret_cast<void**>(&lit->shader) =
                 findShaderForBits(rebased);
 
             unsigned char* const litParams =
-                *reinterpret_cast<unsigned char**>(reinterpret_cast<unsigned char*>(lit) + 0x128);
+                static_cast<unsigned char*>(lit->lightArray.lights.value);
             std::memcpy(litParams, reinterpret_cast<unsigned char*>(m_lightRecords.first)
                                        + kLightRecordStride * l, kLightRecordStride);
 

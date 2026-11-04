@@ -798,7 +798,7 @@ void copyVectorOfVectors(vc71::vector_layout& dst, const vc71::vector_layout& sr
     for (unsigned int i = 0; i < count; ++i)
     {
         copyPodVector(*reinterpret_cast<vc71::vector_layout*>(buffer + i * sizeof(vc71::vector_layout)),
-                      *reinterpret_cast<const vc71::vector_layout*>(src.first + i * sizeof(vc71::vector_layout)), 4u);
+                      *reinterpret_cast<const vc71::vector_layout*>(src.first + i * sizeof(vc71::vector_layout)), sizeof(void*));
     }
     dst.first = buffer;
     dst.last  = buffer + count * sizeof(vc71::vector_layout);
@@ -814,7 +814,7 @@ void copyVectorOfVectors(vc71::vector_layout& dst, const vc71::vector_layout& sr
 StaticMeshMaterial::StaticMeshMaterial(const StaticMeshMaterial& other)
 {
     copyVectorOfVectors(m_vector04, other.m_vector04);
-    copyPodVector(m_vector14, other.m_vector14, 4u);
+    copyPodVector(m_vector14, other.m_vector14, sizeof(void*));
 
     m_flags24        = other.m_flags24;
     m_shaderMaterial = other.m_shaderMaterial;
@@ -887,7 +887,7 @@ StaticMeshMaterial& StaticMeshMaterial::operator=(const StaticMeshMaterial& othe
          cursor += sizeof(vc71::vector_layout))
     {
         vc71::vector_layout scratch = { 0, 0, 0, 0 };
-        copyPodVector(scratch, *reinterpret_cast<const vc71::vector_layout*>(cursor), 4u);
+        copyPodVector(scratch, *reinterpret_cast<const vc71::vector_layout*>(cursor), sizeof(void*));
 
         // push_back(scratch) - a deep copy of the temporary, then the temporary's buffer is freed.
         const unsigned int size =
@@ -910,7 +910,7 @@ StaticMeshMaterial& StaticMeshMaterial::operator=(const StaticMeshMaterial& othe
             m_vector04.last  = buffer + size * sizeof(vc71::vector_layout);
             m_vector04.end   = buffer + grown * sizeof(vc71::vector_layout);
         }
-        copyPodVector(*reinterpret_cast<vc71::vector_layout*>(m_vector04.last), scratch, 4u);
+        copyPodVector(*reinterpret_cast<vc71::vector_layout*>(m_vector04.last), scratch, sizeof(void*));
         m_vector04.last += sizeof(vc71::vector_layout);
 
         if (scratch.first)
@@ -2125,27 +2125,27 @@ void raNormalUnpackConstants(float out[4])
 void pointerVectorPush(vc71::vector_layout& v, const void* value)
 {
     const unsigned int size =
-        v.first ? static_cast<unsigned int>((v.last - v.first) >> 2) : 0u;
+        v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(void*)) : 0u;
     const unsigned int capacity =
-        v.first ? static_cast<unsigned int>((v.end - v.first) >> 2) : 0u;
+        v.first ? static_cast<unsigned int>((v.end - v.first) / sizeof(void*)) : 0u;
 
     if (size == capacity)
     {
         unsigned int grown = capacity + (capacity >> 1);
         if (grown < size + 1u)
             grown = size + 1u;
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 4u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(void*)));
         if (size)
-            ::memcpy(buffer, v.first, size * 4u);
+            ::memcpy(buffer, v.first, size * sizeof(void*));
         if (v.first)
             ::renddx9abi::engineFree(v.first);
         v.first = buffer;
-        v.last  = buffer + size * 4u;
-        v.end   = buffer + grown * 4u;
+        v.last  = buffer + size * sizeof(void*);
+        v.end   = buffer + grown * sizeof(void*);
     }
 
     *reinterpret_cast<const void**>(v.last) = value;
-    v.last += 4;
+    v.last += sizeof(void*);
 }
 
 // sub_1011E7E0 - push_back on the vector OF vectors at material+0x04.  The element is

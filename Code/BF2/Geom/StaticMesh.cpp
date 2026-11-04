@@ -1760,13 +1760,12 @@ void StaticMesh::postLoad()
         }
 
         // Count this geometry's LOD switch distances.
-        unsigned char* const distancesFirst =
-            *reinterpret_cast<unsigned char**>(table32 + 32 * g + 20);
+        const StaticMeshGeom& geomRecord = reinterpret_cast<const StaticMeshGeom*>(table32)[g];
+        unsigned char* const distancesFirst = geomRecord.lodDistances.first;
         unsigned int distanceCount = 0;
         if (distancesFirst)
         {
-            unsigned char* const distancesLast =
-                *reinterpret_cast<unsigned char**>(table32 + 32 * g + 24);
+            unsigned char* const distancesLast = geomRecord.lodDistances.last;
             distanceCount = static_cast<unsigned int>(distancesLast - distancesFirst) >> 2;
         }
         if (m_geomLodDistanceCounts.first)
@@ -1884,16 +1883,16 @@ int StaticMesh::getLodCount() const
 
     const unsigned char* const geomRecord =
         *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, first))
-        + 32 * m_dword314;
+        + sizeof(StaticMeshGeom) * m_dword314;
 
     const unsigned char* const first =
-        *reinterpret_cast<const unsigned char* const*>(geomRecord + 4);
+        reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.first;
     if (!first)
         return 0;
 
     const unsigned char* const last =
-        *reinterpret_cast<const unsigned char* const*>(geomRecord + 8);
-    return static_cast<int>((last - first) / 104);
+        reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.last;
+    return static_cast<int>((last - first) / sizeof(StaticMeshLod));
 }
 
 // +0xF4, one store, into RaObjectParameters::transparency.value.
@@ -2022,7 +2021,7 @@ unsigned int StaticMesh::materialShaderBits(void* material, bool pointLightPass)
 {
     unsigned char* const mat = static_cast<unsigned char*>(material);
     const ShaderMaterial* const shaderMaterial =
-        *reinterpret_cast<const ShaderMaterial* const*>(mat + 0x28);
+        reinterpret_cast<const StaticMeshMaterial*>(mat)->m_shaderMaterial;
     unsigned int bits = g_shaderComboFlags[shaderMaterial->shaderCombo];    // dword_1023A9D0
 
     typedef unsigned int (__fastcall* GetFlagsFn)(const void* BF2_EDX_PARAM);
@@ -2045,7 +2044,7 @@ unsigned int StaticMesh::materialShaderBits(void* material, bool pointLightPass)
             bits |= 0x200u;
     }
 
-    if (*reinterpret_cast<const unsigned int*>(mat + 0x17C) == 2u)       // m_alphaMode
+    if (reinterpret_cast<const StaticMeshMaterial*>(mat)->m_alphaMode == 2u)       // m_alphaMode
         bits |= 0x800u;
     return bits;
 }
@@ -2780,7 +2779,7 @@ void staticMeshCountShadowPrimitives(unsigned int primitives)
 // effect.  D3dxEffect.h names the slot; the wrapper's +0x08 is the interface pointer.
 void staticMeshEffectCommitChanges(dx9rend::Effect* effect)
 {
-    void* const d3dx = *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(effect) + 8);
+    void* const d3dx = *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(effect) + 2 * sizeof(void*));
     reinterpret_cast<::renddx9abi::D3dxCommitChangesFn>(
         (*reinterpret_cast<void***>(d3dx))[0x104  / 4])(d3dx);
 }

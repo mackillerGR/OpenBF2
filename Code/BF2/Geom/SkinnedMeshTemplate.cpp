@@ -463,7 +463,7 @@ void pointerVectorPush(vc71::vector_layout& v, const void* value)
     }
 
     *reinterpret_cast<const void**>(v.last) = value;
-    v.last += 4;
+    v.last += sizeof(void*);
 }
 
 void skinnedMeshReserveGeoms(vc71::vector_layout& companions, unsigned int count)
@@ -618,9 +618,9 @@ void skinnedMeshMaterialConstruct(void* storage, bool hasTangent)
     m[sk(0x18C)] = 0;
 
     *reinterpret_cast<unsigned int*>(m + sk(0x190)) = 4;   // four, not zero
-    *reinterpret_cast<unsigned int*>(m + sk(0x194)) = 0;
+    *reinterpret_cast<void**>(m + sk(0x194)) = 0;
     *reinterpret_cast<unsigned int*>(m + sk(0x198)) = 0;
-    *reinterpret_cast<unsigned int*>(m + sk(0x19C)) = 0;
+    *reinterpret_cast<void**>(m + sk(0x19C)) = 0;
 
     new (m + sk(0x1A0)) vc71::string();                    // +0x1A0
     vc71::mapConstructU32(*reinterpret_cast<vc71::map_layout*>(m + sk(0x1BC)));
@@ -865,7 +865,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
                         if (!slots)
                             break;
                         const unsigned int held =
-                            static_cast<unsigned int>((textures.last - textures.first) >> 2);
+                            static_cast<unsigned int>((textures.last - textures.first) / sizeof(void*));
                         if (j >= held)
                             break;
                         if (slots[j])
@@ -1291,12 +1291,18 @@ void skinnedMeshAssignTextureSlot(unsigned char* record, unsigned int slot, void
     }
 }
 
-unsigned int bufferHandleAt(void* wrapper, unsigned int byteOffset)
+// The wrapper's D3D buffer, which follows the vptr and reference count.
+void* bufferHandleAt(void* wrapper)
 {
-    return wrapper
-        ? *reinterpret_cast<unsigned int*>(
-              static_cast<unsigned char*>(wrapper) + byteOffset)
-        : 0u;
+    return wrapper ? *reinterpret_cast<void**>(
+        static_cast<unsigned char*>(wrapper) + 2 * sizeof(void*)) : 0;
+}
+
+// The vertex wrapper's stride, past the wider pointer members.
+unsigned int bufferStrideOf(void* wrapper)
+{
+    return wrapper ? *reinterpret_cast<unsigned int*>(
+        static_cast<unsigned char*>(wrapper) + 40 + 3 * (sizeof(void*) - 4)) : 0u;
 }
 
 } // namespace
@@ -1332,17 +1338,14 @@ void SkinnedMeshTemplate::finalizeMaterials()
             for (int m = 0; m < materials; ++m, record += kSkinnedMaterialRecordBytes)
             {
                 *reinterpret_cast<unsigned int*>(record + sk(400)) = m_primitiveType;          // +0xAC
-                *reinterpret_cast<unsigned int*>(record + sk(404)) =
-                    bufferHandleAt(m_vertexBuffer, 8);
-                *reinterpret_cast<unsigned int*>(record + sk(408)) =
-                    bufferHandleAt(m_vertexBuffer, 40);
-                *reinterpret_cast<unsigned int*>(record + sk(412)) =
-                    bufferHandleAt(m_indexBuffer, 8);
+                *reinterpret_cast<void**>(record + sk(404)) = bufferHandleAt(m_vertexBuffer);
+                *reinterpret_cast<unsigned int*>(record + sk(408)) = bufferStrideOf(m_vertexBuffer);
+                *reinterpret_cast<void**>(record + sk(412)) = bufferHandleAt(m_indexBuffer);
                 *reinterpret_cast<float*>(record + sk(188)) = 64.0f;
 
-                if (record[394])
+                if (record[sk(394)])
                 {
-                    record[84] = 1;
+                    record[sk(84)] = 1;
                     *reinterpret_cast<int*>(record + sk(220)) = 127;
                     *reinterpret_cast<int*>(record + sk(212)) = 1;
                 }
@@ -1353,7 +1356,7 @@ void SkinnedMeshTemplate::finalizeMaterials()
                 if (textures)
                 {
                     skinnedMeshAssignTextureSlot(record, 244, textures[0]);
-                    if (record[392])
+                    if (record[sk(392)])
                         skinnedMeshAssignTextureSlot(record, 276, textures[1]);
                 }
             }

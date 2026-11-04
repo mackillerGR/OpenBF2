@@ -6027,11 +6027,18 @@ void __fastcall lm_setSunDirection(void* self BF2_EDX_PARAM, Vec3 value)
     dx9rend::raShaderConstantsSetEngineTexture(0x2B8, normalCube);
 }
 
+#if UINTPTR_MAX > 0xFFFFFFFFu
+Vec3 lm_getSunDirection(void* self)
+{
+    return lmField<world::LightSource*>(self, 0x840)->getDirection();
+}
+#else
 Vec3* __fastcall lm_getSunDirection(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getDirection();
     return out;
 }
+#endif
 
 // +0x1A8 / +0x1AC
 void __fastcall lm_setSunColor(void* self BF2_EDX_PARAM, Vec3 value)
@@ -6039,11 +6046,18 @@ void __fastcall lm_setSunColor(void* self BF2_EDX_PARAM, Vec3 value)
     lmField<world::LightSource*>(self, 0x840)->setColor(value);
 }
 
+#if UINTPTR_MAX > 0xFFFFFFFFu
+Vec3 lm_getSunColor(void* self)
+{
+    return lmField<world::LightSource*>(self, 0x840)->getColor();
+}
+#else
 Vec3* __fastcall lm_getSunColor(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getColor();
     return out;
 }
+#endif
 
 // PE 0x1015CCA0/0x1015CDD0, primary +0x1B0/+0x1B4. Exact epsilon equality skips every effect.
 // Otherwise a squared delta >= 0.0025 (and unordered/NaN) regenerates one member of the four-LUT
@@ -6079,11 +6093,18 @@ void __fastcall lm_setSunSpecColor(void* self BF2_EDX_PARAM, Vec3 value)
     sun->setSpecColor(value);
 }
 
+#if UINTPTR_MAX > 0xFFFFFFFFu
+Vec3 lm_getSunSpecColor(void* self)
+{
+    return lmField<world::LightSource*>(self, 0x840)->getSpecColor();
+}
+#else
 Vec3* __fastcall lm_getSunSpecColor(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getSpecColor();
     return out;
 }
+#endif
 
 // PE 0x1015BF80/0x1015BFB0, primary +0x1B8/+0x1BC. This is Object flag bit zero, not
 // LightSource::setEnabled: true clears the disabled bit and false sets it.
@@ -6554,7 +6575,11 @@ void LightManager::setSunDirection(Vec3 direction)
 Vec3 LightManager::getSunDirection() const
 {
     Vec3 result;
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    result = lm_getSunDirection(const_cast<LightManager*>(this));
+#else
     lm_getSunDirection(const_cast<LightManager*>(this), &result);
+#endif
     return result;
 }
 
@@ -6566,7 +6591,11 @@ void LightManager::setSunColor(Vec3 color)
 Vec3 LightManager::getSunColor() const
 {
     Vec3 result;
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    result = lm_getSunColor(const_cast<LightManager*>(this));
+#else
     lm_getSunColor(const_cast<LightManager*>(this), &result);
+#endif
     return result;
 }
 
@@ -6578,7 +6607,11 @@ void LightManager::setSunSpecColor(Vec3 color)
 Vec3 LightManager::getSunSpecColor() const
 {
     Vec3 result;
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    result = lm_getSunSpecColor(const_cast<LightManager*>(this));
+#else
     lm_getSunSpecColor(const_cast<LightManager*>(this), &result);
+#endif
     return result;
 }
 
@@ -6791,16 +6824,31 @@ struct LightManager::HostAbi
     { object(self).LightManager::renderShadowMaps(); }
     static void __fastcall setSunDirection(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunDirection(value); }
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    static Vec3 getSunDirection(void* self)
+    { return object(self).LightManager::getSunDirection(); }
+#else
     static Vec3* __fastcall getSunDirection(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunDirection(); return out; }
+#endif
     static void __fastcall setSunColor(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunColor(value); }
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    static Vec3 getSunColor(void* self)
+    { return object(self).LightManager::getSunColor(); }
+#else
     static Vec3* __fastcall getSunColor(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunColor(); return out; }
+#endif
     static void __fastcall setSunSpecColor(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunSpecColor(value); }
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    static Vec3 getSunSpecColor(void* self)
+    { return object(self).LightManager::getSunSpecColor(); }
+#else
     static Vec3* __fastcall getSunSpecColor(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunSpecColor(); return out; }
+#endif
     static void __fastcall setSunEnabled(void* self BF2_EDX_PARAM, bool enabled)
     { object(self).LightManager::setSunEnabled(enabled); }
     static bool __fastcall getSunEnabled(void* self BF2_EDX_PARAM)

@@ -2084,7 +2084,7 @@ void StaticMeshTemplate::readLods(::renddx9abi::HostNonlinearStream* stream)
 
             bool haveStored = false;
             if (m_lodDistances.first &&
-                static_cast<unsigned int>((m_lodDistances.last - m_lodDistances.first) >> 4) > geom)
+                static_cast<unsigned int>((m_lodDistances.last - m_lodDistances.first) / sizeof(vc71::vector_layout)) > geom)
             {
                 vc71::vector_layout* inner =
                     reinterpret_cast<vc71::vector_layout*>(m_lodDistances.first) + geom;
