@@ -563,19 +563,19 @@ inline int materialDword(const void* material, unsigned int offset)
 // The nine __fastcall entries the table holds. The shipped records are __thiscall, which is this
 // receiver-in-ecx shape with the unused edx slot - the same idiom RenderQueues.cpp's own vtables
 // use, and the same one `materialApplyStreams` calls back through.
-void* __fastcall smm_destroy(void* self, void*, unsigned char flags)
+void* __fastcall smm_destroy(void* self BF2_EDX_PARAM, unsigned char flags)
 { return skinnedMeshMaterialDestroyFlags(self, flags); }
 
-unsigned char __fastcall smm_applyStreams(void* self, void*, void* shaderState)
+unsigned char __fastcall smm_applyStreams(void* self BF2_EDX_PARAM, void* shaderState)
 { return skinnedMeshMaterialApplyStreams(self, shaderState) ? 1u : 0u; }
 
-int __fastcall smm_getVertexCount(void* self, void*)    { return materialDword(self, 0x24); }
-int __fastcall smm_slot0C(void*, void*)                 { return -1; }
-int __fastcall smm_getPrimitiveCount(void* self, void*) { return materialDword(self, 0x20); }
-int __fastcall smm_getDword190(void* self, void*)       { return materialDword(self, 0x190); }
-int __fastcall smm_getVertexStart(void* self, void*)    { return materialDword(self, 0x18); }
-int __fastcall smm_slot1C(void*, void*)                 { return 0; }
-int __fastcall smm_getIndexStart(void* self, void*)     { return materialDword(self, 0x1C); }
+int __fastcall smm_getVertexCount(void* self BF2_EDX_PARAM)    { return materialDword(self, 0x24); }
+int __fastcall smm_slot0C(void* BF2_EDX_PARAM)                 { return -1; }
+int __fastcall smm_getPrimitiveCount(void* self BF2_EDX_PARAM) { return materialDword(self, 0x20); }
+int __fastcall smm_getDword190(void* self BF2_EDX_PARAM)       { return materialDword(self, 0x190); }
+int __fastcall smm_getVertexStart(void* self BF2_EDX_PARAM)    { return materialDword(self, 0x18); }
+int __fastcall smm_slot1C(void* BF2_EDX_PARAM)                 { return 0; }
+int __fastcall smm_getIndexStart(void* self BF2_EDX_PARAM)     { return materialDword(self, 0x1C); }
 
 void* const kSkinnedMeshMaterialVtable[9] =
 {
@@ -942,8 +942,8 @@ void* SkinnedMeshTemplate::createInstance()
     instanceSetErase(m_instances, instance);
     if (instance)
     {
-        typedef void*(__fastcall * DtorFn)(void*, void*, unsigned int);
-        reinterpret_cast<DtorFn>(instance->m_vptr[0x34 / sizeof(void*)])(instance, 0, 1);
+        typedef void*(__fastcall * DtorFn)(void* BF2_EDX_PARAM, unsigned int);
+        reinterpret_cast<DtorFn>(instance->m_vptr[0x34  / 4])(instance, 1);
     }
     return 0;
 }
@@ -1252,9 +1252,9 @@ int SkinnedMeshTemplate::getLodPrimitiveCount(unsigned int lod)
         unsigned char* record = reinterpret_cast<unsigned char*>(lodCompanion->first);
         for (int m = 0; m < materials; ++m, record += 456)
         {
-            typedef int(__fastcall * Fn)(void*, void*);
+            typedef int(__fastcall * Fn)(void* BF2_EDX_PARAM);
             total += reinterpret_cast<Fn>(
-                (*reinterpret_cast<void***>(record))[0x10 / sizeof(void*)])(record, 0);
+                (*reinterpret_cast<void***>(record))[0x10  / 4])(record);
         }
     }
     return total;
@@ -1285,9 +1285,9 @@ void skinnedMeshAssignTextureSlot(unsigned char* record, unsigned int slot, void
     *held = texture;
     if (texture)
     {
-        typedef void(__fastcall * AddRefFn)(void*, void*);
+        typedef void(__fastcall * AddRefFn)(void* BF2_EDX_PARAM);
         reinterpret_cast<AddRefFn>(
-            (*reinterpret_cast<void***>(texture))[0x08 / sizeof(void*)])(texture, 0);
+            (*reinterpret_cast<void***>(texture))[0x08  / 4])(texture);
     }
 }
 

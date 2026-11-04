@@ -182,9 +182,9 @@ bool rendererEndScene()
 
     if (g_endSceneOverlayHook)
     {
-        typedef void (__fastcall* HookFn)(void*, void*);
+        typedef void (__fastcall* HookFn)(void* BF2_EDX_PARAM);
         reinterpret_cast<HookFn>((*static_cast<void***>(g_endSceneOverlayHook))[6])(
-            g_endSceneOverlayHook, 0);
+            g_endSceneOverlayHook);
     }
 
     if (device()->EndScene() < 0)

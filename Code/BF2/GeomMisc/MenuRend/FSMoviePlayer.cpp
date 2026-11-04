@@ -91,11 +91,11 @@ static_assert(sizeof(FSMoviePlayer) == 0x44,
 
 namespace {
 
-void __fastcall fsm_addRef(void* s, void*) { static_cast<FSMoviePlayer*>(s)->addRef(); }
-int  __fastcall fsm_getRef(void* s, void*) { return static_cast<FSMoviePlayer*>(s)->getRef(); }
-int  __fastcall fsm_release(void* s, void*) { return static_cast<FSMoviePlayer*>(s)->release(); }
+void __fastcall fsm_addRef(void* s BF2_EDX_PARAM) { static_cast<FSMoviePlayer*>(s)->addRef(); }
+int  __fastcall fsm_getRef(void* s BF2_EDX_PARAM) { return static_cast<FSMoviePlayer*>(s)->getRef(); }
+int  __fastcall fsm_release(void* s BF2_EDX_PARAM) { return static_cast<FSMoviePlayer*>(s)->release(); }
 
-void* __fastcall fsm_queryInterface(void* s, void*, unsigned int iid)
+void* __fastcall fsm_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<FSMoviePlayer*>(s)->queryInterface(iid);
 }
@@ -104,13 +104,13 @@ void* __fastcall fsm_queryInterface(void* s, void*, unsigned int iid)
 #if BF2_PLUGIN_ABI_NATIVE
 // [CHOSEN, not recovered] Converts the host's by-value string once at the native movie boundary.
 // [RETIRE-WHEN: fsmovie-native-string-adapter] Replace the internal path with native storage while preserving the host's by-value load contract.
-bool __fastcall fsm_load(void* s, void*, ::renddx9abi::HostString path)
+bool __fastcall fsm_load(void* s BF2_EDX_PARAM, ::renddx9abi::HostString path)
 {
     const vc71::string internalPath(path.data(), static_cast<unsigned int>(path.size()));
     return static_cast<FSMoviePlayer*>(s)->load(internalPath);
 }
 #else
-bool __fastcall fsm_load(void* s, void*, const char* pathRaw0, int, int, int, int, int, int)
+bool __fastcall fsm_load(void* s BF2_EDX_PARAM, const char* pathRaw0, int, int, int, int, int, int)
 {
     // the by-value string's seven stack dwords: the first is the union/alloc dword, the buffer
     // or pointer follows. Reconstituting through the layout rather than guessing an overload:
@@ -121,20 +121,20 @@ bool __fastcall fsm_load(void* s, void*, const char* pathRaw0, int, int, int, in
 }
 #endif
 
-void __fastcall fsm_releaseAll(void* s, void*) { static_cast<FSMoviePlayer*>(s)->releaseAll(); }
+void __fastcall fsm_releaseAll(void* s BF2_EDX_PARAM) { static_cast<FSMoviePlayer*>(s)->releaseAll(); }
 
-void __fastcall fsm_drawFrame(void* s, void*)
+void __fastcall fsm_drawFrame(void* s BF2_EDX_PARAM)
 {
     static_cast<FSMoviePlayer*>(s)->drawFrame();
 }
 
 // Calls the video's playback query. Requires a successfully loaded video; no null guard is provided.
-int __fastcall fsm_videoPassthrough(void* s, void*)
+int __fastcall fsm_videoPassthrough(void* s BF2_EDX_PARAM)
 {
     return static_cast<FSMoviePlayer*>(s)->finished() ? 1 : 0;
 }
 
-void __fastcall fsm_dtor(void* s, void*, char flags) { static_cast<FSMoviePlayer*>(s)->dtor(flags); }
+void __fastcall fsm_dtor(void* s BF2_EDX_PARAM, char flags) { static_cast<FSMoviePlayer*>(s)->dtor(flags); }
 
 void* const kFSMoviePlayerVtable[9] =
 {
@@ -149,7 +149,7 @@ void* const kFSMoviePlayerVtable[9] =
     reinterpret_cast<void*>(&fsm_dtor)              // +0x20
 };
 
-void __fastcall fsm_listenerNoop(void*, void*) { /* all three shipped slots are no-ops */ }
+void __fastcall fsm_listenerNoop(void* BF2_EDX_PARAM) { /* all three shipped slots are no-ops */ }
 
 void* const kFSMoviePlayerListenerVtable[3] =
 {

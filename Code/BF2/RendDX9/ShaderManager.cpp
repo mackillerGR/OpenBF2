@@ -563,12 +563,12 @@ void forEachShaderManagerEffect(ShaderManager* sm, unsigned int slot)
         forEachSubEffect<Fn>(vc71::mapNodeValue(node), slot);
 }
 
-void __fastcall sm_onDeviceLost(void* listener, void*)
+void __fastcall sm_onDeviceLost(void* listener BF2_EDX_PARAM)
 {
     forEachShaderManagerEffect<D3dxOnLostDeviceFn>(smFromListener(listener), 0x114);
 }
 
-void __fastcall sm_onDeviceReset(void* listener, void*)
+void __fastcall sm_onDeviceReset(void* listener BF2_EDX_PARAM)
 {
     forEachShaderManagerEffect<D3dxOnResetDeviceFn>(smFromListener(listener), 0x118);
 }
@@ -576,21 +576,21 @@ void __fastcall sm_onDeviceReset(void* listener, void*)
 // shutdown only (the destroy broadcast, 0x10002600). The mapped objects' IBase
 // release (`mov ecx, [node+28h]; mov eax, [ecx]; call [eax+8]`) over both maps; the nodes are left
 // in place for the destructor that follows.
-void __fastcall sm_onDeviceDestroy(void* listener, void*)
+void __fastcall sm_onDeviceDestroy(void* listener BF2_EDX_PARAM)
 {
     ShaderManager* const sm = smFromListener(listener);
-    typedef int (__fastcall* ReleaseFn)(void*, void*);
+    typedef int (__fastcall* ReleaseFn)(void* BF2_EDX_PARAM);
     for (vc71::map_node* node = vc71::mapFirst(sm->effectCache); node;
          node = vc71::mapNext(sm->effectCache, node))
     {
         void* const object = vc71::mapNodeValue(node);
-        reinterpret_cast<ReleaseFn>((*reinterpret_cast<void***>(object))[2])(object, 0);
+        reinterpret_cast<ReleaseFn>((*reinterpret_cast<void***>(object))[2])(object);
     }
     for (vc71::map_node* node = vc71::mapFirst(sm->map48); node;
          node = vc71::mapNext(sm->map48, node))
     {
         void* const object = vc71::mapNodeValue(node);
-        reinterpret_cast<ReleaseFn>((*reinterpret_cast<void***>(object))[2])(object, 0);
+        reinterpret_cast<ReleaseFn>((*reinterpret_cast<void***>(object))[2])(object);
     }
 }
 

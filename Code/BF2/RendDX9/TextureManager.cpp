@@ -328,19 +328,19 @@ namespace {
 // an unused EDX - the same convention for slots whose arguments are all stack-passed after `this`.
 
 
-void __fastcall tm_addRef(void* self, void*) { static_cast<TextureManager*>(self)->addRef(); }
-int  __fastcall tm_getRef(void* self, void*) { return static_cast<TextureManager*>(self)->getRef(); }
+void __fastcall tm_addRef(void* self BF2_EDX_PARAM) { static_cast<TextureManager*>(self)->addRef(); }
+int  __fastcall tm_getRef(void* self BF2_EDX_PARAM) { return static_cast<TextureManager*>(self)->getRef(); }
 
 // +0x0C, 0x10025930. A comdat-folded body shared with SkinnedMeshRenderer, which is why the
 // database names it after that class - the same three instructions serve both. It accepts exactly
 // one interface id: `return iid != 1 ? 0 : this`, so IID_IBase and nothing else.
-void* __fastcall tm_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall tm_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return iid == RD9_IID_IBASE ? self : 0;
 }
 
 #define RD9_TM_SLOT(name, qualified, slotOffset)                                    \
-    void __fastcall name(void* self, void*)                                         \
+    void __fastcall name(void* self BF2_EDX_PARAM)                                         \
     {                                                                               \
         RD9_FRONTIER_AT("dice::hfe::dx9rend::TextureManager::" qualified,            \
                         self, slotOffset);                                          \
@@ -358,9 +358,9 @@ inline TextureManager* tmFromListener(void* listener)
     return reinterpret_cast<TextureManager*>(static_cast<unsigned char*>(listener) - 4);
 }
 
-void __fastcall tm_onDeviceLost(void* listener, void*)   { tmFromListener(listener)->onDeviceLost(); }
-void __fastcall tm_onDeviceReset(void* listener, void*)  { tmFromListener(listener)->onDeviceReset(); }
-void __fastcall tm_listenerSlot08(void* listener, void*) { tmFromListener(listener)->onDeviceDestroy(); }
+void __fastcall tm_onDeviceLost(void* listener BF2_EDX_PARAM)   { tmFromListener(listener)->onDeviceLost(); }
+void __fastcall tm_onDeviceReset(void* listener BF2_EDX_PARAM)  { tmFromListener(listener)->onDeviceReset(); }
+void __fastcall tm_listenerSlot08(void* listener BF2_EDX_PARAM) { tmFromListener(listener)->onDeviceDestroy(); }
 
 void* const kTextureManagerVtable[6] =
 {
@@ -1147,8 +1147,8 @@ void TextureManager::onDeviceDestroy()
         {
             EngineTexture* const survivor =
                 static_cast<EngineTexture*>(vc71::mapNodeValue(node));   // re-read, as shipped
-            typedef void (__fastcall* SlotFn)(void*, void*);
-            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(survivor))[1])(survivor, 0);
+            typedef void (__fastcall* SlotFn)(void* BF2_EDX_PARAM);
+            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(survivor))[1])(survivor);
         }
     }
 }
@@ -1246,15 +1246,15 @@ struct AtlasCache
 
 static_assert(sizeof(AtlasCache) == 0x2C, "sub_10088EA0 allocates 0x2C for it");
 
-void __fastcall ac_addRef(void* self, void*) { ++static_cast<AtlasCache*>(self)->refCount; }
-int  __fastcall ac_getRef(void* self, void*) { return static_cast<AtlasCache*>(self)->refCount; }
+void __fastcall ac_addRef(void* self BF2_EDX_PARAM) { ++static_cast<AtlasCache*>(self)->refCount; }
+int  __fastcall ac_getRef(void* self BF2_EDX_PARAM) { return static_cast<AtlasCache*>(self)->refCount; }
 
-void __fastcall ac_slot08(void* self, void*)
+void __fastcall ac_slot08(void* self BF2_EDX_PARAM)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::AtlasCache::slot_0x08 (0x10017B50, unread)", self, 0x08);
 }
 
-void* __fastcall ac_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall ac_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return iid == RD9_IID_IBASE ? self : 0;
 }

@@ -1106,10 +1106,10 @@ bool shadowCasterPredicateBody(world::IObject* object, unsigned char accept)
     void* const geometry = objectGeometry(object);
     if (geometry)
     {
-        typedef void* (__fastcall* GetTemplateFn)(void*, void*);
+        typedef void* (__fastcall* GetTemplateFn)(void* BF2_EDX_PARAM);
         void** const vtbl = *reinterpret_cast<void***>(geometry);
         void* const geometryTemplate =
-            reinterpret_cast<GetTemplateFn>(vtbl[0x38 / sizeof(void*)])(geometry, 0);
+            reinterpret_cast<GetTemplateFn>(vtbl[0x38  / 4])(geometry);
         if (static_cast<MeshTemplate*>(geometryTemplate)->isWater())              // +0x50
             return false;
     }
@@ -1166,14 +1166,14 @@ struct ShadowCasterPredicator
     unsigned char pad05[3];
 };
 
-bool __fastcall shadowPredicate(void* self, void*, world::IObject* object)
+bool __fastcall shadowPredicate(void* self BF2_EDX_PARAM, world::IObject* object)
 {
     return shadowCasterPredicateBody(
         object, static_cast<ShadowCasterPredicator*>(self)->accept);
 }
-unsigned int __fastcall shadowPredicateFlags(void*, void*) { return 0; }
-bool __fastcall shadowPredicateCull(void*, void*, world::IObject*) { return true; }
-bool __fastcall shadowPredicateSurface(void*, void*, int) { return true; }
+unsigned int __fastcall shadowPredicateFlags(void* BF2_EDX_PARAM) { return 0; }
+bool __fastcall shadowPredicateCull(void* BF2_EDX_PARAM, world::IObject*) { return true; }
+bool __fastcall shadowPredicateSurface(void* BF2_EDX_PARAM, int) { return true; }
 const void* const kShadowCasterPredicatorVtable[4] =
 {
     reinterpret_cast<void*>(&shadowPredicate),
@@ -2338,44 +2338,44 @@ void terrainQueryFrustum(TerrainPatchQueryLayout* query, const Frustum* frustum)
         terrainQueryFrustumWalk(query, query->root);
 }
 
-void __fastcall pointCollectSlot(void* self, void*, double time,
+void __fastcall pointCollectSlot(void* self BF2_EDX_PARAM, double time,
                                  vc71::vector_layout* destination, int flag)
 {
     pointCollect(static_cast<XpCuller*>(self), time, *destination, flag);
 }
-void __fastcall spotCollectSlot(void* self, void*, double time,
+void __fastcall spotCollectSlot(void* self BF2_EDX_PARAM, double time,
                                 vc71::vector_layout* destination, int flag)
 {
     spotCollect(static_cast<XpSpotCuller*>(self), time, *destination, flag);
 }
-bool __fastcall pointVisibleSlot(void* self, void*, const Frustum* camera)
+bool __fastcall pointVisibleSlot(void* self BF2_EDX_PARAM, const Frustum* camera)
 {
     return pointVisible(static_cast<XpCuller*>(self), *camera);
 }
-bool __fastcall spotVisibleSlot(void* self, void*, const Frustum* camera)
+bool __fastcall spotVisibleSlot(void* self BF2_EDX_PARAM, const Frustum* camera)
 {
     return spotVisible(static_cast<XpSpotCuller*>(self), *camera);
 }
 // Both retail +0x08 bodies are `xor al,al; ret 4`: one opaque stack argument is consumed even
 // though the result is always false.  Keep that argument so an indirect call cannot unbalance esp.
-bool __fastcall cullerFalseSlot(void*, void*, void*) { return false; }
-void __fastcall pointSecondCullSlot(void* self, void*, TerrainPatchQueryLayout* query)
+bool __fastcall cullerFalseSlot(void* BF2_EDX_PARAM, void*) { return false; }
+void __fastcall pointSecondCullSlot(void* self BF2_EDX_PARAM, TerrainPatchQueryLayout* query)
 {
     XpCuller* const culler = static_cast<XpCuller*>(self);
     const Vec3& position = culler->light->source->getAbsolutePosition();
     terrainQuerySphere(query, &position,
                        culler->light->source->getVisualBoundingRadius());
 }
-void __fastcall spotSecondCullSlot(void* self, void*, TerrainPatchQueryLayout* query)
+void __fastcall spotSecondCullSlot(void* self BF2_EDX_PARAM, TerrainPatchQueryLayout* query)
 {
     terrainQueryFrustum(query, static_cast<XpSpotCuller*>(self)->frustum);
 }
-void __fastcall pointFillRecordSlot(void*, void*, unsigned char* record)
+void __fastcall pointFillRecordSlot(void* BF2_EDX_PARAM, unsigned char* record)
 {
     *reinterpret_cast<float*>(record + 0x3C) = 1.0f;
     *reinterpret_cast<float*>(record + 0x40) = 1.0f;
 }
-void __fastcall spotFillRecordSlot(void* self, void*, unsigned char* record)
+void __fastcall spotFillRecordSlot(void* self BF2_EDX_PARAM, unsigned char* record)
 {
     XpSpotCuller* const culler = static_cast<XpSpotCuller*>(self);
     const float degreesToRadians = 0.01745329251994329577f;
@@ -2384,8 +2384,8 @@ void __fastcall spotFillRecordSlot(void* self, void*, unsigned char* record)
     *reinterpret_cast<float*>(record + 0x40) =
         std::cos(culler->light->source->getConeAngle2() * degreesToRadians);
 }
-void __fastcall pointDebugSlot(void*, void*) {}
-void __fastcall spotDebugSlot(void* self, void*)
+void __fastcall pointDebugSlot(void* BF2_EDX_PARAM) {}
+void __fastcall spotDebugSlot(void* self BF2_EDX_PARAM)
 {
     XpSpotCuller* const culler = static_cast<XpSpotCuller*>(self);
     (void)culler;
@@ -2700,14 +2700,14 @@ static const unsigned int kStaticMeshReflectionType  = 0x870CA653u;
 
 inline void* geometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 
 inline IGeometryTemplate* geometryTemplate(void* geometry)
 {
-    typedef void* (__fastcall* GetTemplateFn)(void*, void*);
+    typedef void* (__fastcall* GetTemplateFn)(void* BF2_EDX_PARAM);
     return static_cast<IGeometryTemplate*>(
-        reinterpret_cast<GetTemplateFn>(geometrySlot(geometry, 0x38))(geometry, 0));
+        reinterpret_cast<GetTemplateFn>(geometrySlot(geometry, 0x38))(geometry));
 }
 
 // The PE never caches this pair: every caller asks +0x38 and then the template's +0x10 again.
@@ -2718,15 +2718,15 @@ inline unsigned int geometryReflectionType(void* geometry)
 
 inline const LocalBoundingBox& geometryLocalBounds(void* geometry)
 {
-    typedef const void* (__fastcall* GetLocalBoundsFn)(void*, void*);
+    typedef const void* (__fastcall* GetLocalBoundsFn)(void* BF2_EDX_PARAM);
     return *static_cast<const LocalBoundingBox*>(
-        reinterpret_cast<GetLocalBoundsFn>(geometrySlot(geometry, 0x40))(geometry, 0));
+        reinterpret_cast<GetLocalBoundsFn>(geometrySlot(geometry, 0x40))(geometry));
 }
 
 inline bool geometryAcceptsXpShadow(void* geometry)
 {
-    typedef bool (__fastcall* AcceptsFn)(void*, void*);
-    return reinterpret_cast<AcceptsFn>(geometrySlot(geometry, 0xA8))(geometry, 0);
+    typedef bool (__fastcall* AcceptsFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<AcceptsFn>(geometrySlot(geometry, 0xA8))(geometry);
 }
 
 inline const Mat4& candidateAbsoluteTransformation(world::IObject* candidate)
@@ -3257,9 +3257,9 @@ inline world::IObject* const* controlFirstPersonObjectsBegin(void* control)
 // +0xA0, no arguments: the geometry's owner object (StaticMesh answers the shared const-0 body).
 inline world::IObject* geometryObject(void* geometry)
 {
-    typedef void* (__fastcall* OwnerFn)(void*, void*);
+    typedef void* (__fastcall* OwnerFn)(void* BF2_EDX_PARAM);
     return static_cast<world::IObject*>(
-        reinterpret_cast<OwnerFn>(geometrySlot(geometry, 0xA0))(geometry, 0));
+        reinterpret_cast<OwnerFn>(geometrySlot(geometry, 0xA0))(geometry));
 }
 
 bool pointCasterPassesLocalView(void* localPlayer, world::IObject* candidate,
@@ -3365,10 +3365,10 @@ void assignPointShadowAtlas(void* manager, XpRenderRecordLayout& record)
 inline void geometryDrawShadow(void* geometry, XpRenderRecordLayout* record,
                                int secondPass, int effectChanged)
 {
-    typedef void (__fastcall* DrawShadowMapFn)(void*, void*, void*, const void*, const void*,
+    typedef void (__fastcall* DrawShadowMapFn)(void* BF2_EDX_PARAM, void*, const void*, const void*,
                                                const void*, unsigned int, unsigned int);
     reinterpret_cast<DrawShadowMapFn>(geometrySlot(geometry, 0x20))(
-        geometry, 0, record, &record->matrices[1], &record->matrices[2], &record->frustum,
+        geometry, record, &record->matrices[1], &record->matrices[2], &record->frustum,
         static_cast<unsigned int>(secondPass), static_cast<unsigned int>(effectChanged));
 }
 
@@ -3646,24 +3646,24 @@ bool geometryUsesShadowSphere(void* geometry)
 // site discards them, so the dispatch is declared void.
 inline void geometryPrepareShadow(void* geometry, unsigned int rendererToken)
 {
-    typedef void (__fastcall* StampFn)(void*, void*, unsigned int);
-    reinterpret_cast<StampFn>(geometrySlot(geometry, 0xAC))(geometry, 0, rendererToken);
+    typedef void (__fastcall* StampFn)(void* BF2_EDX_PARAM, unsigned int);
+    reinterpret_cast<StampFn>(geometrySlot(geometry, 0xAC))(geometry, rendererToken);
 }
 
 // +0x24, one argument: the shadow record this geometry draws into (StaticMesh +0x34C, SkinnedMesh
 // +0x33C, BundledMesh +0x2B4 - the "caster" the shadow draws read when no light is passed).
 inline void geometryAttachShadowRecord(void* geometry, XpRenderRecordLayout* record)
 {
-    typedef void (__fastcall* AttachFn)(void*, void*, void*);
-    reinterpret_cast<AttachFn>(geometrySlot(geometry, 0x24))(geometry, 0, record);
+    typedef void (__fastcall* AttachFn)(void* BF2_EDX_PARAM, void*);
+    reinterpret_cast<AttachFn>(geometrySlot(geometry, 0x24))(geometry, record);
 }
 
 // +0xA4, no arguments: the geometry's root object (memoised by +0xF8 / refreshed in the call).
 inline world::IObject* geometryFinalizerObject(void* geometry)
 {
-    typedef void* (__fastcall* RootFn)(void*, void*);
+    typedef void* (__fastcall* RootFn)(void* BF2_EDX_PARAM);
     return static_cast<world::IObject*>(
-        reinterpret_cast<RootFn>(geometrySlot(geometry, 0xA4))(geometry, 0));
+        reinterpret_cast<RootFn>(geometrySlot(geometry, 0xA4))(geometry));
 }
 
 inline unsigned int rendererShadowToken()
@@ -3988,11 +3988,11 @@ void collectDirectionalChildren(void* manager, world::IObject* root, LocalBoundi
 inline void geometryDrawDirectionalBatch(void* geometry, int secondPass,
                                          int reflectionChanged)
 {
-    typedef void (__fastcall* DrawShadowMapFn)(void*, void*, void*, unsigned int, unsigned int,
+    typedef void (__fastcall* DrawShadowMapFn)(void* BF2_EDX_PARAM, void*, unsigned int, unsigned int,
                                                unsigned int, unsigned int, unsigned int);
     void** const vtbl = *reinterpret_cast<void***>(geometry);
-    reinterpret_cast<DrawShadowMapFn>(vtbl[0x20 / sizeof(void*)])(
-        geometry, 0, 0, 0u, 0u, 0u,
+    reinterpret_cast<DrawShadowMapFn>(vtbl[0x20  / 4])(
+        geometry, 0, 0u, 0u, 0u,
         static_cast<unsigned int>(secondPass != 0),
         static_cast<unsigned int>(reflectionChanged != 0));
 }
@@ -4095,13 +4095,13 @@ struct DestroyableShadowPredicator
 {
     const void** table;
 };
-bool __fastcall destroyableShadowPredicate(void*, void*, world::IObject* object)
+bool __fastcall destroyableShadowPredicate(void* BF2_EDX_PARAM, world::IObject* object)
 {
     return destroyableShadowPredicateBody(object);
 }
-unsigned int __fastcall destroyableShadowFlags(void*, void*) { return 0; }
-bool __fastcall destroyableShadowCull(void*, void*, world::IObject*) { return true; }
-bool __fastcall destroyableShadowSurface(void*, void*, int) { return true; }
+unsigned int __fastcall destroyableShadowFlags(void* BF2_EDX_PARAM) { return 0; }
+bool __fastcall destroyableShadowCull(void* BF2_EDX_PARAM, world::IObject*) { return true; }
+bool __fastcall destroyableShadowSurface(void* BF2_EDX_PARAM, int) { return true; }
 const void* const kDestroyableShadowVtable[4] = {
     reinterpret_cast<void*>(&destroyableShadowPredicate),
     reinterpret_cast<void*>(&destroyableShadowFlags),
@@ -4493,19 +4493,19 @@ inline dx9rend::Effect* staticMeshShadowEffect()
 inline void geometryDrawOccluderShadow(void* geometry, XpRenderRecordLayout* record,
                                        const Mat4* view, const Mat4* projection)
 {
-    typedef void (__fastcall* DrawShadowMapFn)(void*, void*, void*, const void*, const void*,
+    typedef void (__fastcall* DrawShadowMapFn)(void* BF2_EDX_PARAM, void*, const void*, const void*,
                                                unsigned int, unsigned int, unsigned int);
     reinterpret_cast<DrawShadowMapFn>(geometrySlot(geometry, 0x20))(
-        geometry, 0, record, view, projection, 0u, 0u, 0u);
+        geometry, record, view, projection, 0u, 0u, 0u);
 }
 
 // +0x20 for the OverGrowth instances (0x10166D23..0x10166D32): the first record, then five zeros.
 inline void geometryDrawRecordShadow(void* geometry, XpRenderRecordLayout* record)
 {
-    typedef void (__fastcall* DrawShadowMapFn)(void*, void*, void*, unsigned int, unsigned int,
+    typedef void (__fastcall* DrawShadowMapFn)(void* BF2_EDX_PARAM, void*, unsigned int, unsigned int,
                                                unsigned int, unsigned int, unsigned int);
     reinterpret_cast<DrawShadowMapFn>(geometrySlot(geometry, 0x20))(
-        geometry, 0, record, 0u, 0u, 0u, 0u, 0u);
+        geometry, record, 0u, 0u, 0u, 0u, 0u);
 }
 
 // the first half.
@@ -4856,23 +4856,23 @@ void destroyLightManager(void* self)
 // declared: with the frontier trap armed it never returns, which is the only stack-safe behavior
 // for an as-yet unknown __thiscall signature.  The byte offset is still carried into the diagnostic.
 template <unsigned int Slot>
-void __fastcall lm_unrecovered(void* self, void*)
+void __fastcall lm_unrecovered(void* self BF2_EDX_PARAM)
 {
     RD9_FRONTIER_AT("dice::hfe::geom::LightManager::unrecoveredVirtual", self, Slot);
     std::abort();
 }
 
-int __fastcall lm_addRef(void* self, void*)
+int __fastcall lm_addRef(void* self BF2_EDX_PARAM)
 {
     return ++lmField<int>(self, 0x10);
 }
 
-int __fastcall lm_getRef(void* self, void*)
+int __fastcall lm_getRef(void* self BF2_EDX_PARAM)
 {
     return lmField<int>(self, 0x10);
 }
 
-int __fastcall lm_release(void* self, void*)
+int __fastcall lm_release(void* self BF2_EDX_PARAM)
 {
     const int remaining = --lmField<int>(self, 0x10);
     if (remaining == 0)
@@ -4883,7 +4883,7 @@ int __fastcall lm_release(void* self, void*)
     return remaining;
 }
 
-void* __fastcall lm_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall lm_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     if (iid == RD9_IID_IBASE || iid == IID_ILightManager)
         return self;
@@ -5239,7 +5239,7 @@ bool lightMatchesMask(world::LightSource* light, unsigned int required, unsigned
 // It walks the owned set at +0x1B8 (the head read is `[ecx+1BCh]`), not the active one:
 // enabled-ness is a mask bit, not a set membership.
 
-void __fastcall lm_getLightsByMask(void* self, void*, vc71::vector_layout* out,
+void __fastcall lm_getLightsByMask(void* self BF2_EDX_PARAM, vc71::vector_layout* out,
                                    unsigned int required, unsigned int forbidden)
 {
     vc71::set_layout& owned = lmOwnedLights(self);
@@ -5257,7 +5257,7 @@ void __fastcall lm_getLightsByMask(void* self, void*, vc71::vector_layout* out,
 // Appends this frame's visible lights matching required/forbidden masks.
 // Required 0x7FFFFFFF instead selects enabled non-directional emitter lights and ignores forbidden.
 
-void __fastcall lm_getVisibleLightsByMask(void* self, void*, vc71::vector_layout* out,
+void __fastcall lm_getVisibleLightsByMask(void* self BF2_EDX_PARAM, vc71::vector_layout* out,
                                           unsigned int required, unsigned int forbidden)
 {
     vc71::vector_layout& scratch = lmField<vc71::vector_layout>(self, 0x1D0);
@@ -5395,15 +5395,15 @@ struct LightOcclusionPredicator
     unsigned int mask;
 };
 
-bool __fastcall lightOcclusionPredicate(void* self, void*, world::IObject* object)
+bool __fastcall lightOcclusionPredicate(void* self BF2_EDX_PARAM, world::IObject* object)
 {
     const unsigned int mask = static_cast<LightOcclusionPredicator*>(self)->mask;
     return (mask & object->getFlags()) == mask;
 }
-unsigned int __fastcall lightOcclusionPredicateFlags(void* self, void*)
+unsigned int __fastcall lightOcclusionPredicateFlags(void* self BF2_EDX_PARAM)
 { return static_cast<LightOcclusionPredicator*>(self)->mask; }
-bool __fastcall lightOcclusionPredicateCull(void*, void*, world::IObject*) { return true; }
-bool __fastcall lightOcclusionPredicateSurface(void*, void*, int) { return true; }
+bool __fastcall lightOcclusionPredicateCull(void* BF2_EDX_PARAM, world::IObject*) { return true; }
+bool __fastcall lightOcclusionPredicateSurface(void* BF2_EDX_PARAM, int) { return true; }
 const void* const kLightOcclusionPredicatorVtable[4] =
 {
     reinterpret_cast<void*>(&lightOcclusionPredicate),
@@ -5425,7 +5425,7 @@ inline world::ObjectPredicator* lightOcclusionPredicatorPointer(LightOcclusionPr
 // Candidates must strictly overlap the query sphere and pass both masks. Optional
 // occlusion casts from the light toward position; hits inside radius remain accepted.
 
-void __fastcall lm_gatherLights(void* self, void*, const Vec3* position, float radius,
+void __fastcall lm_gatherLights(void* self BF2_EDX_PARAM, const Vec3* position, float radius,
                                 vc71::vector_layout* out, unsigned int maxLights,
                                 unsigned int required, unsigned int forbidden,
                                 unsigned char occlusionTest)
@@ -5499,19 +5499,19 @@ void __fastcall lm_gatherLights(void* self, void*, const Vec3* position, float r
 // geometry instance interface is not modelled as a type in this tree (see ObjectDrawer.cpp); the
 // call order - transform first, radius second - is the shipped one.
 
-void __fastcall lm_gatherLightsForGeometry(void* self, void*, void* geometry,
+void __fastcall lm_gatherLightsForGeometry(void* self BF2_EDX_PARAM, void* geometry,
                                            vc71::vector_layout* out, unsigned int maxLights,
                                            unsigned int required, unsigned int forbidden,
                                            int occlusionTest)
 {
-    typedef const Mat4* (__fastcall* TransformationFn)(void*, void*);
-    typedef float (__fastcall* BoundingRadiusFn)(void*, void*);
+    typedef const Mat4* (__fastcall* TransformationFn)(void* BF2_EDX_PARAM);
+    typedef float (__fastcall* BoundingRadiusFn)(void* BF2_EDX_PARAM);
 
     void** const vtbl = *reinterpret_cast<void***>(geometry);
     const Mat4* const transform =
-        reinterpret_cast<TransformationFn>(vtbl[0x48 / sizeof(void*)])(geometry, 0);
+        reinterpret_cast<TransformationFn>(vtbl[0x48  / 4])(geometry);
     const float radius =
-        reinterpret_cast<BoundingRadiusFn>(vtbl[0x44 / sizeof(void*)])(geometry, 0);
+        reinterpret_cast<BoundingRadiusFn>(vtbl[0x44  / 4])(geometry);
     const Vec3* const position = reinterpret_cast<const Vec3*>(&transform->m[12]);
 
     static_cast<LightManager*>(self)->gatherLights(*position, radius, *out, maxLights,
@@ -5520,12 +5520,12 @@ void __fastcall lm_gatherLightsForGeometry(void* self, void*, void* geometry,
 
 // +0x280, PE 0x1015BF40 and +0x2D8, the two one-instruction getters the StaticMesh
 // shadow draw dispatches.  ; the fields are the ones the constructor seeds.
-int __fastcall lm_getStaticMeshShadowLod(void* self, void*)
+int __fastcall lm_getStaticMeshShadowLod(void* self BF2_EDX_PARAM)
 {
     return static_cast<int>(lmField<unsigned int>(self, 0x154));
 }
 
-int __fastcall lm_getShadowMergeLodLimit(void* self, void*)
+int __fastcall lm_getShadowMergeLodLimit(void* self BF2_EDX_PARAM)
 {
     return static_cast<int>(lmField<unsigned int>(self, 0x820));
 }
@@ -5533,7 +5533,7 @@ int __fastcall lm_getShadowMergeLodLimit(void* self, void*)
 // +0x10, PE 0x10160D30 -> 0x100F2D00. Retail clears the scratch vector, refreshes/copies the active
 // RenderView's Frustum, applies the configured cull distance, and walks the active set in pointer
 // order. Each accepted light is appended to the VC7.1 scratch vector at +0x1D0.
-void __fastcall lm_update(void* self, void*, double time)
+void __fastcall lm_update(void* self BF2_EDX_PARAM, double time)
 {
     (void)time;
 
@@ -5573,7 +5573,7 @@ void __fastcall lm_update(void* self, void*, double time)
 
 // +0x24/+0x28, PE 0x1015BB90/0x1015BBC0.  Assignment owns one reference.  The same-pointer case
 // deliberately adds another reference without releasing the old one; that retail leak is visible.
-void __fastcall lm_setSkyLight(void* self, void*, world::LightSource* light)
+void __fastcall lm_setSkyLight(void* self BF2_EDX_PARAM, world::LightSource* light)
 {
     world::LightSource*& current = lmField<world::LightSource*>(self, 0x14);
     if (current && current != light)
@@ -5582,14 +5582,14 @@ void __fastcall lm_setSkyLight(void* self, void*, world::LightSource* light)
     light->addRef();
 }
 
-world::LightSource* __fastcall lm_getSkyLight(void* self, void*)
+world::LightSource* __fastcall lm_getSkyLight(void* self BF2_EDX_PARAM)
 {
     return lmField<world::LightSource*>(self, 0x14);
 }
 
 // +0x8C, PE 0x100F2C70.  addRef is unconditional after std::set::insert, including when a
 // duplicate key is rejected (the shipped duplicate-registration leak).
-void __fastcall lm_addLight(void* self, void*, world::LightSource* light)
+void __fastcall lm_addLight(void* self BF2_EDX_PARAM, world::LightSource* light)
 {
     lmOwnedLights(self).insert(lmLightKey(light));
     light->addRef();
@@ -5597,7 +5597,7 @@ void __fastcall lm_addLight(void* self, void*, world::LightSource* light)
 
 // +0x90, PE 0x100F2B40.  The special pointer is non-owning. Sky ownership and owning-set
 // ownership are independent, so a sky light found in the set is released twice in this call.
-void __fastcall lm_removeLight(void* self, void*, world::LightSource* light)
+void __fastcall lm_removeLight(void* self BF2_EDX_PARAM, world::LightSource* light)
 {
     world::LightSource*& special = lmField<world::LightSource*>(self, 0x840);
     if (special == light)
@@ -5621,7 +5621,7 @@ void __fastcall lm_removeLight(void* self, void*, world::LightSource* light)
 
 // +0x94, PE 0x100F2CA0.  Point/Spot lights visit the XpLight coordinator before every light is
 // inserted into the non-owning active set.  The pointer at +0x840 is explicitly excluded.
-void __fastcall lm_enableLight(void* self, void*, world::LightSource* light)
+void __fastcall lm_enableLight(void* self BF2_EDX_PARAM, world::LightSource* light)
 {
     if (lmField<world::LightSource*>(self, 0x840) == light)
         return;
@@ -5637,7 +5637,7 @@ void __fastcall lm_enableLight(void* self, void*, world::LightSource* light)
 
 // +0x98, PE 0x100F2BB0.  Coordinator removal precedes erasing the active-set node and happens only
 // when that node was present.
-void __fastcall lm_disableLight(void* self, void*, world::LightSource* light)
+void __fastcall lm_disableLight(void* self BF2_EDX_PARAM, world::LightSource* light)
 {
     if (lmField<world::LightSource*>(self, 0x840) == light)
         return;
@@ -5652,47 +5652,47 @@ void __fastcall lm_disableLight(void* self, void*, world::LightSource* light)
 }
 
 // +0x54..+0x70 are exact setter/getter pairs over +0x13C..+0x148.
-void __fastcall lm_setLightCullDistance(void* self, void*, float value)
+void __fastcall lm_setLightCullDistance(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x13C) = value;
 }
-float __fastcall lm_getLightCullDistance(void* self, void*)
+float __fastcall lm_getLightCullDistance(void* self BF2_EDX_PARAM)
 {
     const float value = lmField<float>(self, 0x13C);
     return value > 0.0f ? value : 0.0f;
 }
-void __fastcall lm_setMaxLightsPerBundledMesh(void* self, void*, int value)
+void __fastcall lm_setMaxLightsPerBundledMesh(void* self BF2_EDX_PARAM, int value)
 {
     lmField<int>(self, 0x140) = value;
 }
-int __fastcall lm_getMaxLightsPerBundledMesh(void* self, void*)
+int __fastcall lm_getMaxLightsPerBundledMesh(void* self BF2_EDX_PARAM)
 {
     const int value = lmField<int>(self, 0x140);
     return value > 0 ? value : 0;
 }
-void __fastcall lm_setMaxLightsPerStaticMesh(void* self, void*, int value)
+void __fastcall lm_setMaxLightsPerStaticMesh(void* self BF2_EDX_PARAM, int value)
 {
     lmField<int>(self, 0x144) = value;
 }
-int __fastcall lm_getMaxLightsPerStaticMesh(void* self, void*)
+int __fastcall lm_getMaxLightsPerStaticMesh(void* self BF2_EDX_PARAM)
 {
     const int value = lmField<int>(self, 0x144);
     return value > 0 ? value : 0;
 }
-void __fastcall lm_setMaxLightsPerSkinnedMesh(void* self, void*, int value)
+void __fastcall lm_setMaxLightsPerSkinnedMesh(void* self BF2_EDX_PARAM, int value)
 {
     lmField<int>(self, 0x148) = value;
 }
-int __fastcall lm_getMaxLightsPerSkinnedMesh(void* self, void*)
+int __fastcall lm_getMaxLightsPerSkinnedMesh(void* self BF2_EDX_PARAM)
 {
     const int value = lmField<int>(self, 0x148);
     return value > 0 ? value : 0;
 }
-void __fastcall lm_setMaxLightsPerTerrainPatch(void* self, void*, int value)
+void __fastcall lm_setMaxLightsPerTerrainPatch(void* self BF2_EDX_PARAM, int value)
 {
     lmField<int>(self, 0x14C) = value;
 }
-int __fastcall lm_getMaxLightsPerTerrainPatch(void* self, void*)
+int __fastcall lm_getMaxLightsPerTerrainPatch(void* self BF2_EDX_PARAM)
 {
     const int value = lmField<int>(self, 0x14C);
     return value > 0 ? value : 0;
@@ -5700,21 +5700,21 @@ int __fastcall lm_getMaxLightsPerTerrainPatch(void* self, void*)
 
 // Primary +0x7C/+0x80, PE 0x1015BF00/0x1015BF10. Unlike the neighbouring quality
 // accessors, these preserve the stored float without clamping. The getter returns it in ST(0).
-void __fastcall lm_setSkinnedMeshShaderLodDistance(void* self, void*, float value)
+void __fastcall lm_setSkinnedMeshShaderLodDistance(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x1B4) = value;
 }
-float __fastcall lm_getSkinnedMeshShaderLodDistance(void* self, void*)
+float __fastcall lm_getSkinnedMeshShaderLodDistance(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x1B4);
 }
 // Primary +0x84/+0x88: the getter returns the field's address; the setter reads and stores the
 // second component before the first.
-const Vec2& __fastcall lm_getLightMapAmbientAlphaCutoffRange(void* self, void*)
+const Vec2& __fastcall lm_getLightMapAmbientAlphaCutoffRange(void* self BF2_EDX_PARAM)
 {
     return lmField<Vec2>(self, 0x1FC);
 }
-void __fastcall lm_setLightMapAmbientAlphaCutoffRange(void* self, void*, const Vec2& range)
+void __fastcall lm_setLightMapAmbientAlphaCutoffRange(void* self BF2_EDX_PARAM, const Vec2& range)
 {
     const float second = range.y;
     const float first = range.x;
@@ -5725,56 +5725,56 @@ void __fastcall lm_setLightMapAmbientAlphaCutoffRange(void* self, void*, const V
 // Simple-shadow settings and CPU map sampling. The packed map and bit-vector are populated by
 // loadSimpleShadowMaps; retail has no null/bounds fallback in these texel readers.
 // PE 0x1015BE10/20, table 0x1021AAF0 +0x284/+0x288; ordinary unclamped integer field.
-void __fastcall lm_setBundledMeshShadowLod(void* self, void*, int lod)
+void __fastcall lm_setBundledMeshShadowLod(void* self BF2_EDX_PARAM, int lod)
 {
     lmField<int>(self, 0x158) = lod;
 }
-int __fastcall lm_getBundledMeshShadowLod(void* self, void*)
+int __fastcall lm_getBundledMeshShadowLod(void* self BF2_EDX_PARAM)
 {
     return lmField<int>(self, 0x158);
 }
 // PE 0x1015BE70/80, +0x29C/+0x2A0. The upward ray length, default150 in the constructor.
-void __fastcall lm_setShadowRoofRayLength(void* self, void*, float length)
+void __fastcall lm_setShadowRoofRayLength(void* self BF2_EDX_PARAM, float length)
 {
     lmField<float>(self, 0x164) = length;
 }
-float __fastcall lm_getShadowRoofRayLength(void* self, void*)
+float __fastcall lm_getShadowRoofRayLength(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x164);
 }
 // PE 0x1015BE30/40, +0x28C/+0x290: the skinned-mesh shadow LOD is an unclamped integer.
-void __fastcall lm_setSkinnedMeshShadowLod(void* self, void*, int lod)
+void __fastcall lm_setSkinnedMeshShadowLod(void* self BF2_EDX_PARAM, int lod)
 {
     lmField<int>(self, 0x15C) = lod;
 }
-int __fastcall lm_getSkinnedMeshShadowLod(void* self, void*)
+int __fastcall lm_getSkinnedMeshShadowLod(void* self BF2_EDX_PARAM)
 {
     return lmField<int>(self, 0x15C);
 }
 // PE 0x1015BE90/A0, +0x2A4/+0x2A8: unclamped exponent.
-void __fastcall lm_setShadowSunScalePower(void* self, void*, float power)
+void __fastcall lm_setShadowSunScalePower(void* self BF2_EDX_PARAM, float power)
 {
     lmField<float>(self, 0x168) = power;
 }
-float __fastcall lm_getShadowSunScalePower(void* self, void*)
+float __fastcall lm_getShadowSunScalePower(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x168);
 }
 // PE 0x1015CB40 writes the second component first; 0x1015BEE0 returns the field's address.
-void __fastcall lm_setShadowSunHeightOverFade(void* self, void*, const Vec2& range)
+void __fastcall lm_setShadowSunHeightOverFade(void* self BF2_EDX_PARAM, const Vec2& range)
 {
     const float first = range.x;
     lmField<float>(self, 0x178) = range.y;
     lmField<float>(self, 0x174) = first;
 }
-const Vec2& __fastcall lm_getShadowSunHeightOverFade(void* self, void*)
+const Vec2& __fastcall lm_getShadowSunHeightOverFade(void* self BF2_EDX_PARAM)
 {
     return lmField<Vec2>(self, 0x174);
 }
 
 // PE 0x100F1F10, +0x2D0. Four two-bit cells per byte, low bits first. The arithmetic
 // right shift of negative x is significant: the map origin is added before that byte offset.
-float __fastcall lm_sampleSimpleShadowMapTexel(void* self, void*, int x, int z)
+float __fastcall lm_sampleSimpleShadowMapTexel(void* self BF2_EDX_PARAM, int x, int z)
 {
     const unsigned int row = (static_cast<unsigned int>(z) + lmField<unsigned int>(self, 0x1B0))
                           * lmField<unsigned int>(self, 0x1A8)
@@ -5786,7 +5786,7 @@ float __fastcall lm_sampleSimpleShadowMapTexel(void* self, void*, int x, int z)
 
 // PE 0x100F2C10, +0x2CC. The IO map is a bit vector: compute the wrapped 32-bit bit index,
 // then use a logical shift for its word address. The only results are the shipped 0 and 1.
-float __fastcall lm_sampleSimpleShadowMapIOTexel(void* self, void*, int x, int z)
+float __fastcall lm_sampleSimpleShadowMapIOTexel(void* self BF2_EDX_PARAM, int x, int z)
 {
     const unsigned int bit =
         (static_cast<unsigned int>(z) + lmField<unsigned int>(self, 0x1A4))
@@ -5842,7 +5842,7 @@ float sampleSimpleShadowMapFiltered(void* self, float x, float z)
 // +0xEC, PE 0x1015CEC0. Enabling publishes the byte before resource creation, then replaces it with
 // the creation result. Disabling clears the three render-record vectors before invoking the device-
 // lost listener on the secondary this pointer.
-void __fastcall lm_setDynamicShadowsEnabled(void* self, void*, bool enabled)
+void __fastcall lm_setDynamicShadowsEnabled(void* self BF2_EDX_PARAM, bool enabled)
 {
     unsigned char& current = lmField<unsigned char>(self, 0x7EC);
     if (enabled)
@@ -5864,43 +5864,43 @@ void __fastcall lm_setDynamicShadowsEnabled(void* self, void*, bool enabled)
         releaseShadowResources(self, true);
     }
 }
-bool __fastcall lm_getDynamicShadowsEnabled(void* self, void*)
+bool __fastcall lm_getDynamicShadowsEnabled(void* self BF2_EDX_PARAM)
 {
     return lmField<unsigned char>(self, 0x7EC) != 0;
 }
 
-void __fastcall lm_setShadowIntensityBias(void* self, void*, float value)
+void __fastcall lm_setShadowIntensityBias(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x26C) = value;
     lmField<dx9rend::ShaderParameter*>(self, 0x894)->setFloat(value);
 }
-float __fastcall lm_getShadowIntensityBias(void* self, void*)
+float __fastcall lm_getShadowIntensityBias(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x26C);
 }
-void __fastcall lm_setLightMapIntensityBias(void* self, void*, float value)
+void __fastcall lm_setLightMapIntensityBias(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x270) = value;
     lmField<dx9rend::ShaderParameter*>(self, 0x898)->setFloat(value);
 }
-float __fastcall lm_getLightMapIntensityBias(void* self, void*)
+float __fastcall lm_getLightMapIntensityBias(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x270);
 }
 
-void __fastcall lm_setShadowUpdatesEnabled(void* self, void*, bool enabled)
+void __fastcall lm_setShadowUpdatesEnabled(void* self BF2_EDX_PARAM, bool enabled)
 {
     lmField<unsigned char>(self, 0x7F9) = enabled ? 1 : 0;
 }
-bool __fastcall lm_getShadowUpdatesEnabled(void* self, void*)
+bool __fastcall lm_getShadowUpdatesEnabled(void* self BF2_EDX_PARAM)
 {
     return lmField<unsigned char>(self, 0x7F9) != 0;
 }
-void __fastcall lm_setShadowUseSweepTest(void* self, void*, bool enabled)
+void __fastcall lm_setShadowUseSweepTest(void* self BF2_EDX_PARAM, bool enabled)
 {
     lmField<unsigned char>(self, 0x170) = enabled ? 1 : 0;
 }
-bool __fastcall lm_getShadowUseSweepTest(void* self, void*)
+bool __fastcall lm_getShadowUseSweepTest(void* self BF2_EDX_PARAM)
 {
     return lmField<unsigned char>(self, 0x170) != 0;
 }
@@ -5908,11 +5908,11 @@ bool __fastcall lm_getShadowUseSweepTest(void* self, void*)
 // Console property shadowTSMFocus, primary +0x180/+0x184, PE
 // The directional TSM fitter reads this through the
 // getter rather than loading +0x814 itself.
-void __fastcall lm_setShadowTSMFocus(void* self, void*, float value)
+void __fastcall lm_setShadowTSMFocus(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x814) = value;
 }
-float __fastcall lm_getShadowTSMFocus(void* self, void*)
+float __fastcall lm_getShadowTSMFocus(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x814);
 }
@@ -5920,11 +5920,11 @@ float __fastcall lm_getShadowTSMFocus(void* self, void*)
 // +0xC4/+0xC8, PE 0x1015C150/0x1015C160.  The public spelling has not yet
 // been attested, but the bodies and their use by the stock point-shadow
 // predicate are exact: they write/read the feature byte at +0x268.
-void __fastcall lm_setShadowStaticFeature(void* self, void*, bool enabled)
+void __fastcall lm_setShadowStaticFeature(void* self BF2_EDX_PARAM, bool enabled)
 {
     lmField<unsigned char>(self, 0x268) = enabled ? 1 : 0;
 }
-bool __fastcall lm_getShadowStaticFeature(void* self, void*)
+bool __fastcall lm_getShadowStaticFeature(void* self BF2_EDX_PARAM)
 {
     return lmField<unsigned char>(self, 0x268) != 0;
 }
@@ -5932,7 +5932,7 @@ bool __fastcall lm_getShadowStaticFeature(void* self, void*)
 // +0x19C, PE 0x101679A0.  Profiler counters and the loader-zero diagnostic flush are nonfunctional
 // instrumentation; the renderer state, target, directional/point/spot and finalizer ordering is
 // otherwise the shipped transaction.
-void __fastcall lm_renderShadowMaps(void* self, void*)
+void __fastcall lm_renderShadowMaps(void* self BF2_EDX_PARAM)
 {
     if (!lmField<void*>(self, 0x14)
         || !lmField<unsigned char>(self, 0x7EC)
@@ -5963,13 +5963,13 @@ void __fastcall lm_renderShadowMaps(void* self, void*)
 // Keeping the implementation templated does not merge ABI entries: MSVC
 // still emits one __fastcall thunk per instantiated field offset.
 template <unsigned int Offset>
-void __fastcall lm_setVec3(void* self, void*, const Vec3* value)
+void __fastcall lm_setVec3(void* self BF2_EDX_PARAM, const Vec3* value)
 {
     lmField<Vec3>(self, Offset) = *value;
 }
 
 template <unsigned int Offset>
-const Vec3* __fastcall lm_getVec3(void* self, void*)
+const Vec3* __fastcall lm_getVec3(void* self BF2_EDX_PARAM)
 {
     return &lmField<Vec3>(self, Offset);
 }
@@ -5984,7 +5984,7 @@ inline bool vec3EpsilonEqual(const Vec3& a, const Vec3& b)
 
 // PE 0x1015CB80/0x1015CC40, primary +0x1A0/+0x1A4. The manager interface takes and returns Vec3
 // by value; the explicit output pointer below is the physical MSVC x86 sret parameter.
-void __fastcall lm_setSunDirection(void* self, void*, Vec3 value)
+void __fastcall lm_setSunDirection(void* self BF2_EDX_PARAM, Vec3 value)
 {
     world::LightSource* const sun = lmField<world::LightSource*>(self, 0x840);
     sun->setDirection(value);
@@ -5994,19 +5994,19 @@ void __fastcall lm_setSunDirection(void* self, void*, Vec3 value)
     dx9rend::raShaderConstantsSetEngineTexture(0x2B8, normalCube);
 }
 
-Vec3* __fastcall lm_getSunDirection(void* self, void*, Vec3* out)
+Vec3* __fastcall lm_getSunDirection(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getDirection();
     return out;
 }
 
 // +0x1A8 / +0x1AC
-void __fastcall lm_setSunColor(void* self, void*, Vec3 value)
+void __fastcall lm_setSunColor(void* self BF2_EDX_PARAM, Vec3 value)
 {
     lmField<world::LightSource*>(self, 0x840)->setColor(value);
 }
 
-Vec3* __fastcall lm_getSunColor(void* self, void*, Vec3* out)
+Vec3* __fastcall lm_getSunColor(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getColor();
     return out;
@@ -6015,7 +6015,7 @@ Vec3* __fastcall lm_getSunColor(void* self, void*, Vec3* out)
 // PE 0x1015CCA0/0x1015CDD0, primary +0x1B0/+0x1B4. Exact epsilon equality skips every effect.
 // Otherwise a squared delta >= 0.0025 (and unordered/NaN) regenerates one member of the four-LUT
 // ring before the live LightSource receives the new specular colour.
-void __fastcall lm_setSunSpecColor(void* self, void*, Vec3 value)
+void __fastcall lm_setSunSpecColor(void* self BF2_EDX_PARAM, Vec3 value)
 {
     world::LightSource* const sun = lmField<world::LightSource*>(self, 0x840);
     bool regenerate = lmField<dx9rend::EngineTexture*>(self, 0x250) == 0;
@@ -6046,7 +6046,7 @@ void __fastcall lm_setSunSpecColor(void* self, void*, Vec3 value)
     sun->setSpecColor(value);
 }
 
-Vec3* __fastcall lm_getSunSpecColor(void* self, void*, Vec3* out)
+Vec3* __fastcall lm_getSunSpecColor(void* self BF2_EDX_PARAM, Vec3* out)
 {
     *out = lmField<world::LightSource*>(self, 0x840)->getSpecColor();
     return out;
@@ -6054,7 +6054,7 @@ Vec3* __fastcall lm_getSunSpecColor(void* self, void*, Vec3* out)
 
 // PE 0x1015BF80/0x1015BFB0, primary +0x1B8/+0x1BC. This is Object flag bit zero, not
 // LightSource::setEnabled: true clears the disabled bit and false sets it.
-void __fastcall lm_setSunEnabled(void* self, void*, bool enabled)
+void __fastcall lm_setSunEnabled(void* self BF2_EDX_PARAM, bool enabled)
 {
     world::LightSource* const sun = lmField<world::LightSource*>(self, 0x840);
     if (enabled)
@@ -6063,39 +6063,39 @@ void __fastcall lm_setSunEnabled(void* self, void*, bool enabled)
         sun->updateFlags(1, 0);
 }
 
-bool __fastcall lm_getSunEnabled(void* self, void*)
+bool __fastcall lm_getSunEnabled(void* self BF2_EDX_PARAM)
 {
     return (lightSourceFlags(lmField<world::LightSource*>(self, 0x840)) & 1u) == 0;
 }
 
 // Console property defaultEffectLightAffectionFactor: +0x26C setter, +0x270 getter.
-void __fastcall lm_setDefaultEffectFactor(void* self, void*, float value)
+void __fastcall lm_setDefaultEffectFactor(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x138) = value;
 }
-float __fastcall lm_getDefaultEffectFactor(void* self, void*)
+float __fastcall lm_getDefaultEffectFactor(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x138);
 }
 
 // Console property dynamicLightRangeScale: +0x2DC setter, +0x2E0 getter. PE 0x1015C5A0 and
 // 0x1015C5B0 are direct stores/loads at +0x824; the constructor writes 1.0f.
-void __fastcall lm_setDynamicLightRangeScale(void* self, void*, float value)
+void __fastcall lm_setDynamicLightRangeScale(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x824) = value;
 }
-float __fastcall lm_getDynamicLightRangeScale(void* self, void*)
+float __fastcall lm_getDynamicLightRangeScale(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x824);
 }
 
 // Console property occludedSkyNightIntensity: +0x2E4 setter, +0x2E8 getter. PE 0x1015C5C0 is
 // exactly an x87 load from +0x828; zero-fill supplies the shipped constructor default 0.0f.
-void __fastcall lm_setOccludedSkyNightIntensity(void* self, void*, float value)
+void __fastcall lm_setOccludedSkyNightIntensity(void* self BF2_EDX_PARAM, float value)
 {
     lmField<float>(self, 0x828) = value;
 }
-float __fastcall lm_getOccludedSkyNightIntensity(void* self, void*)
+float __fastcall lm_getOccludedSkyNightIntensity(void* self BF2_EDX_PARAM)
 {
     return lmField<float>(self, 0x828);
 }
@@ -6103,7 +6103,7 @@ float __fastcall lm_getOccludedSkyNightIntensity(void* self, void*)
 // PE 0x1015CE30, primary vtable +0x2F0. Mesh renderers publish the shadow Effect associated
 // with their GeometryTemplate reflection type. Replacement releases the previous map value,
 // stores the new pointer, then unconditionally retains it; retail has no null guard here.
-void __fastcall lm_registerShadowEffect(void* self, void*, int reflectionTypeId,
+void __fastcall lm_registerShadowEffect(void* self BF2_EDX_PARAM, int reflectionTypeId,
                                         dx9rend::Effect* effect)
 {
     ShadowTreeNode* const node = shadowTreeFindOrInsert(
@@ -6140,46 +6140,46 @@ void lightManagerSetDepthStencil(IDirect3DSurface9* surface)
 // boundary; no source caller indexes that table.
 void LightManager::addRef()
 {
-    (void)lm_addRef(this, 0);
+    (void)lm_addRef(this);
 }
 
 int LightManager::getRef()
 {
-    return lm_getRef(this, 0);
+    return lm_getRef(this);
 }
 
 int LightManager::release()
 {
-    return lm_release(this, 0);
+    return lm_release(this);
 }
 
 void* LightManager::queryInterface(unsigned int iid) const
 {
-    return lm_queryInterface(const_cast<LightManager*>(this), 0, iid);
+    return lm_queryInterface(const_cast<LightManager*>(this), iid);
 }
 
 void LightManager::update(double time)
 {
-    lm_update(this, 0, time);
+    lm_update(this, time);
 }
 
 void LightManager::getLightsByMask(vc71::vector_layout& out, unsigned int required,
                                    unsigned int forbidden)
 {
-    lm_getLightsByMask(this, 0, &out, required, forbidden);
+    lm_getLightsByMask(this, &out, required, forbidden);
 }
 
 void LightManager::getVisibleLightsByMask(vc71::vector_layout& out, unsigned int required,
                                           unsigned int forbidden)
 {
-    lm_getVisibleLightsByMask(this, 0, &out, required, forbidden);
+    lm_getVisibleLightsByMask(this, &out, required, forbidden);
 }
 
 void LightManager::gatherLights(const Vec3& position, float radius, vc71::vector_layout& out,
                                 unsigned int maxLights, unsigned int required,
                                 unsigned int forbidden, bool occlusionTest)
 {
-    lm_gatherLights(this, 0, &position, radius, &out, maxLights, required, forbidden,
+    lm_gatherLights(this, &position, radius, &out, maxLights, required, forbidden,
                     occlusionTest ? 1u : 0u);
 }
 
@@ -6187,38 +6187,38 @@ void LightManager::gatherLightsForGeometry(void* geometry, vc71::vector_layout& 
                                            unsigned int maxLights, unsigned int required,
                                            unsigned int forbidden, bool occlusionTest)
 {
-    lm_gatherLightsForGeometry(this, 0, geometry, &out, maxLights, required, forbidden,
+    lm_gatherLightsForGeometry(this, geometry, &out, maxLights, required, forbidden,
                                occlusionTest ? 1 : 0);
 }
 
 int LightManager::getStaticMeshShadowLod() const
 {
-    return lm_getStaticMeshShadowLod(const_cast<LightManager*>(this), 0);
+    return lm_getStaticMeshShadowLod(const_cast<LightManager*>(this));
 }
 
 int LightManager::getShadowMergeLodLimit() const
 {
-    return lm_getShadowMergeLodLimit(const_cast<LightManager*>(this), 0);
+    return lm_getShadowMergeLodLimit(const_cast<LightManager*>(this));
 }
 
 void LightManager::setSkyLight(world::LightSource* light)
 {
-    lm_setSkyLight(this, 0, light);
+    lm_setSkyLight(this, light);
 }
 
 world::LightSource* LightManager::getSkyLight() const
 {
-    return lm_getSkyLight(const_cast<LightManager*>(this), 0);
+    return lm_getSkyLight(const_cast<LightManager*>(this));
 }
 
 #define BF2_LIGHT_DEFINE_COLOR_PROPERTY(Name, Offset)                              \
     void LightManager::set##Name(const Vec3& color)                                \
     {                                                                               \
-        lm_setVec3<Offset>(this, 0, &color);                                        \
+        lm_setVec3<Offset>(this, &color);                                        \
     }                                                                               \
     const Vec3& LightManager::get##Name() const                                     \
     {                                                                               \
-        return *lm_getVec3<Offset>(const_cast<LightManager*>(this), 0);             \
+        return *lm_getVec3<Offset>(const_cast<LightManager*>(this));             \
     }
 
 BF2_LIGHT_DEFINE_COLOR_PROPERTY(SkyColor, 0x018u)
@@ -6303,113 +6303,113 @@ const vc71::string& LightManager::getGroundHemi() const
 
 void LightManager::setLightCullDistance(float distance)
 {
-    lm_setLightCullDistance(this, 0, distance);
+    lm_setLightCullDistance(this, distance);
 }
 
 float LightManager::getLightCullDistance() const
 {
-    return lm_getLightCullDistance(const_cast<LightManager*>(this), 0);
+    return lm_getLightCullDistance(const_cast<LightManager*>(this));
 }
 
 void LightManager::setMaxLightsPerBundledMesh(int quality)
 {
-    lm_setMaxLightsPerBundledMesh(this, 0, quality);
+    lm_setMaxLightsPerBundledMesh(this, quality);
 }
 
 int LightManager::getMaxLightsPerBundledMesh() const
 {
-    return lm_getMaxLightsPerBundledMesh(const_cast<LightManager*>(this), 0);
+    return lm_getMaxLightsPerBundledMesh(const_cast<LightManager*>(this));
 }
 
 void LightManager::setMaxLightsPerStaticMesh(int quality)
 {
-    lm_setMaxLightsPerStaticMesh(this, 0, quality);
+    lm_setMaxLightsPerStaticMesh(this, quality);
 }
 
 int LightManager::getMaxLightsPerStaticMesh() const
 {
-    return lm_getMaxLightsPerStaticMesh(const_cast<LightManager*>(this), 0);
+    return lm_getMaxLightsPerStaticMesh(const_cast<LightManager*>(this));
 }
 
 void LightManager::setMaxLightsPerSkinnedMesh(int quality)
 {
-    lm_setMaxLightsPerSkinnedMesh(this, 0, quality);
+    lm_setMaxLightsPerSkinnedMesh(this, quality);
 }
 
 int LightManager::getMaxLightsPerSkinnedMesh() const
 {
-    return lm_getMaxLightsPerSkinnedMesh(const_cast<LightManager*>(this), 0);
+    return lm_getMaxLightsPerSkinnedMesh(const_cast<LightManager*>(this));
 }
 
 void LightManager::setMaxLightsPerTerrainPatch(int quality)
 {
-    lm_setMaxLightsPerTerrainPatch(this, 0, quality);
+    lm_setMaxLightsPerTerrainPatch(this, quality);
 }
 
 int LightManager::getMaxLightsPerTerrainPatch() const
 {
-    return lm_getMaxLightsPerTerrainPatch(const_cast<LightManager*>(this), 0);
+    return lm_getMaxLightsPerTerrainPatch(const_cast<LightManager*>(this));
 }
 
 void LightManager::setSkinnedMeshShaderLodDistance(float distance)
 {
-    lm_setSkinnedMeshShaderLodDistance(this, 0, distance);
+    lm_setSkinnedMeshShaderLodDistance(this, distance);
 }
 
 float LightManager::getSkinnedMeshShaderLodDistance() const
 {
-    return lm_getSkinnedMeshShaderLodDistance(const_cast<LightManager*>(this), 0);
+    return lm_getSkinnedMeshShaderLodDistance(const_cast<LightManager*>(this));
 }
 
 const Vec2& LightManager::getLightMapAmbientAlphaCutoffRange() const
 {
-    return lm_getLightMapAmbientAlphaCutoffRange(const_cast<LightManager*>(this), 0);
+    return lm_getLightMapAmbientAlphaCutoffRange(const_cast<LightManager*>(this));
 }
 
 void LightManager::setLightMapAmbientAlphaCutoffRange(const Vec2& range)
 {
-    lm_setLightMapAmbientAlphaCutoffRange(this, 0, range);
+    lm_setLightMapAmbientAlphaCutoffRange(this, range);
 }
 
 void LightManager::setBundledMeshShadowLod(int lod)
 {
-    lm_setBundledMeshShadowLod(this, 0, lod);
+    lm_setBundledMeshShadowLod(this, lod);
 }
 int LightManager::getBundledMeshShadowLod() const
 {
-    return lm_getBundledMeshShadowLod(const_cast<LightManager*>(this), 0);
+    return lm_getBundledMeshShadowLod(const_cast<LightManager*>(this));
 }
 void LightManager::setShadowRoofRayLength(float length)
 {
-    lm_setShadowRoofRayLength(this, 0, length);
+    lm_setShadowRoofRayLength(this, length);
 }
 float LightManager::getShadowRoofRayLength() const
 {
-    return lm_getShadowRoofRayLength(const_cast<LightManager*>(this), 0);
+    return lm_getShadowRoofRayLength(const_cast<LightManager*>(this));
 }
 void LightManager::setSkinnedMeshShadowLod(int lod)
 {
-    lm_setSkinnedMeshShadowLod(this, 0, lod);
+    lm_setSkinnedMeshShadowLod(this, lod);
 }
 int LightManager::getSkinnedMeshShadowLod() const
 {
-    return lm_getSkinnedMeshShadowLod(const_cast<LightManager*>(this), 0);
+    return lm_getSkinnedMeshShadowLod(const_cast<LightManager*>(this));
 }
 void LightManager::setShadowSunScalePower(float power)
 {
-    lm_setShadowSunScalePower(this, 0, power);
+    lm_setShadowSunScalePower(this, power);
 }
 float LightManager::getShadowSunScalePower() const
 {
-    return lm_getShadowSunScalePower(const_cast<LightManager*>(this), 0);
+    return lm_getShadowSunScalePower(const_cast<LightManager*>(this));
 }
 void LightManager::setShadowSunHeightOverFade(const Vec2& range)
 {
-    lm_setShadowSunHeightOverFade(this, 0, range);
+    lm_setShadowSunHeightOverFade(this, range);
 }
 const Vec2& LightManager::getShadowSunHeightOverFade() const
 {
-    return lm_getShadowSunHeightOverFade(const_cast<LightManager*>(this), 0);
+    return lm_getShadowSunHeightOverFade(const_cast<LightManager*>(this));
 }
 float LightManager::sampleSimpleShadowMap(float x, float z) const
 {
@@ -6421,187 +6421,187 @@ float LightManager::sampleSimpleShadowMapIO(float x, float z) const
 }
 float LightManager::sampleSimpleShadowMapIOTexel(int x, int z) const
 {
-    return lm_sampleSimpleShadowMapIOTexel(const_cast<LightManager*>(this), 0, x, z);
+    return lm_sampleSimpleShadowMapIOTexel(const_cast<LightManager*>(this), x, z);
 }
 float LightManager::sampleSimpleShadowMapTexel(int x, int z) const
 {
-    return lm_sampleSimpleShadowMapTexel(const_cast<LightManager*>(this), 0, x, z);
+    return lm_sampleSimpleShadowMapTexel(const_cast<LightManager*>(this), x, z);
 }
 
 void LightManager::addLight(world::LightSource* light)
 {
-    lm_addLight(this, 0, light);
+    lm_addLight(this, light);
 }
 
 void LightManager::removeLight(world::LightSource* light)
 {
-    lm_removeLight(this, 0, light);
+    lm_removeLight(this, light);
 }
 
 void LightManager::enableLight(world::LightSource* light)
 {
-    lm_enableLight(this, 0, light);
+    lm_enableLight(this, light);
 }
 
 void LightManager::disableLight(world::LightSource* light)
 {
-    lm_disableLight(this, 0, light);
+    lm_disableLight(this, light);
 }
 
 void LightManager::setShadowStaticFeature(bool enabled)
 {
-    lm_setShadowStaticFeature(this, 0, enabled);
+    lm_setShadowStaticFeature(this, enabled);
 }
 
 bool LightManager::getShadowStaticFeature() const
 {
-    return lm_getShadowStaticFeature(const_cast<LightManager*>(this), 0);
+    return lm_getShadowStaticFeature(const_cast<LightManager*>(this));
 }
 
 void LightManager::setShadowIntensityBias(float value)
 {
-    lm_setShadowIntensityBias(this, 0, value);
+    lm_setShadowIntensityBias(this, value);
 }
 
 float LightManager::getShadowIntensityBias() const
 {
-    return lm_getShadowIntensityBias(const_cast<LightManager*>(this), 0);
+    return lm_getShadowIntensityBias(const_cast<LightManager*>(this));
 }
 
 void LightManager::setLightMapIntensityBias(float value)
 {
-    lm_setLightMapIntensityBias(this, 0, value);
+    lm_setLightMapIntensityBias(this, value);
 }
 
 float LightManager::getLightMapIntensityBias() const
 {
-    return lm_getLightMapIntensityBias(const_cast<LightManager*>(this), 0);
+    return lm_getLightMapIntensityBias(const_cast<LightManager*>(this));
 }
 
 void LightManager::setDynamicShadowsEnabled(bool enabled)
 {
-    lm_setDynamicShadowsEnabled(this, 0, enabled);
+    lm_setDynamicShadowsEnabled(this, enabled);
 }
 
 bool LightManager::getDynamicShadowsEnabled() const
 {
-    return lm_getDynamicShadowsEnabled(const_cast<LightManager*>(this), 0);
+    return lm_getDynamicShadowsEnabled(const_cast<LightManager*>(this));
 }
 
 void LightManager::setShadowUpdatesEnabled(bool enabled)
 {
-    lm_setShadowUpdatesEnabled(this, 0, enabled);
+    lm_setShadowUpdatesEnabled(this, enabled);
 }
 
 bool LightManager::getShadowUpdatesEnabled() const
 {
-    return lm_getShadowUpdatesEnabled(const_cast<LightManager*>(this), 0);
+    return lm_getShadowUpdatesEnabled(const_cast<LightManager*>(this));
 }
 
 void LightManager::setShadowTSMFocus(float value)
 {
-    lm_setShadowTSMFocus(this, 0, value);
+    lm_setShadowTSMFocus(this, value);
 }
 
 float LightManager::getShadowTSMFocus() const
 {
-    return lm_getShadowTSMFocus(const_cast<LightManager*>(this), 0);
+    return lm_getShadowTSMFocus(const_cast<LightManager*>(this));
 }
 
 void LightManager::renderShadowMaps()
 {
-    lm_renderShadowMaps(this, 0);
+    lm_renderShadowMaps(this);
 }
 
 void LightManager::setSunDirection(Vec3 direction)
 {
-    lm_setSunDirection(this, 0, direction);
+    lm_setSunDirection(this, direction);
 }
 
 Vec3 LightManager::getSunDirection() const
 {
     Vec3 result;
-    lm_getSunDirection(const_cast<LightManager*>(this), 0, &result);
+    lm_getSunDirection(const_cast<LightManager*>(this), &result);
     return result;
 }
 
 void LightManager::setSunColor(Vec3 color)
 {
-    lm_setSunColor(this, 0, color);
+    lm_setSunColor(this, color);
 }
 
 Vec3 LightManager::getSunColor() const
 {
     Vec3 result;
-    lm_getSunColor(const_cast<LightManager*>(this), 0, &result);
+    lm_getSunColor(const_cast<LightManager*>(this), &result);
     return result;
 }
 
 void LightManager::setSunSpecColor(Vec3 color)
 {
-    lm_setSunSpecColor(this, 0, color);
+    lm_setSunSpecColor(this, color);
 }
 
 Vec3 LightManager::getSunSpecColor() const
 {
     Vec3 result;
-    lm_getSunSpecColor(const_cast<LightManager*>(this), 0, &result);
+    lm_getSunSpecColor(const_cast<LightManager*>(this), &result);
     return result;
 }
 
 void LightManager::setSunEnabled(bool enabled)
 {
-    lm_setSunEnabled(this, 0, enabled);
+    lm_setSunEnabled(this, enabled);
 }
 
 bool LightManager::getSunEnabled() const
 {
-    return lm_getSunEnabled(const_cast<LightManager*>(this), 0);
+    return lm_getSunEnabled(const_cast<LightManager*>(this));
 }
 
 void LightManager::setDefaultEffectLightAffectionFactor(float factor)
 {
-    lm_setDefaultEffectFactor(this, 0, factor);
+    lm_setDefaultEffectFactor(this, factor);
 }
 
 float LightManager::getDefaultEffectLightAffectionFactor() const
 {
-    return lm_getDefaultEffectFactor(const_cast<LightManager*>(this), 0);
+    return lm_getDefaultEffectFactor(const_cast<LightManager*>(this));
 }
 
 void LightManager::setShadowUseSweepTest(bool enabled)
 {
-    lm_setShadowUseSweepTest(this, 0, enabled);
+    lm_setShadowUseSweepTest(this, enabled);
 }
 
 bool LightManager::getShadowUseSweepTest() const
 {
-    return lm_getShadowUseSweepTest(const_cast<LightManager*>(this), 0);
+    return lm_getShadowUseSweepTest(const_cast<LightManager*>(this));
 }
 
 void LightManager::setDynamicLightRangeScale(float scale)
 {
-    lm_setDynamicLightRangeScale(this, 0, scale);
+    lm_setDynamicLightRangeScale(this, scale);
 }
 
 float LightManager::getDynamicLightRangeScale() const
 {
-    return lm_getDynamicLightRangeScale(const_cast<LightManager*>(this), 0);
+    return lm_getDynamicLightRangeScale(const_cast<LightManager*>(this));
 }
 
 void LightManager::setOccludedSkyNightIntensity(float intensity)
 {
-    lm_setOccludedSkyNightIntensity(this, 0, intensity);
+    lm_setOccludedSkyNightIntensity(this, intensity);
 }
 
 float LightManager::getOccludedSkyNightIntensity() const
 {
-    return lm_getOccludedSkyNightIntensity(const_cast<LightManager*>(this), 0);
+    return lm_getOccludedSkyNightIntensity(const_cast<LightManager*>(this));
 }
 
 void LightManager::registerShadowEffect(int reflectionTypeId, dx9rend::Effect* effect)
 {
-    lm_registerShadowEffect(this, 0, reflectionTypeId, effect);
+    lm_registerShadowEffect(this, reflectionTypeId, effect);
 }
 
 // The explicit host table requires plain x86 entry points. Keeping these adapters nested under
@@ -6611,48 +6611,48 @@ struct LightManager::HostAbi
 {
     static LightManager& object(void* self) { return *static_cast<LightManager*>(self); }
 
-    static void __fastcall addRef(void* self, void*) { object(self).LightManager::addRef(); }
-    static int __fastcall getRef(void* self, void*) { return object(self).LightManager::getRef(); }
-    static int __fastcall release(void* self, void*) { return object(self).LightManager::release(); }
-    static void* __fastcall queryInterface(void* self, void*, unsigned int iid)
+    static void __fastcall addRef(void* self BF2_EDX_PARAM) { object(self).LightManager::addRef(); }
+    static int __fastcall getRef(void* self BF2_EDX_PARAM) { return object(self).LightManager::getRef(); }
+    static int __fastcall release(void* self BF2_EDX_PARAM) { return object(self).LightManager::release(); }
+    static void* __fastcall queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
     { return object(self).LightManager::queryInterface(iid); }
-    static void __fastcall update(void* self, void*, double time)
+    static void __fastcall update(void* self BF2_EDX_PARAM, double time)
     { object(self).LightManager::update(time); }
-    static void __fastcall getLightsByMask(void* self, void*, vc71::vector_layout* out,
+    static void __fastcall getLightsByMask(void* self BF2_EDX_PARAM, vc71::vector_layout* out,
                                            unsigned int required, unsigned int forbidden)
     { object(self).LightManager::getLightsByMask(*out, required, forbidden); }
-    static void __fastcall getVisibleLightsByMask(void* self, void*, vc71::vector_layout* out,
+    static void __fastcall getVisibleLightsByMask(void* self BF2_EDX_PARAM, vc71::vector_layout* out,
                                                   unsigned int required, unsigned int forbidden)
     { object(self).LightManager::getVisibleLightsByMask(*out, required, forbidden); }
-    static int __fastcall getStaticMeshShadowLod(void* self, void*)
+    static int __fastcall getStaticMeshShadowLod(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getStaticMeshShadowLod(); }
-    static void __fastcall setBundledMeshShadowLod(void* self, void*, int lod)
+    static void __fastcall setBundledMeshShadowLod(void* self BF2_EDX_PARAM, int lod)
     { object(self).LightManager::setBundledMeshShadowLod(lod); }
-    static int __fastcall getBundledMeshShadowLod(void* self, void*)
+    static int __fastcall getBundledMeshShadowLod(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getBundledMeshShadowLod(); }
-    static int __fastcall getShadowMergeLodLimit(void* self, void*)
+    static int __fastcall getShadowMergeLodLimit(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getShadowMergeLodLimit(); }
-    static void __fastcall gatherLights(void* self, void*, const Vec3* position, float radius,
+    static void __fastcall gatherLights(void* self BF2_EDX_PARAM, const Vec3* position, float radius,
                                         vc71::vector_layout* out, unsigned int maxLights,
                                         unsigned int required, unsigned int forbidden,
                                         unsigned char occlusionTest)
     { object(self).LightManager::gatherLights(*position, radius, *out, maxLights, required,
                                               forbidden, occlusionTest != 0); }
-    static void __fastcall gatherLightsForGeometry(void* self, void*, void* geometry,
+    static void __fastcall gatherLightsForGeometry(void* self BF2_EDX_PARAM, void* geometry,
                                                    vc71::vector_layout* out,
                                                    unsigned int maxLights, unsigned int required,
                                                    unsigned int forbidden, int occlusionTest)
     { object(self).LightManager::gatherLightsForGeometry(geometry, *out, maxLights, required,
                                                          forbidden, occlusionTest != 0); }
-    static void __fastcall setSkyLight(void* self, void*, world::LightSource* light)
+    static void __fastcall setSkyLight(void* self BF2_EDX_PARAM, world::LightSource* light)
     { object(self).LightManager::setSkyLight(light); }
-    static world::LightSource* __fastcall getSkyLight(void* self, void*)
+    static world::LightSource* __fastcall getSkyLight(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getSkyLight(); }
 
 #define BF2_LIGHT_HOST_COLOR(Name)                                                \
-    static void __fastcall set##Name(void* self, void*, const Vec3* color)         \
+    static void __fastcall set##Name(void* self BF2_EDX_PARAM, const Vec3* color)         \
     { object(self).LightManager::set##Name(*color); }                              \
-    static const Vec3* __fastcall get##Name(void* self, void*)                     \
+    static const Vec3* __fastcall get##Name(void* self BF2_EDX_PARAM)                     \
     { return &object(self).LightManager::get##Name(); }
 
     BF2_LIGHT_HOST_COLOR(SkyColor)
@@ -6670,23 +6670,23 @@ struct LightManager::HostAbi
 
 #undef BF2_LIGHT_HOST_COLOR
 
-    static void __fastcall setGroundHemi(void* self, void*, const LightManagerHostString* name)
+    static void __fastcall setGroundHemi(void* self BF2_EDX_PARAM, const LightManagerHostString* name)
     { object(self).LightManager::setGroundHemi(*name); }
-    static const vc71::string* __fastcall getGroundHemi(void* self, void*)
+    static const vc71::string* __fastcall getGroundHemi(void* self BF2_EDX_PARAM)
     { return &object(self).LightManager::getGroundHemi(); }
-    static void __fastcall setHemiLerpBias(void* self, void*, float bias)
+    static void __fastcall setHemiLerpBias(void* self BF2_EDX_PARAM, float bias)
     { object(self).LightManager::setHemiLerpBias(bias); }
-    static float __fastcall getHemiLerpBias(void* self, void*)
+    static float __fastcall getHemiLerpBias(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getHemiLerpBias(); }
-    static void __fastcall setLightCullDistance(void* self, void*, float value)
+    static void __fastcall setLightCullDistance(void* self BF2_EDX_PARAM, float value)
     { object(self).LightManager::setLightCullDistance(value); }
-    static float __fastcall getLightCullDistance(void* self, void*)
+    static float __fastcall getLightCullDistance(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getLightCullDistance(); }
 
 #define BF2_LIGHT_HOST_INT_PROPERTY(Name)                                         \
-    static void __fastcall set##Name(void* self, void*, int value)                 \
+    static void __fastcall set##Name(void* self BF2_EDX_PARAM, int value)                 \
     { object(self).LightManager::set##Name(value); }                                \
-    static int __fastcall get##Name(void* self, void*)                              \
+    static int __fastcall get##Name(void* self BF2_EDX_PARAM)                              \
     { return object(self).LightManager::get##Name(); }
 
     BF2_LIGHT_HOST_INT_PROPERTY(MaxLightsPerBundledMesh)
@@ -6697,19 +6697,19 @@ struct LightManager::HostAbi
 
 #undef BF2_LIGHT_HOST_INT_PROPERTY
 
-    static void __fastcall addLight(void* self, void*, world::LightSource* light)
+    static void __fastcall addLight(void* self BF2_EDX_PARAM, world::LightSource* light)
     { object(self).LightManager::addLight(light); }
-    static void __fastcall removeLight(void* self, void*, world::LightSource* light)
+    static void __fastcall removeLight(void* self BF2_EDX_PARAM, world::LightSource* light)
     { object(self).LightManager::removeLight(light); }
-    static void __fastcall enableLight(void* self, void*, world::LightSource* light)
+    static void __fastcall enableLight(void* self BF2_EDX_PARAM, world::LightSource* light)
     { object(self).LightManager::enableLight(light); }
-    static void __fastcall disableLight(void* self, void*, world::LightSource* light)
+    static void __fastcall disableLight(void* self BF2_EDX_PARAM, world::LightSource* light)
     { object(self).LightManager::disableLight(light); }
 
 #define BF2_LIGHT_HOST_BOOL_PROPERTY(Name)                                        \
-    static void __fastcall set##Name(void* self, void*, bool value)                \
+    static void __fastcall set##Name(void* self BF2_EDX_PARAM, bool value)                \
     { object(self).LightManager::set##Name(value); }                                \
-    static bool __fastcall get##Name(void* self, void*)                             \
+    static bool __fastcall get##Name(void* self BF2_EDX_PARAM)                             \
     { return object(self).LightManager::get##Name(); }
 
     BF2_LIGHT_HOST_BOOL_PROPERTY(ShadowStaticFeature)
@@ -6720,9 +6720,9 @@ struct LightManager::HostAbi
 #undef BF2_LIGHT_HOST_BOOL_PROPERTY
 
 #define BF2_LIGHT_HOST_FLOAT_PROPERTY(Name)                                       \
-    static void __fastcall set##Name(void* self, void*, float value)               \
+    static void __fastcall set##Name(void* self BF2_EDX_PARAM, float value)               \
     { object(self).LightManager::set##Name(value); }                                \
-    static float __fastcall get##Name(void* self, void*)                            \
+    static float __fastcall get##Name(void* self BF2_EDX_PARAM)                            \
     { return object(self).LightManager::get##Name(); }
 
     BF2_LIGHT_HOST_FLOAT_PROPERTY(SkinnedMeshShaderLodDistance)
@@ -6737,61 +6737,61 @@ struct LightManager::HostAbi
 
 #undef BF2_LIGHT_HOST_FLOAT_PROPERTY
 
-    static const Vec2* __fastcall getLightMapAmbientAlphaCutoffRange(void* self, void*)
+    static const Vec2* __fastcall getLightMapAmbientAlphaCutoffRange(void* self BF2_EDX_PARAM)
     { return &object(self).LightManager::getLightMapAmbientAlphaCutoffRange(); }
-    static void __fastcall setLightMapAmbientAlphaCutoffRange(void* self, void*, const Vec2* range)
+    static void __fastcall setLightMapAmbientAlphaCutoffRange(void* self BF2_EDX_PARAM, const Vec2* range)
     { object(self).LightManager::setLightMapAmbientAlphaCutoffRange(*range); }
-    static void __fastcall setShadowSunHeightOverFade(void* self, void*, const Vec2* range)
+    static void __fastcall setShadowSunHeightOverFade(void* self BF2_EDX_PARAM, const Vec2* range)
     { object(self).LightManager::setShadowSunHeightOverFade(*range); }
-    static const Vec2* __fastcall getShadowSunHeightOverFade(void* self, void*)
+    static const Vec2* __fastcall getShadowSunHeightOverFade(void* self BF2_EDX_PARAM)
     { return &object(self).LightManager::getShadowSunHeightOverFade(); }
-    static float __fastcall sampleSimpleShadowMap(void* self, void*, float x, float z)
+    static float __fastcall sampleSimpleShadowMap(void* self BF2_EDX_PARAM, float x, float z)
     { return object(self).LightManager::sampleSimpleShadowMap(x, z); }
-    static float __fastcall sampleSimpleShadowMapIO(void* self, void*, float x, float z)
+    static float __fastcall sampleSimpleShadowMapIO(void* self BF2_EDX_PARAM, float x, float z)
     { return object(self).LightManager::sampleSimpleShadowMapIO(x, z); }
-    static float __fastcall sampleSimpleShadowMapIOTexel(void* self, void*, int x, int z)
+    static float __fastcall sampleSimpleShadowMapIOTexel(void* self BF2_EDX_PARAM, int x, int z)
     { return object(self).LightManager::sampleSimpleShadowMapIOTexel(x, z); }
-    static float __fastcall sampleSimpleShadowMapTexel(void* self, void*, int x, int z)
+    static float __fastcall sampleSimpleShadowMapTexel(void* self BF2_EDX_PARAM, int x, int z)
     { return object(self).LightManager::sampleSimpleShadowMapTexel(x, z); }
 
-    static void __fastcall renderShadowMaps(void* self, void*)
+    static void __fastcall renderShadowMaps(void* self BF2_EDX_PARAM)
     { object(self).LightManager::renderShadowMaps(); }
-    static void __fastcall setSunDirection(void* self, void*, Vec3 value)
+    static void __fastcall setSunDirection(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunDirection(value); }
-    static Vec3* __fastcall getSunDirection(void* self, void*, Vec3* out)
+    static Vec3* __fastcall getSunDirection(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunDirection(); return out; }
-    static void __fastcall setSunColor(void* self, void*, Vec3 value)
+    static void __fastcall setSunColor(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunColor(value); }
-    static Vec3* __fastcall getSunColor(void* self, void*, Vec3* out)
+    static Vec3* __fastcall getSunColor(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunColor(); return out; }
-    static void __fastcall setSunSpecColor(void* self, void*, Vec3 value)
+    static void __fastcall setSunSpecColor(void* self BF2_EDX_PARAM, Vec3 value)
     { object(self).LightManager::setSunSpecColor(value); }
-    static Vec3* __fastcall getSunSpecColor(void* self, void*, Vec3* out)
+    static Vec3* __fastcall getSunSpecColor(void* self BF2_EDX_PARAM, Vec3* out)
     { *out = object(self).LightManager::getSunSpecColor(); return out; }
-    static void __fastcall setSunEnabled(void* self, void*, bool enabled)
+    static void __fastcall setSunEnabled(void* self BF2_EDX_PARAM, bool enabled)
     { object(self).LightManager::setSunEnabled(enabled); }
-    static bool __fastcall getSunEnabled(void* self, void*)
+    static bool __fastcall getSunEnabled(void* self BF2_EDX_PARAM)
     { return object(self).LightManager::getSunEnabled(); }
     static void __fastcall registerShadowEffect(
-        void* self, void*, int reflectionTypeId, dx9rend::Effect* effect)
+        void* self BF2_EDX_PARAM, int reflectionTypeId, dx9rend::Effect* effect)
     { object(self).LightManager::registerShadowEffect(reflectionTypeId, effect); }
-    static void __fastcall loadSimpleShadowMaps(void* self, void*)
+    static void __fastcall loadSimpleShadowMaps(void* self BF2_EDX_PARAM)
     { object(self).LightManager::loadSimpleShadowMaps(); }
 };
 
 namespace {
 
-void __fastcall lm_deviceLost(void* self, void*)
+void __fastcall lm_deviceLost(void* self BF2_EDX_PARAM)
 {
     releaseShadowResources(static_cast<unsigned char*>(self) - 4, true);
 }
-void __fastcall lm_deviceReset(void* self, void*)
+void __fastcall lm_deviceReset(void* self BF2_EDX_PARAM)
 {
     createShadowResourcesBody(static_cast<unsigned char*>(self) - 4);
 }
-void __fastcall lm_deviceNull(void*, void*) {}
+void __fastcall lm_deviceNull(void* BF2_EDX_PARAM) {}
 
-void __fastcall lm_renderPathActivated(void* self, void*, int path)
+void __fastcall lm_renderPathActivated(void* self BF2_EDX_PARAM, int path)
 {
     void* const base = static_cast<unsigned char*>(self) - 8;
     rebuildShadowAtlas(base);
@@ -6819,25 +6819,25 @@ void __fastcall lm_renderPathActivated(void* self, void*, int path)
         for (unsigned int i = 0; i < sizeof(parameters) / sizeof(parameters[0]); ++i)
             lmField<void*>(base, parameters[i].offset) =
                 getEffectParameter(effect, parameters[i].semantic);
-        lm_setShadowIntensityBias(base, 0, 0.0f);
-        lm_setLightMapIntensityBias(base, 0, 0.0f);
+        lm_setShadowIntensityBias(base, 0.0f);
+        lm_setLightMapIntensityBias(base, 0.0f);
     }
     lmField<dx9rend::EngineTexture*>(base, 0x8B8) =
         loadManagerTexture("Common/Textures/RadialAtt2");
     lmField<dx9rend::EngineTexture*>(base, 0x8BC) =
         loadManagerTexture("Common/Textures/ConicalAtt");
 }
-void __fastcall lm_renderPathNull04(void*, void*) {}
-void __fastcall lm_renderPathNull08(void*, void*, int) {}
-void __fastcall lm_renderPathNull0C(void*, void*, void*) {}
-void* __fastcall lm_getRenderPath(void* self, void*)
+void __fastcall lm_renderPathNull04(void* BF2_EDX_PARAM) {}
+void __fastcall lm_renderPathNull08(void* BF2_EDX_PARAM, int) {}
+void __fastcall lm_renderPathNull0C(void* BF2_EDX_PARAM, void*) {}
+void* __fastcall lm_getRenderPath(void* self BF2_EDX_PARAM)
 {
     // PE 0x101A9A10 returns secondaryThis[1].  The render-path listener subobject starts at
     // base+0x08, so this is the pointer at base+0x0C (zero in the partial constructor).
     return lmField<void*>(self, 0x04);
 }
 renddx9abi::HostString* __fastcall lm_getRenderPathName(
-    void*, void*, renddx9abi::HostString* out)
+    void* BF2_EDX_PARAM, renddx9abi::HostString* out)
 {
     // PE 0x100F7910 constructs this exact string into the caller's MSVC x86 sret storage and
     // returns it in EAX (`retn 4`). HostString selects the native or VC7.1 representation at the

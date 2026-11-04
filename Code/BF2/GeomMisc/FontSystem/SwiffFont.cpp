@@ -822,8 +822,8 @@ int FontRenderer::release()
     const int remaining = --m_refCount;
     if (!remaining)
     {
-        typedef void* (__fastcall* DestroyFn)(void*, void*, char);
-        reinterpret_cast<DestroyFn>(const_cast<void*>(m_vptr[0x10 / 4]))(this, 0, 1);
+        typedef void* (__fastcall* DestroyFn)(void* BF2_EDX_PARAM, char);
+        reinterpret_cast<DestroyFn>(const_cast<void*>(m_vptr[0x10 / 4]))(this, 1);
     }
     return remaining;
 }
@@ -847,12 +847,12 @@ void* FontRenderer::queryInterface(unsigned int iid) const
 }
 
 namespace {
-void  __fastcall fr_addRef(void* s, void*)  { static_cast<FontRenderer*>(s)->addRef(); }
-int   __fastcall fr_getRef(void* s, void*)  { return static_cast<FontRenderer*>(s)->getRef(); }
-int   __fastcall fr_release(void* s, void*) { return static_cast<FontRenderer*>(s)->release(); }
-void* __fastcall fr_queryInterface(void* s, void*, unsigned int iid)
+void  __fastcall fr_addRef(void* s BF2_EDX_PARAM)  { static_cast<FontRenderer*>(s)->addRef(); }
+int   __fastcall fr_getRef(void* s BF2_EDX_PARAM)  { return static_cast<FontRenderer*>(s)->getRef(); }
+int   __fastcall fr_release(void* s BF2_EDX_PARAM) { return static_cast<FontRenderer*>(s)->release(); }
+void* __fastcall fr_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return static_cast<FontRenderer*>(s)->queryInterface(iid); }
-void* __fastcall fr_destroy(void* s, void*, char flags)
+void* __fastcall fr_destroy(void* s BF2_EDX_PARAM, char flags)
 { static_cast<FontRenderer*>(s)->destroy(flags); return s; }
 
 // 0x1020D274, five slots in the shipped order.
@@ -866,9 +866,9 @@ const void* kFontRendererVtable[5] =
 };
 
 // 0x1020D268, the listener table (the three dwords before the primary).
-void __fastcall fr_onDeviceLost(void* sub, void*)  { FontRenderer::fromListener(sub)->onDeviceLost(); }
-void __fastcall fr_onDeviceReset(void* sub, void*) { FontRenderer::fromListener(sub)->onDeviceReset(); }
-void __fastcall fr_onDeviceDestroy(void*, void*)   { /* 0x10037D40: ret, the shared nullsub */ }
+void __fastcall fr_onDeviceLost(void* sub BF2_EDX_PARAM)  { FontRenderer::fromListener(sub)->onDeviceLost(); }
+void __fastcall fr_onDeviceReset(void* sub BF2_EDX_PARAM) { FontRenderer::fromListener(sub)->onDeviceReset(); }
+void __fastcall fr_onDeviceDestroy(void* BF2_EDX_PARAM)   { /* 0x10037D40: ret, the shared nullsub */ }
 
 const void* kFontRendererListenerVtable[3] =
 {
@@ -906,15 +906,15 @@ public:
     SwiffFontObject(DifFont* font, const wchar_t* initialText);
 
     // The slots SwiffRender forwards to (all __fastcall(self, edx, ...) to match __thiscall dispatch).
-    static void  __fastcall vRelease(void* self, void*);                                    // +8
-    static int   __fastcall vSetText(void* self, void*, const wchar_t* text, int flag);     // +16
-    static void  __fastcall vDraw(void* self, void*, const float* m, unsigned int color);   // +20
-    static char  __fastcall vGetExtent(void* self, void*, int arg, float* outW, float* outH);// +28
-    static char  __fastcall vForward32(void* self, void*, int arg, float x, float y);       // +32
-    static char  __fastcall vForward40(void* self, void*, int a, int b);                     // +40
-    static char  __fastcall vForward44(void* self, void*, float x1, float y1,
+    static void  __fastcall vRelease(void* self BF2_EDX_PARAM);                                    // +8
+    static int   __fastcall vSetText(void* self BF2_EDX_PARAM, const wchar_t* text, int flag);     // +16
+    static void  __fastcall vDraw(void* self BF2_EDX_PARAM, const float* m, unsigned int color);   // +20
+    static char  __fastcall vGetExtent(void* self BF2_EDX_PARAM, int arg, float* outW, float* outH);// +28
+    static char  __fastcall vForward32(void* self BF2_EDX_PARAM, int arg, float x, float y);       // +32
+    static char  __fastcall vForward40(void* self BF2_EDX_PARAM, int a, int b);                     // +40
+    static char  __fastcall vForward44(void* self BF2_EDX_PARAM, float x1, float y1,
                                        float x2, float y2);                                  // +44
-    static int   __fastcall vForward48(void* self, void*);                                   // +48
+    static int   __fastcall vForward48(void* self BF2_EDX_PARAM);                                   // +48
 
     DifFont* font() const { return m_font; }
 
@@ -1292,26 +1292,26 @@ void SwiffFontObject::draw(const float* m, unsigned int color)
 
 // [CHOSEN, not recovered] Decrements the wrapper reference without freeing it while list ownership is unfinished.
 // [RETIRE-WHEN: RW-80 font-list ops] The owning font list must release wrappers during removal.
-void __fastcall SwiffFontObject::vRelease(void* self, void*)
+void __fastcall SwiffFontObject::vRelease(void* self BF2_EDX_PARAM)
 {
     SwiffFontObject* o = static_cast<SwiffFontObject*>(self);
     if (o->m_refCount > 0)
         --o->m_refCount;
     // No free - the font list owns the wrapper; its (withheld) erase performs the teardown.
 }
-int __fastcall SwiffFontObject::vSetText(void* self, void*, const wchar_t* text, int flag)
+int __fastcall SwiffFontObject::vSetText(void* self BF2_EDX_PARAM, const wchar_t* text, int flag)
 {
     static_cast<SwiffFontObject*>(self)->setText(text, flag);
     return 0;
 }
-void __fastcall SwiffFontObject::vDraw(void* self, void*, const float* m, unsigned int color)
+void __fastcall SwiffFontObject::vDraw(void* self BF2_EDX_PARAM, const float* m, unsigned int color)
 {
     static_cast<SwiffFontObject*>(self)->draw(m, color);
 }
 // sub_100A5160 - the extent up to character `arg` (SwiffPlayer asks with the caret for the caret's x
 // and with the line length for word wrap), plus the window's scroll offset. No font: 0 with the
 // outs untouched; no text: 0 with both zeroed (sub_100A4810's own first stores).
-char __fastcall SwiffFontObject::vGetExtent(void* self, void*, int arg, float* outW, float* outH)
+char __fastcall SwiffFontObject::vGetExtent(void* self BF2_EDX_PARAM, int arg, float* outW, float* outH)
 {
     SwiffFontObject* o = static_cast<SwiffFontObject*>(self);
     if (!o->m_font)
@@ -1321,10 +1321,10 @@ char __fastcall SwiffFontObject::vGetExtent(void* self, void*, int arg, float* o
     *outW = o->m_scrollOffset + *outW;
     return 1;
 }
-char __fastcall SwiffFontObject::vForward32(void*, void*, int, float, float) { fontForwardNote(); return 0; }
-char __fastcall SwiffFontObject::vForward40(void*, void*, int, int)          { fontForwardNote(); return 0; }
-char __fastcall SwiffFontObject::vForward44(void*, void*, float, float, float, float) { fontForwardNote(); return 0; }
-int  __fastcall SwiffFontObject::vForward48(void*, void*)                    { fontForwardNote(); return 0; }
+char __fastcall SwiffFontObject::vForward32(void* BF2_EDX_PARAM, int, float, float) { fontForwardNote(); return 0; }
+char __fastcall SwiffFontObject::vForward40(void* BF2_EDX_PARAM, int, int)          { fontForwardNote(); return 0; }
+char __fastcall SwiffFontObject::vForward44(void* BF2_EDX_PARAM, float, float, float, float) { fontForwardNote(); return 0; }
+int  __fastcall SwiffFontObject::vForward48(void* BF2_EDX_PARAM)                    { fontForwardNote(); return 0; }
 
 
 // Caches fonts by name and size, and reloads them when the display width changes.
@@ -1350,7 +1350,7 @@ public:
 
     // the +4 subobject's one slot, IEventListener::handleEvent(category, id, node,
     // data), thiscall with `retn 10h`: the front's __fastcall shim shape (ecx = the subobject).
-    static void __fastcall handleRendererEvent(void* listener, void*, int category, unsigned int id,
+    static void __fastcall handleRendererEvent(void* listener BF2_EDX_PARAM, int category, unsigned int id,
                                                void* node, void* data);
 
 private:
@@ -1396,7 +1396,7 @@ void FontSystem::clear()
 }
 
 
-void __fastcall FontSystem::handleRendererEvent(void* listener, void*, int category, unsigned int id,
+void __fastcall FontSystem::handleRendererEvent(void* listener BF2_EDX_PARAM, int category, unsigned int id,
                                                 void* /*node*/, void* data)
 {
     static_assert(offsetof(FontSystem, m_eventVptr) == 4,
@@ -1555,10 +1555,10 @@ void* FontSystem::queryInterface(unsigned int iid) const
 }
 
 namespace {
-void  __fastcall fs_addRef(void* s, void*)  { static_cast<FontSystem*>(s)->addRef(); }
-int   __fastcall fs_getRef(void* s, void*)  { return static_cast<FontSystem*>(s)->getRef(); }
-int   __fastcall fs_release(void* s, void*) { return static_cast<FontSystem*>(s)->release(); }
-void* __fastcall fs_queryInterface(void* s, void*, unsigned int iid)
+void  __fastcall fs_addRef(void* s BF2_EDX_PARAM)  { static_cast<FontSystem*>(s)->addRef(); }
+int   __fastcall fs_getRef(void* s BF2_EDX_PARAM)  { return static_cast<FontSystem*>(s)->getRef(); }
+int   __fastcall fs_release(void* s BF2_EDX_PARAM) { return static_cast<FontSystem*>(s)->release(); }
+void* __fastcall fs_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return static_cast<FontSystem*>(s)->queryInterface(iid); }
 
 const void* kFontSystemVtable[4] =

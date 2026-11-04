@@ -299,17 +299,17 @@ T& psmField(ParticleSystemManager* self, unsigned int offset)
 // even the diagnostic continue mode cannot corrupt ESP.
 
 // +0x00 addRef, +0x04 getRefCount - the shared reference-count thunks (0x1000CB20 / 0x101A9A10).
-int __fastcall psm_addRef(void* self, void*) { return ++static_cast<ParticleSystemManager*>(self)->m_refCount; }
-int __fastcall psm_getRc (void* self, void*) { return   static_cast<ParticleSystemManager*>(self)->m_refCount; }
+int __fastcall psm_addRef(void* self BF2_EDX_PARAM) { return ++static_cast<ParticleSystemManager*>(self)->m_refCount; }
+int __fastcall psm_getRc (void* self BF2_EDX_PARAM) { return   static_cast<ParticleSystemManager*>(self)->m_refCount; }
 
 // +0x08 release (0x100D7480): decrement, and at zero invoke the deleting destructor (slot 17).
-int __fastcall psm_release(void* self, void*)
+int __fastcall psm_release(void* self BF2_EDX_PARAM)
 {
     return static_cast<ParticleSystemManager*>(self)->release();
 }
 
 // +0x0C queryInterface (0x100D7440): accepts iid 1 (IBase) and 820016.
-void* __fastcall psm_qi(void* self, void*, unsigned int iid)
+void* __fastcall psm_qi(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     if (iid == RD9_IID_IBASE || iid == IID_IParticleSystemManager)
         return self;
@@ -318,18 +318,18 @@ void* __fastcall psm_qi(void* self, void*, unsigned int iid)
 
 // +0x20, the BF2 build deliberately does nothing, but it does consume the template
 // pointer (`retn 4`). The old stand-in used a no-argument ret and was ABI-wrong.
-void __fastcall psm_removeParticleSystem(void*, void*, IParticleSystemTemplate*) { }
+void __fastcall psm_removeParticleSystem(void* BF2_EDX_PARAM, IParticleSystemTemplate*) { }
 
 // +0x30 resetStats(), the BF2 build's genuine no-argument nullsub. The Editor body
 // clears counters and its console registration supplies the exact name.
-void __fastcall psm_resetStats(void*, void*) { }
+void __fastcall psm_resetStats(void* BF2_EDX_PARAM) { }
 
 // +0x10, virtual-call resetStats(), then reacquire WindManager. `postLoadLevel` is NOT
 // this slot: Editor ResourceManager::postLoadLevel names and directly calls the 0x101C3470 twin of
 // BF2 0x100D2FD0, which only reacquires HeightmapCluster at +0x8C14. The ctor invokes this +0x10
 // behavior inline, so `init` is the supported interpretation; the exact source spelling remains
 // unresolved. BF2 0x100D38D0 is instead the unnamed lazy pool/atlas initializer.
-void __fastcall psm_reserved10(void* self, void*)
+void __fastcall psm_reserved10(void* self BF2_EDX_PARAM)
 {
     reinterpret_cast<IParticleSystemManager*>(self)->resetStats();
     renddx9abi::HostString name("WindManager");
@@ -345,7 +345,7 @@ IParticleSystemInstance* psmCreateType3Instance(IParticleSystemTemplate* descrip
 IParticleSystemInstance* psmCreateType4Instance(IParticleSystemTemplate* descriptor);
 const char* psmRegisteredTemplateName(IParticleSystemTemplate* descriptor);
 IParticleSystemInstance* __fastcall psm_createInstance(
-    void* self, void*, IParticleSystemTemplate* systemTemplate)
+    void* self BF2_EDX_PARAM, IParticleSystemTemplate* systemTemplate)
 {
     ParticleSystemManager* const manager = static_cast<ParticleSystemManager*>(self);
     if (!manager->m_poolsInitialized)
@@ -408,7 +408,7 @@ inline bool psmOwnerRootDisabled(void* owner)
 
 // +0x18, 0x100D4F40. Instances with live particles stop emitting and detach from their owner.
 // Otherwise detach the controller before queuing inactive removal and destruction.
-void __fastcall psm_removeInstance(void* self, void*, IParticleSystemInstance* instance)
+void __fastcall psm_removeInstance(void* self BF2_EDX_PARAM, IParticleSystemInstance* instance)
 {
     ParticleSystemManager* const manager = static_cast<ParticleSystemManager*>(self);
     if (!manager->m_poolsInitialized || manager->m_tearingDown)
@@ -431,7 +431,7 @@ void __fastcall psm_removeInstance(void* self, void*, IParticleSystemInstance* i
 
 // +0x24, stop/release every instance, advance each by 0.1, drain twice, then assert
 // that the active list is empty. Both loops retain the same initial instance-count snapshot.
-void __fastcall psm_reserved24(void* self, void*)
+void __fastcall psm_reserved24(void* self BF2_EDX_PARAM)
 {
     ParticleSystemManager* const manager = static_cast<ParticleSystemManager*>(self);
     psmRemoveActive(manager, false);
@@ -446,10 +446,10 @@ void __fastcall psm_reserved24(void* self, void*)
                                 "(Debug: All particle systems have not been released!)");
 }
 
-void __fastcall psm_onPathDraw(void* self, void*, bool firstPerson, bool secondPass);
+void __fastcall psm_onPathDraw(void* self BF2_EDX_PARAM, bool firstPerson, bool secondPass);
 
 // +0x34, flip byte +0x0C, then broadcast it to active instances in vector order.
-void __fastcall psm_togglePause(void* self, void*)
+void __fastcall psm_togglePause(void* self BF2_EDX_PARAM)
 {
     ParticleSystemManager* manager = static_cast<ParticleSystemManager*>(self);
     manager->m_paused = manager->m_paused ? 0 : 1;
@@ -461,7 +461,7 @@ void __fastcall psm_togglePause(void* self, void*)
 
 // +0x40, 0x100D74A0: `vector@this+0x7CB0.resize(0, 0)`. Its elements are pointer-sized and have
 // trivial destruction, so the exact observable effect is to retain storage and set last=first.
-void __fastcall psm_reserved40(void* self, void*)
+void __fastcall psm_reserved40(void* self BF2_EDX_PARAM)
 {
     ParticleSystemInstanceList* const values = reinterpret_cast<ParticleSystemInstanceList*>(
         static_cast<unsigned char*>(self) + 0x7CB0);
@@ -543,7 +543,7 @@ bool psmHasUnrecoveredOwnedState(const ParticleSystemManager* self)
         || *reinterpret_cast<void* const*>(self->m_templatesByIdTree + 4);
 }
 
-void* __fastcall psm_deletingDtor(void* rawSelf, void*, int flags)
+void* __fastcall psm_deletingDtor(void* rawSelf BF2_EDX_PARAM, int flags)
 {
     return static_cast<ParticleSystemManager*>(rawSelf)->deletingDestructor(flags);
 }
@@ -649,7 +649,7 @@ void psmRecomputeDerivedSettings(ParticleSystemManager* self)
 // through Renderer +0x74 / VideoOptions +0x28, conditionally updates the five pool capacities, then
 // runs 0x100D3460 above and sets +0x8C93. A missing LightManager stops at the named dependency;
 // retail has no null guard there either.
-void __fastcall psm_applySettings(void* rawSelf, void*, const ParticleSystemSettings* config)
+void __fastcall psm_applySettings(void* rawSelf BF2_EDX_PARAM, const ParticleSystemSettings* config)
 {
     ParticleSystemManager* const self = static_cast<ParticleSystemManager*>(rawSelf);
     psmField<float>(self, 0x8CA8) = config->distanceFactor;
@@ -943,7 +943,7 @@ void psmPreLoadLevel(ParticleSystemManager* self)
 // (0x2A4 bytes); the other four emitter types are reconstructed as they are first reached.
 // Returns the template pointer.
 IParticleSystemTemplate* __fastcall psm_createParticleSystem(
-    void* self, void*, int type, const ParticleSystemName* name)
+    void* self BF2_EDX_PARAM, int type, const ParticleSystemName* name)
 {
     ParticleSystemManager* const manager = static_cast<ParticleSystemManager*>(self);
     const char* const rawName = name->c_str();
@@ -1015,14 +1015,14 @@ IParticleSystemTemplate* __fastcall psm_createParticleSystem(
 
 // +0x38 getter (0x100D7470). The shipped body is literally `return this + 16`: a reference/pointer
 // ABI return to the active VC7.1 instance vector at byte +0x10.
-ParticleSystemInstanceList* __fastcall psm_getInstances(void* self, void*)
+ParticleSystemInstanceList* __fastcall psm_getInstances(void* self BF2_EDX_PARAM)
 {
     return &static_cast<ParticleSystemManager*>(self)->m_instances;
 }
 
 // +0x28 update(dt), PE 100D5150. No pool-initialized or paused manager guard exists here.
 // Queue draining, preparation and all ten bucket walks retain their shipped order.
-void __fastcall psm_update(void* rawSelf, void*, float dt)
+void __fastcall psm_update(void* rawSelf BF2_EDX_PARAM, float dt)
 {
     ParticleSystemManager* const self = static_cast<ParticleSystemManager*>(rawSelf);
     psmRemoveActive(self, false);
@@ -1111,7 +1111,7 @@ void psmDrawPath(ParticleSystemManager* self, dx9rend::IRenderView* view, bool f
 
 // +0x2C, PE 100D4920. Both bool arguments follow the three BF2Render call sites. Only the
 // uninitialized-pools return is shipped; initialized empty state takes the complete CPU path.
-void __fastcall psm_onPathDraw(void* rawSelf, void*, bool firstPerson, bool secondPass)
+void __fastcall psm_onPathDraw(void* rawSelf BF2_EDX_PARAM, bool firstPerson, bool secondPass)
 {
     ParticleSystemManager* const self = static_cast<ParticleSystemManager*>(rawSelf);
     if (!self->m_poolsInitialized)
@@ -1398,14 +1398,14 @@ dx9rend::TextureAtlasEntry* particleSystemFindTextureRegion(const vc71::string& 
     return dx9rend::textureAtlasFind(atlas, path);
 }
 
-void __fastcall particleRendererCollectSorted(void* self, void*, dx9rend::IRenderView* view,
+void __fastcall particleRendererCollectSorted(void* self BF2_EDX_PARAM, dx9rend::IRenderView* view,
     IParticleSystemInstance* instance, IParticleSystemTemplate* descriptor)
 {
     psmCollectSortedParticles(static_cast<unsigned char*>(self), view,
         reinterpret_cast<unsigned char*>(instance), reinterpret_cast<unsigned char*>(descriptor));
 }
 
-void __fastcall particleRendererCollectAdditive(void* self, void*, dx9rend::IRenderView* view,
+void __fastcall particleRendererCollectAdditive(void* self BF2_EDX_PARAM, dx9rend::IRenderView* view,
     IParticleSystemInstance* instance, IParticleSystemTemplate* descriptor)
 {
     psmCollectAdditiveParticles(static_cast<unsigned char*>(self), view,
@@ -1531,7 +1531,7 @@ IBase* __fastcall createParticleSystemManager(unsigned int iid, IBase* outer)
     ParticleSystemManager* self = static_cast<ParticleSystemManager*>(storage);
     constructParticleSystemManager(self);
 
-    void* itf = psm_qi(self, 0, iid);
+    void* itf = psm_qi(self, iid);
     if (!itf)
         self->release();
     return static_cast<IBase*>(itf);

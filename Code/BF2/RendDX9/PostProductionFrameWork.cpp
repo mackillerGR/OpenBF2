@@ -43,7 +43,7 @@ inline unsigned char& Bt(void* p, unsigned off) { return *reinterpret_cast<unsig
 // render lifetime and is not reached during play (nothing releases the singleton mid-session).
 // A logged, non-freeing body: it must not free owner+8 (the allocation base is owner+0).
 // [RETIRE-WHEN: the post-production render path is recovered]
-void* __fastcall pp_dtor(void* self, void*, int /*flags*/)
+void* __fastcall pp_dtor(void* self BF2_EDX_PARAM, int /*flags*/)
 {
     static bool noted = false;
     if (!noted) { noted = true;
@@ -54,20 +54,20 @@ void* __fastcall pp_dtor(void* self, void*, int /*flags*/)
 
 // +0x04 / +0x08 / +0x0C / +0x10 / +0x14 / +0x18 / +0x1C / +0x20 - eight paired float accessors.
 // (this+40..43 <=> byte 160/164/168/172.)
-void  __fastcall pp_set160(void* self, void*, unsigned v) { U(self, 160) = v; }             // +0x04
-float __fastcall pp_get160(void* self, void*)             { return F(self, 160); }          // +0x08
-void  __fastcall pp_set164(void* self, void*, unsigned v) { U(self, 164) = v; }             // +0x0C
-float __fastcall pp_get164(void* self, void*)             { return F(self, 164); }          // +0x10
-void  __fastcall pp_set168(void* self, void*, unsigned v) { U(self, 168) = v; }             // +0x14
-float __fastcall pp_get168(void* self, void*)             { return F(self, 168); }          // +0x18
-void  __fastcall pp_set172(void* self, void*, unsigned v) { U(self, 172) = v; }             // +0x1C
-float __fastcall pp_get172(void* self, void*)             { return F(self, 172); }          // +0x20
+void  __fastcall pp_set160(void* self BF2_EDX_PARAM, unsigned v) { U(self, 160) = v; }             // +0x04
+float __fastcall pp_get160(void* self BF2_EDX_PARAM)             { return F(self, 160); }          // +0x08
+void  __fastcall pp_set164(void* self BF2_EDX_PARAM, unsigned v) { U(self, 164) = v; }             // +0x0C
+float __fastcall pp_get164(void* self BF2_EDX_PARAM)             { return F(self, 164); }          // +0x10
+void  __fastcall pp_set168(void* self BF2_EDX_PARAM, unsigned v) { U(self, 168) = v; }             // +0x14
+float __fastcall pp_get168(void* self BF2_EDX_PARAM)             { return F(self, 168); }          // +0x18
+void  __fastcall pp_set172(void* self BF2_EDX_PARAM, unsigned v) { U(self, 172) = v; }             // +0x1C
+float __fastcall pp_get172(void* self BF2_EDX_PARAM)             { return F(self, 172); }          // +0x20
 
 // +0x24 setStateVec4 (0x1004F7A0): store a vec4 at this+11..14 (byte 44..56); mark a render-state
 // dirty flag. That flag lives on dword_1024B930, a render-context global this front does not model;
 // the shipped guard is `if (dword_1024B930) *(dword_1024B930+1052)=1`, so with it absent the poke is
 // simply skipped - the field store, the observable half, is faithful.
-void __fastcall pp_setStateVec4(void* self, void*, const float* state)
+void __fastcall pp_setStateVec4(void* self BF2_EDX_PARAM, const float* state)
 {
     U(self, 44) = *reinterpret_cast<const unsigned*>(&state[0]);
     F(self, 48) = state[1];
@@ -76,7 +76,7 @@ void __fastcall pp_setStateVec4(void* self, void*, const float* state)
 }
 
 // +0x28 getStateVec4 (0x1004F7E0).
-void* __fastcall pp_getStateVec4(void* self, void*, float* out)
+void* __fastcall pp_getStateVec4(void* self BF2_EDX_PARAM, float* out)
 {
     out[0] = F(self, 44);
     out[1] = F(self, 48);
@@ -87,7 +87,7 @@ void* __fastcall pp_getStateVec4(void* self, void*, float* out)
 
 // Stores the near/far range.
 // [FRONTIER] AmbientIllumination range/color holder updates remain unimplemented.
-void __fastcall pp_setRange(void* self, void*, const float* a2)
+void __fastcall pp_setRange(void* self BF2_EDX_PARAM, const float* a2)
 {
     U(self, 144) = *reinterpret_cast<const unsigned*>(&a2[0]);
     F(self, 148) = a2[1];
@@ -96,7 +96,7 @@ void __fastcall pp_setRange(void* self, void*, const float* a2)
 }
 
 // +0x30 get the range vec4 (0x1004F8C0).
-void* __fastcall pp_getRange(void* self, void*, float* a2)
+void* __fastcall pp_getRange(void* self BF2_EDX_PARAM, float* a2)
 {
     a2[0] = F(self, 144);
     a2[1] = F(self, 148);
@@ -107,7 +107,7 @@ void* __fastcall pp_getRange(void* self, void*, float* a2)
 
 // +0x34 setGasMaskBlend (0x1004F330) - THE per-frame caller. Store the blend at this+216; if the
 // previous blend was exactly 0, latch the "just became active" byte at this+220.
-void __fastcall pp_setBlend(void* self, void*, unsigned a2)
+void __fastcall pp_setBlend(void* self BF2_EDX_PARAM, unsigned a2)
 {
     if (F(self, 216) == 0.0f)
         Bt(self, 220) = 1;
@@ -115,23 +115,23 @@ void __fastcall pp_setBlend(void* self, void*, unsigned a2)
 }
 
 // +0x38 getGasMaskBlend (return this[54] == byte 216).
-float __fastcall pp_getBlend(void* self, void*) { return F(self, 216); }
+float __fastcall pp_getBlend(void* self BF2_EDX_PARAM) { return F(self, 216); }
 
 // +0x3C / +0x40 two 0x24-byte (3x3 matrix) copies into this+256 / this+292 (0x10051680 / 0x100516A0).
-void __fastcall pp_setMat0(void* self, void*, const void* a2) { memcpy(static_cast<char*>(self) + 256, a2, 0x24u); }
-void __fastcall pp_setMat1(void* self, void*, const void* a2) { memcpy(static_cast<char*>(self) + 292, a2, 0x24u); }
+void __fastcall pp_setMat0(void* self BF2_EDX_PARAM, const void* a2) { memcpy(static_cast<char*>(self) + 256, a2, 0x24u); }
+void __fastcall pp_setMat1(void* self BF2_EDX_PARAM, const void* a2) { memcpy(static_cast<char*>(self) + 292, a2, 0x24u); }
 
 // +0x44 / +0x48 two dword setters (this+62 / this+63 == byte 248/252).
-void __fastcall pp_set248(void* self, void*, unsigned v) { U(self, 248) = v; }
-void __fastcall pp_set252(void* self, void*, unsigned v) { U(self, 252) = v; }
+void __fastcall pp_set248(void* self BF2_EDX_PARAM, unsigned v) { U(self, 248) = v; }
+void __fastcall pp_set252(void* self BF2_EDX_PARAM, unsigned v) { U(self, 252) = v; }
 
 // +0x4C / +0x50 two byte flag setters (this+242 / this+241) (0x100516E0 / 0x100516F0).
-void __fastcall pp_setByte242(void* self, void*, unsigned char v) { Bt(self, 242) = v; }
-void __fastcall pp_setByte241(void* self, void*, unsigned char v) { Bt(self, 241) = v; }
+void __fastcall pp_setByte242(void* self BF2_EDX_PARAM, unsigned char v) { Bt(self, 242) = v; }
+void __fastcall pp_setByte241(void* self BF2_EDX_PARAM, unsigned char v) { Bt(self, 241) = v; }
 
 // +0x54 / +0x58 two getters that read the live Renderer (renderer+1852/1856).
-float __fastcall pp_getRendererFloat1852(void*, void*) { return F(g_Renderer, 1852); }
-float __fastcall pp_getRendererFloat1856(void*, void*) { return F(g_Renderer, 1856); }
+float __fastcall pp_getRendererFloat1852(void* BF2_EDX_PARAM) { return F(g_Renderer, 1852); }
+float __fastcall pp_getRendererFloat1856(void* BF2_EDX_PARAM) { return F(g_Renderer, 1856); }
 
 // +0x5C setNoiseTextureName (0x1004FC30). The shipped body compares an incoming name against the
 // stored one at this+127, releases the old texture at this+126, stores the new name, then acquires a
@@ -139,7 +139,7 @@ float __fastcall pp_getRendererFloat1856(void*, void*) { return F(g_Renderer, 18
 // the constructor; with no texture ever loaded (this+126 stays null) there is nothing to release and
 // nothing to reacquire, so this is a visible no-op until the render path lands. Logged once.
 // [RETIRE-WHEN: the post-production render path is recovered]
-void __fastcall pp_setNoiseTextureName(void* self, void*, const void* /*name*/)
+void __fastcall pp_setNoiseTextureName(void* self BF2_EDX_PARAM, const void* /*name*/)
 {
     (void)self;
     static bool noted = false;
@@ -178,7 +178,7 @@ const void* const kPostProdVtable[24] =
 
 
 // Releases and clears the owned distortion-noise texture on device loss.
-void __fastcall dl_onLost(void* self, void*)
+void __fastcall dl_onLost(void* self BF2_EDX_PARAM)
 {
     EngineTexture*& noise = *reinterpret_cast<EngineTexture**>(static_cast<char*>(self) + 0x1FC);
     textureReleaseRef(noise);
@@ -189,7 +189,7 @@ void __fastcall dl_onLost(void* self, void*)
 // flag to 0 (sub_10017E20), reload the texture BY name (sub_10019260, the string copied by value)
 // into owner+0x200, and restore the flag. The old pointer is not released first - the lost slot
 // already nulled it.
-void __fastcall dl_onReset(void* self, void*)
+void __fastcall dl_onReset(void* self BF2_EDX_PARAM)
 {
     const vc71::string& name = *reinterpret_cast<const vc71::string*>(static_cast<char*>(self) + 0x200);
     if (name.size() == 0)
@@ -200,7 +200,7 @@ void __fastcall dl_onReset(void* self, void*)
 }
 
 // slot 2 (0x1004E960): nullsub in the shipped image.
-void __fastcall dl_slot2(void*, void*) { }
+void __fastcall dl_slot2(void* BF2_EDX_PARAM) { }
 
 const void* const kDeviceLostVtable[3] =
 {
@@ -218,7 +218,7 @@ const void* const kDeviceLostVtable[3] =
 // slot 0 handleEvent (0x1004F0F0): react to (class 0,id 13) device-reset and (class 5,id 1)
 // GSViewDistance change. Recovered verbatim; unreached until the EventManager registration is undone
 // from deferral. a4 is the event payload.
-int __fastcall el_handleEvent(void* self, void*, int a2, int a3, int a4, int a5)
+int __fastcall el_handleEvent(void* self BF2_EDX_PARAM, int a2, int a3, int a4, int a5)
 {
     int result = a2;
     if (a2)
@@ -253,26 +253,26 @@ int __fastcall el_handleEvent(void* self, void*, int a2, int a3, int a4, int a5)
     return result;
 }
 
-int  __fastcall el_addRef (void* self, void*) { return ++U(self, 12); }
-int  __fastcall el_getRc  (void* self, void*) { return   U(self, 12); }
+int  __fastcall el_addRef (void* self BF2_EDX_PARAM) { return ++U(self, 12); }
+int  __fastcall el_getRc  (void* self BF2_EDX_PARAM) { return   U(self, 12); }
 
 // decrement; at zero invoke the PostProductionFrameWork subobject's deleting dtor
 // (owner+8 vtable slot 0), i.e. `(*(*(this+8)))(this+8, 1)`.
-int __fastcall el_release(void* self, void*)
+int __fastcall el_release(void* self BF2_EDX_PARAM)
 {
     int v = --U(self, 12);
     if (!v)
     {
         void* sub = static_cast<char*>(self) + 8;
         void** vt = *reinterpret_cast<void***>(sub);
-        typedef void* (__fastcall* DtorFn)(void*, void*, int);
-        reinterpret_cast<DtorFn>(vt[0])(sub, 0, 1);
+        typedef void* (__fastcall* DtorFn)(void* BF2_EDX_PARAM, int);
+        reinterpret_cast<DtorFn>(vt[0])(sub, 1);
     }
     return v;
 }
 
 // queryInterface - accepts iid 1 (IBase) only.
-void* __fastcall el_qi(void* self, void*, unsigned iid) { return iid != 1u ? 0 : self; }
+void* __fastcall el_qi(void* self BF2_EDX_PARAM, unsigned iid) { return iid != 1u ? 0 : self; }
 
 const void* const kOwnerVtable[5] =
 {
@@ -511,14 +511,12 @@ void postProductionUpdateFog(float underwaterDepth)
 
 void postProductionGetHemiState(float outState[4])
 {
-    pp_getStateVec4(static_cast<char*>(static_cast<void*>(g_PostProductionFrameWorkOwner)) + 8,
-                    0, outState);
+    pp_getStateVec4(static_cast<char*>(static_cast<void*>(g_PostProductionFrameWorkOwner)) + 8, outState);
 }
 
 void postProductionSetHemiState(const float state[4])
 {
-    pp_setStateVec4(static_cast<char*>(static_cast<void*>(g_PostProductionFrameWorkOwner)) + 8,
-                    0, state);
+    pp_setStateVec4(static_cast<char*>(static_cast<void*>(g_PostProductionFrameWorkOwner)) + 8, state);
 }
 
 } // namespace dx9rend

@@ -78,7 +78,7 @@ unsigned int g_staticMeshMergedCount[5] = { 0, 0, 0, 0, 0 };   // dword_1025B594
 
 namespace {
 
-void __fastcall raParameterHolderFrontier(void* self, void*)
+void __fastcall raParameterHolderFrontier(void* self BF2_EDX_PARAM)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::Ra parameter holder "
                     "(off_101E1480 / 148C / 149C / 14A8 / 14BC / 1E78 / 1E80 / 2210 - "

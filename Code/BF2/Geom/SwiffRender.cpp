@@ -1071,18 +1071,18 @@ void collectFill(SwiffRender* s, const short* verts, unsigned int count)
 // The 67 primary slots. Shims are __fastcall(self, edx, ...) == __thiscall at the call site.
 
 
-void __fastcall sr_addRef(void* self, void*)
+void __fastcall sr_addRef(void* self BF2_EDX_PARAM)
 {
     ++static_cast<SwiffRender*>(self)->refCount;
 }
-int __fastcall sr_getRef(void* self, void*)
+int __fastcall sr_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<SwiffRender*>(self)->refCount;
 }
 
 void swiffRenderDestroy(SwiffRender* s);       // the dtor, below
 
-int __fastcall sr_release(void* self, void*)
+int __fastcall sr_release(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     const int remaining = --s->refCount;
@@ -1094,23 +1094,23 @@ int __fastcall sr_release(void* self, void*)
     return remaining;
 }
 
-void* __fastcall sr_queryInterfaceById(void* self, void*, unsigned int iid)
+void* __fastcall sr_queryInterfaceById(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     if (iid == 1u || iid == IID_ISwiffRender)
         return self;
     return 0;
 }
 
-int  __fastcall sr_init(void* self, void*);            // 0x10152200, below
-int  __fastcall sr_shutdown(void* self, void*);        // 0x10153FE0, below
+int  __fastcall sr_init(void* self BF2_EDX_PARAM);            // 0x10152200, below
+int  __fastcall sr_shutdown(void* self BF2_EDX_PARAM);        // 0x10153FE0, below
 
-int __fastcall sr_slot6(void*, void*)
+int __fastcall sr_slot6(void* BF2_EDX_PARAM)
 {
     return -1;
 }
 
 // upload an A8 alpha image (font glyph pages). D3DFMT_A8 == 28.
-int __fastcall sr_uploadAlpha(void* self, void*, unsigned int w, unsigned int h, const void* data)
+int __fastcall sr_uploadAlpha(void* self BF2_EDX_PARAM, unsigned int w, unsigned int h, const void* data)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     void* device = ::dice::hfe::dx9rend::renderDevice();
@@ -1136,14 +1136,14 @@ int __fastcall sr_uploadAlpha(void* self, void*, unsigned int w, unsigned int h,
     return id;
 }
 
-int __fastcall sr_slot8(void*, void*, int)
+int __fastcall sr_slot8(void* BF2_EDX_PARAM, int)
 {
     return -1;
 }
 
 // upload an RGBA image: swap R<->B in place, load as A8R8G8B8 (21), register.
 // The descriptor: {data, width, height, pitch}.
-int __fastcall sr_uploadRgba(void* self, void*, unsigned int* desc)
+int __fastcall sr_uploadRgba(void* self BF2_EDX_PARAM, unsigned int* desc)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     void* device = ::dice::hfe::dx9rend::renderDevice();
@@ -1185,7 +1185,7 @@ int __fastcall sr_uploadRgba(void* self, void*, unsigned int* desc)
 }
 
 // load by name through the routing loader. Note the raw char* argument.
-int __fastcall sr_loadTexture(void* self, void*, const char* name,
+int __fastcall sr_loadTexture(void* self BF2_EDX_PARAM, const char* name,
                               unsigned int* outW, unsigned int* outH)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1199,14 +1199,14 @@ int __fastcall sr_loadTexture(void* self, void*, const char* name,
     return id;
 }
 
-int __fastcall sr_releaseTexture(void* self, void*, int id)
+int __fastcall sr_releaseTexture(void* self BF2_EDX_PARAM, int id)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     return registryReleaseId(s->registry, id) ? 1 : 0;
 }
 
 // beginDisplay. Nine stack arguments; the first is unused in the shipped body too.
-void __fastcall sr_beginDisplay(void* self, void*, int bgUnused, int vpX, int vpY,
+void __fastcall sr_beginDisplay(void* self BF2_EDX_PARAM, int bgUnused, int vpX, int vpY,
                                 int vpWidth, int vpHeight, float xMin, float xMax,
                                 float yMin, float yMax)
 {
@@ -1321,7 +1321,7 @@ void __fastcall sr_beginDisplay(void* self, void*, int bgUnused, int vpX, int vp
 }
 
 // endDisplay: flush, credits rain under a scissor, viewport restore, texture unbind.
-void __fastcall sr_endDisplay(void* self, void*)
+void __fastcall sr_endDisplay(void* self BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1405,9 +1405,9 @@ void __fastcall sr_endDisplay(void* self, void*)
                         float m[6] = { 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, r->points[i].y };
                         // ISwiffRender slot 30, exactly as the shipped rain calls it virtually
                         void** vtbl = s->vtPrimary;
-                        typedef void (__fastcall* DrawGlyphFn)(void*, void*, void*, const float*,
+                        typedef void (__fastcall* DrawGlyphFn)(void* BF2_EDX_PARAM, void*, const float*,
                                                                int, int);
-                        reinterpret_cast<DrawGlyphFn>(vtbl[30])(s, 0, r->points[i].font, m, -1, 0);
+                        reinterpret_cast<DrawGlyphFn>(vtbl[30])(s, r->points[i].font, m, -1, 0);
                     }
                     r->points[i].y -= speed * dt;
                 }
@@ -1456,7 +1456,7 @@ void __fastcall sr_endDisplay(void* self, void*)
 }
 
 // setTransform: SWF 2x3 -> 4x4, x M616 x M552, latched and pushed to transform.
-void __fastcall sr_setTransform(void* self, void*, const float* m2x3)
+void __fastcall sr_setTransform(void* self BF2_EDX_PARAM, const float* m2x3)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (sstEnabled())   // [TEMP] tracer
@@ -1483,12 +1483,12 @@ void __fastcall sr_setTransform(void* self, void*, const float* m2x3)
     paramSetValue(s->paramTransform, combined, 0);
 }
 
-void __fastcall sr_setCxform(void* self, void*, const float* cx)
+void __fastcall sr_setCxform(void* self BF2_EDX_PARAM, const float* cx)
 {
     ::memcpy(static_cast<SwiffRender*>(self)->cxform, cx, 32);
 }
 
-int __fastcall sr_recordStat(void* self, void*, int value)
+int __fastcall sr_recordStat(void* self BF2_EDX_PARAM, int value)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     s->statPrev = s->statCur;
@@ -1500,7 +1500,7 @@ int __fastcall sr_recordStat(void* self, void*, int value)
 
 // drawVertices: the solid arm accumulates a stitched triangle strip; the textured
 // arm routes through the fill collector; an inactive fill style just flushes.
-void __fastcall sr_drawVertices(void* self, void*, const short* verts, unsigned int count)
+void __fastcall sr_drawVertices(void* self BF2_EDX_PARAM, const short* verts, unsigned int count)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (sstEnabled())   // [TEMP] tracer
@@ -1589,7 +1589,7 @@ void __fastcall sr_drawVertices(void* self, void*, const short* verts, unsigned 
 
 // the line-strip draw: line style + "Line" technique, transformed into the static
 // scratch (unk_1025E9E0's role), drawn per pass with DrawPrimitiveUP(linestrip).
-void __fastcall sr_drawLineStrip(void* self, void*, const short* verts, unsigned int count)
+void __fastcall sr_drawLineStrip(void* self BF2_EDX_PARAM, const short* verts, unsigned int count)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1646,7 +1646,7 @@ void __fastcall sr_drawLineStrip(void* self, void*, const short* verts, unsigned
     effectEnd(s->effect);
 }
 
-int __fastcall sr_fillStyleDisable(void* self, void*, int index)
+int __fastcall sr_fillStyleDisable(void* self BF2_EDX_PARAM, int index)
 {
     SST("[swiff]   fillStyleDisable side=%d", index);   // [TEMP] tracer
     static_cast<SwiffRender*>(self)->style[index].mode = 0;
@@ -1654,7 +1654,7 @@ int __fastcall sr_fillStyleDisable(void* self, void*, int index)
 }
 
 // solid fill: cxform-transform the color, mode 1.
-void __fastcall sr_fillStyleColor(void* self, void*, int index, unsigned int rgba)
+void __fastcall sr_fillStyleColor(void* self BF2_EDX_PARAM, int index, unsigned int rgba)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     const unsigned int transformed =
@@ -1670,7 +1670,7 @@ void __fastcall sr_fillStyleColor(void* self, void*, int index, unsigned int rgb
 }
 
 // 0x10152D50 / sub_10152130 - textured fill: id, dims, matrix, wrap/clamp, cxform snapshot.
-void __fastcall sr_setTexture(void* self, void*, int index, int texId, int w, int h,
+void __fastcall sr_setTexture(void* self BF2_EDX_PARAM, int index, int texId, int w, int h,
                               const float* matrix, int clamp)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1694,14 +1694,14 @@ void __fastcall sr_setTexture(void* self, void*, int index, int texId, int w, in
     }
 }
 
-void __fastcall sr_lineStyleDisable(void* self, void*)
+void __fastcall sr_lineStyleDisable(void* self BF2_EDX_PARAM)
 {
     SST("[swiff]   lineStyleDisable");   // [TEMP] tracer
     static_cast<SwiffRender*>(self)->style[2].mode = 0;
 }
 
 // line color, cxform-transformed.
-int __fastcall sr_lineStyleColor(void* self, void*, unsigned int rgba)
+int __fastcall sr_lineStyleColor(void* self BF2_EDX_PARAM, unsigned int rgba)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     const unsigned int transformed =
@@ -1714,7 +1714,7 @@ int __fastcall sr_lineStyleColor(void* self, void*, unsigned int rgba)
 
 // the shipped body clamps the OLD width to >= 1.0 and then overwrites it with the
 // raw new dword - the clamp is dead. Reproduced as-is.
-void __fastcall sr_lineStyleWidth(void* self, void*, unsigned int widthAsDword)
+void __fastcall sr_lineStyleWidth(void* self BF2_EDX_PARAM, unsigned int widthAsDword)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (s->style[2].width < 1.0f)
@@ -1725,16 +1725,16 @@ void __fastcall sr_lineStyleWidth(void* self, void*, unsigned int widthAsDword)
 
 // No-op slots retain their stack arguments so fastcall adapters perform the required
 // thiscall cleanup: five words for drawBitmap, one each for slots 38 and 48.
-void __fastcall sr_nullsub25(void*, void*, const void*, int, const void*, const void*, unsigned int) { }
-void __fastcall sr_nullsub38(void*, void*, int) { }
-void __fastcall sr_nullsub48(void*, void*, int) { }
+void __fastcall sr_nullsub25(void* BF2_EDX_PARAM, const void*, int, const void*, const void*, unsigned int) { }
+void __fastcall sr_nullsub38(void* BF2_EDX_PARAM, int) { }
+void __fastcall sr_nullsub48(void* BF2_EDX_PARAM, int) { }
 
 
 // The font slots, 26..37. All of them ride the withheld FontRenderer/FontSystem (RW-80): createFont
 // resolves the FontSystem singleton (null here) and every forward dereferences the wrapper the
 // caller got from it. Null guards + a one-time note stand in for the always-present singletons.
 
-void* __fastcall sr_createFont(void* self, void*, const char* name, int size)
+void* __fastcall sr_createFont(void* self BF2_EDX_PARAM, const char* name, int size)
 {
     (void)self;
     void* font = createSwiffFont(name, size, 0);
@@ -1747,7 +1747,7 @@ void* __fastcall sr_createFont(void* self, void*, const char* name, int size)
     return font;
 }
 
-void __fastcall sr_releaseFontHandle(void* self, void*, void* font)
+void __fastcall sr_releaseFontHandle(void* self BF2_EDX_PARAM, void* font)
 {
     (void)self;
     if (!font)
@@ -1756,7 +1756,7 @@ void __fastcall sr_releaseFontHandle(void* self, void*, void* font)
                 "(RW-80)");
 }
 
-int __fastcall sr_fontForward16(void* self, void*, void* font, int arg)
+int __fastcall sr_fontForward16(void* self BF2_EDX_PARAM, void* font, int arg)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     SST("[swiff]   font.setText font=%p arg=%08X", font, (unsigned)arg);   // [TEMP] tracer
@@ -1767,7 +1767,7 @@ int __fastcall sr_fontForward16(void* self, void*, void* font, int arg)
     return reinterpret_cast<Fn>(vtbl[16 / 4])(font, arg, 0);
 }
 
-int __fastcall sr_destroyFont(void* self, void*, void* font)
+int __fastcall sr_destroyFont(void* self BF2_EDX_PARAM, void* font)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (!font || s->fontsDisabled)
@@ -1780,7 +1780,7 @@ int __fastcall sr_destroyFont(void* self, void*, void* font)
 
 // draw one glyph/name object: flush, cxform the color, build the pixel-snapped 4x4,
 // font vslot +20. The credits rain calls this through the vtable.
-void __fastcall sr_drawGlyphBitmap(void* self, void*, void* font, const float* m2x3,
+void __fastcall sr_drawGlyphBitmap(void* self BF2_EDX_PARAM, void* font, const float* m2x3,
                                    unsigned int rgba, int /*unused*/)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1817,7 +1817,7 @@ void __fastcall sr_drawGlyphBitmap(void* self, void*, void* font, const float* m
     reinterpret_cast<DrawFn>(vtbl[20 / 4])(font, m, color);
 }
 
-char __fastcall sr_fontGetExtent(void* self, void*, void* font, int arg,
+char __fastcall sr_fontGetExtent(void* self BF2_EDX_PARAM, void* font, int arg,
                                  float* outW, float* outH)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1834,7 +1834,7 @@ char __fastcall sr_fontGetExtent(void* self, void*, void* font, int arg,
     return ok;
 }
 
-char __fastcall sr_fontForward32(void* self, void*, void* font, int arg,
+char __fastcall sr_fontForward32(void* self BF2_EDX_PARAM, void* font, int arg,
                                  float x, float y)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1845,7 +1845,7 @@ char __fastcall sr_fontForward32(void* self, void*, void* font, int arg,
     return reinterpret_cast<Fn>(vtbl[32 / 4])(font, arg, x * s->scaleX, y * s->scaleY);
 }
 
-char __fastcall sr_fontForward40(void* self, void*, void* font, int a, int b)
+char __fastcall sr_fontForward40(void* self BF2_EDX_PARAM, void* font, int a, int b)
 {
     if (static_cast<SwiffRender*>(self)->fontsDisabled || !font)
         return 0;
@@ -1854,7 +1854,7 @@ char __fastcall sr_fontForward40(void* self, void*, void* font, int a, int b)
     return reinterpret_cast<Fn>(vtbl[40 / 4])(font, a, b);
 }
 
-char __fastcall sr_fontForward44(void* self, void*, void* font,
+char __fastcall sr_fontForward44(void* self BF2_EDX_PARAM, void* font,
                                  float x1, float y1, float x2, float y2)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -1866,7 +1866,7 @@ char __fastcall sr_fontForward44(void* self, void*, void* font,
                                               x2 * s->scaleX, y2 * s->scaleY);
 }
 
-int __fastcall sr_fontForward48(void* self, void*, void* font)
+int __fastcall sr_fontForward48(void* self BF2_EDX_PARAM, void* font)
 {
     if (static_cast<SwiffRender*>(self)->fontsDisabled || !font)
         return 0;
@@ -1874,7 +1874,7 @@ int __fastcall sr_fontForward48(void* self, void*, void* font)
     return reinterpret_cast<HostIntFn>(vtbl[48 / 4])(font);
 }
 
-int __fastcall sr_fontSetSize(void* self, void*, void* font, float size, int flag)
+int __fastcall sr_fontSetSize(void* self BF2_EDX_PARAM, void* font, float size, int flag)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (s->fontsDisabled || !font)
@@ -1887,7 +1887,7 @@ int __fastcall sr_fontSetSize(void* self, void*, void* font, float size, int fla
     return (int)(uintptr_t)font;
 }
 
-int __fastcall sr_fontSetField104(void* self, void*, void* font, int value)
+int __fastcall sr_fontSetField104(void* self BF2_EDX_PARAM, void* font, int value)
 {
     if (static_cast<SwiffRender*>(self)->fontsDisabled || !font)
         return 0;
@@ -1900,7 +1900,7 @@ int __fastcall sr_fontSetField104(void* self, void*, void* font, int value)
 }
 
 // the Flash clip-mask trio over the stencil buffer.
-void __fastcall sr_beginMask(void* self, void*)
+void __fastcall sr_beginMask(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (sstEnabled()) { ++g_sst.nMasks; SST("[swiff]   beginMask (ref %u)", s->stencilRef); }   // [TEMP] tracer
@@ -1921,7 +1921,7 @@ void __fastcall sr_beginMask(void* self, void*)
     smSetRenderState(168, 0);                // colorwriteenable off - the mask is stencil-only
 }
 
-void __fastcall sr_endMask(void* self, void*)
+void __fastcall sr_endMask(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     SST("[swiff]   endMask (ref %u)", s->stencilRef);   // [TEMP] tracer
@@ -1937,7 +1937,7 @@ void __fastcall sr_endMask(void* self, void*)
     smSetRenderState(54, 1);
 }
 
-void __fastcall sr_disableMask(void* self, void*)
+void __fastcall sr_disableMask(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     SST("[swiff]   disableMask");   // [TEMP] tracer
@@ -1948,29 +1948,29 @@ void __fastcall sr_disableMask(void* self, void*)
     smSetRenderState(52, 0);
 }
 
-void __fastcall sr_setMovieWidth(void* self, void*, unsigned int w)
+void __fastcall sr_setMovieWidth(void* self BF2_EDX_PARAM, unsigned int w)
 {
     if (sstEnabled()) ::renddx9abi::logf("[swiff] setMovieWidth(%u)", w);   // [TEMP] tracer
     static_cast<SwiffRender*>(self)->movieWidth = w;
 }
-void __fastcall sr_setMovieHeight(void* self, void*, int h)
+void __fastcall sr_setMovieHeight(void* self BF2_EDX_PARAM, int h)
 {
     if (sstEnabled()) ::renddx9abi::logf("[swiff] setMovieHeight(%d)", h);   // [TEMP] tracer
     static_cast<SwiffRender*>(self)->movieHeight = h;
 }
-void __fastcall sr_setScale(void* self, void*, float sx, float sy)
+void __fastcall sr_setScale(void* self BF2_EDX_PARAM, float sx, float sy)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (sstEnabled()) ::renddx9abi::logf("[swiff] setScale(%.4f, %.4f)", sx, sy);   // [TEMP] tracer
     s->scaleX = sx;
     s->scaleY = sy;
 }
-void __fastcall sr_setBackgroundColor(void* self, void*, unsigned int rgb)
+void __fastcall sr_setBackgroundColor(void* self BF2_EDX_PARAM, unsigned int rgb)
 {
     SST("[swiff]   setBackgroundColor %08X", rgb);   // [TEMP] tracer
     static_cast<SwiffRender*>(self)->bgColor = rgb;
 }
-void __fastcall sr_setMouseState(void* self, void*, int x, int y, int buttons)
+void __fastcall sr_setMouseState(void* self BF2_EDX_PARAM, int x, int y, int buttons)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     SST("[swiff]   setMouseState (%d,%d,%d)", x, y, buttons);   // [TEMP] tracer
@@ -1979,13 +1979,13 @@ void __fastcall sr_setMouseState(void* self, void*, int x, int y, int buttons)
     s->mouseButtons = buttons;
 }
 
-int __fastcall sr_slot47(void*, void*, int) { return -1; }
-char __fastcall sr_slot49(void*, void*, int) { return 1; }             // (a no-op preload)
-char __fastcall sr_slot50(void*, void*, int) { return 1; }
+int __fastcall sr_slot47(void* BF2_EDX_PARAM, int) { return -1; }
+char __fastcall sr_slot49(void* BF2_EDX_PARAM, int) { return 1; }             // (a no-op preload)
+char __fastcall sr_slot50(void* BF2_EDX_PARAM, int) { return 1; }
 
 // beginFrame: the background clear color (when the host says the movie has one), the
 // per-frame stats reset, and the renderer's beginScene. This is the call BF2 crashed reaching.
-int __fastcall sr_beginFrame(void* self, void*)
+int __fastcall sr_beginFrame(void* self BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -2009,7 +2009,7 @@ int __fastcall sr_beginFrame(void* self, void*)
 }
 
 // endFrame: endScene + Present. The menu's actual present call.
-int __fastcall sr_endFrame(void* self, void*)
+int __fastcall sr_endFrame(void* self BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -2020,7 +2020,7 @@ int __fastcall sr_endFrame(void* self, void*)
 }
 
 // assign a per-texture technique index (into techRecord[]) by texture name.
-void* __fastcall sr_setTextureTechnique(void* self, void*, const vc71::string* name, int index)
+void* __fastcall sr_setTextureTechnique(void* self BF2_EDX_PARAM, const vc71::string* name, int index)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     vc71::map_node* node = vc71::mapInsert(s->texTechniqueMap, 0x30, name->c_str());
@@ -2029,7 +2029,7 @@ void* __fastcall sr_setTextureTechnique(void* self, void*, const vc71::string* n
     return node;
 }
 
-int __fastcall sr_updateTime(void* self, void*, unsigned int t, float dt)
+int __fastcall sr_updateTime(void* self BF2_EDX_PARAM, unsigned int t, float dt)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     SST("[swiff]   updateTime t=%u dt=%.5f", t, dt);   // [TEMP] tracer
@@ -2044,13 +2044,13 @@ int __fastcall sr_updateTime(void* self, void*, unsigned int t, float dt)
     return (int)t;
 }
 
-void* __fastcall sr_getTextureRegistry(void* self, void*)
+void* __fastcall sr_getTextureRegistry(void* self BF2_EDX_PARAM)
 {
     return &static_cast<SwiffRender*>(self)->registry;
 }
 
 // uploadTexture: the loader with the cache skipped. Note the string-pointer argument.
-int __fastcall sr_uploadTexture(void* self, void*, const vc71::string* name,
+int __fastcall sr_uploadTexture(void* self BF2_EDX_PARAM, const vc71::string* name,
                                 unsigned int* outW, unsigned int* outH)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -2058,7 +2058,7 @@ int __fastcall sr_uploadTexture(void* self, void*, const vc71::string* name,
 }
 
 // Copies the device driver version; returns zeros when caps are absent.
-unsigned int* __fastcall sr_getDriverVersion(void*, void*, unsigned int* out)
+unsigned int* __fastcall sr_getDriverVersion(void* BF2_EDX_PARAM, unsigned int* out)
 {
     void* caps = ::dice::hfe::dx9rend::g_deviceCaps;
     if (caps)
@@ -2075,7 +2075,7 @@ unsigned int* __fastcall sr_getDriverVersion(void*, void*, unsigned int* out)
     return out;
 }
 
-char __fastcall sr_isNvidia(void*, void*)      // adapter.VendorId == 0x10DE (4318)
+char __fastcall sr_isNvidia(void* BF2_EDX_PARAM)      // adapter.VendorId == 0x10DE (4318)
 {
     void* caps = ::dice::hfe::dx9rend::g_deviceCaps;
     if (!caps)
@@ -2085,16 +2085,16 @@ char __fastcall sr_isNvidia(void*, void*)      // adapter.VendorId == 0x10DE (43
 }
 
 unsigned char g_swiffFlag1023D950 = 0;         // byte_1023D950 - a host-toggled flag pair
-char __fastcall sr_getFlag(void*, void*) { return (char)g_swiffFlag1023D950; }
-char __fastcall sr_setFlag(void*, void*, char v) { g_swiffFlag1023D950 = (unsigned char)v; return v; }
+char __fastcall sr_getFlag(void* BF2_EDX_PARAM) { return (char)g_swiffFlag1023D950; }
+char __fastcall sr_setFlag(void* BF2_EDX_PARAM, char v) { g_swiffFlag1023D950 = (unsigned char)v; return v; }
 
-int __fastcall sr_creditsCount(void* self, void*);     // slot 62, forward-declared for 61
+int __fastcall sr_creditsCount(void* self BF2_EDX_PARAM);     // slot 62, forward-declared for 61
 
 // preload images/credits/1..113.png and remember each name that resolved.
-char __fastcall sr_preloadCredits(void* self, void*)
+char __fastcall sr_preloadCredits(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
-    if (sr_creditsCount(self, 0))
+    if (sr_creditsCount(self))
         return 1;
 
     for (unsigned int i = 1; i <= 0x71; ++i)
@@ -2140,7 +2140,7 @@ char __fastcall sr_preloadCredits(void* self, void*)
     return 1;
 }
 
-int __fastcall sr_creditsCount(void* self, void*)
+int __fastcall sr_creditsCount(void* self BF2_EDX_PARAM)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (!s->creditsFirst)
@@ -2149,10 +2149,10 @@ int __fastcall sr_creditsCount(void* self, void*)
 }
 
 // copy the i-th credits name out; empty string when out of range.
-vc71::string* __fastcall sr_getCreditsName(void* self, void*, vc71::string* out, unsigned int index)
+vc71::string* __fastcall sr_getCreditsName(void* self BF2_EDX_PARAM, vc71::string* out, unsigned int index)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
-    const int count = sr_creditsCount(self, 0);
+    const int count = sr_creditsCount(self);
     if (count && index < (unsigned int)count)
         new (out) vc71::string(s->creditsFirst[index]);
     else
@@ -2178,21 +2178,21 @@ int swiffRandomRange(int lo, int hi)
     return lo - (int)((double)::rand() * range * -0.000030518509);
 }
 
-vc71::string* __fastcall sr_getRandomCreditsName(void* self, void*, vc71::string* out)
+vc71::string* __fastcall sr_getRandomCreditsName(void* self BF2_EDX_PARAM, vc71::string* out)
 {
-    const int count = sr_creditsCount(self, 0);
+    const int count = sr_creditsCount(self);
     const int pick  = swiffRandomRange(0, count - 1);
     // slot 63, virtually - as the shipped body dispatches through its own vtable
     void** vtbl = static_cast<SwiffRender*>(self)->vtPrimary;
-    typedef vc71::string* (__fastcall* GetNameFn)(void*, void*, vc71::string*, unsigned int);
-    return reinterpret_cast<GetNameFn>(vtbl[63])(self, 0, out, (unsigned int)pick);
+    typedef vc71::string* (__fastcall* GetNameFn)(void* BF2_EDX_PARAM, vc71::string*, unsigned int);
+    return reinterpret_cast<GetNameFn>(vtbl[63])(self, out, (unsigned int)pick);
 }
 
-char __fastcall sr_getWasDeviceLost(void* self, void*)
+char __fastcall sr_getWasDeviceLost(void* self BF2_EDX_PARAM)
 {
     return (char)static_cast<SwiffRender*>(self)->wasLostSticky;
 }
-void __fastcall sr_clearWasDeviceLost(void* self, void*)
+void __fastcall sr_clearWasDeviceLost(void* self BF2_EDX_PARAM)
 {
     static_cast<SwiffRender*>(self)->wasLostSticky = 0;
 }
@@ -2201,7 +2201,7 @@ void __fastcall sr_clearWasDeviceLost(void* self, void*)
 // init - 0x10152200. Singletons, the effect + six parameters, eight technique records, the vertex
 // declaration, three ring VBs under a pool swap, the listener/event registrations, the rain.
 
-int __fastcall sr_init(void* self, void*)
+int __fastcall sr_init(void* self BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -2248,8 +2248,8 @@ int __fastcall sr_init(void* self, void*)
     // Slot 49 with "default" - the shipped no-op preload, dispatched virtually as shipped.
     {
         void** vtbl = s->vtPrimary;
-        typedef char (__fastcall* PreloadFn)(void*, void*, const char*);
-        reinterpret_cast<PreloadFn>(vtbl[49])(s, 0, "default");
+        typedef char (__fastcall* PreloadFn)(void* BF2_EDX_PARAM, const char*);
+        reinterpret_cast<PreloadFn>(vtbl[49])(s, "default");
     }
 
     // sub_100A1240 - FontRenderer attach (its effect, decls, FONT_VBS ring). Withheld (RW-80).
@@ -2315,14 +2315,14 @@ int __fastcall sr_init(void* self, void*)
                 const int type = *reinterpret_cast<int*>(e + 28);
 #endif
                 void** vtbl = s->vtPrimary;
-                typedef void* (__fastcall* CreateFontFn)(void*, void*, const char*, int);
+                typedef void* (__fastcall* CreateFontFn)(void* BF2_EDX_PARAM, const char*, int);
                 void* font = 0;
                 if (type == 1)
-                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, 0, "StandardTextBold", 13);
+                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, "StandardTextBold", 13);
                 else if (type == 2)
-                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, 0, "StandardTextBold", 15);
+                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, "StandardTextBold", 15);
                 else
-                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, 0, "DynamicText", 11);
+                    font = reinterpret_cast<CreateFontFn>(vtbl[26])(s, "DynamicText", 11);
                 if (!font)
                     continue;       // withheld fonts (RW-80); the shipped dereferences here
                 // the size/flag fields, the localized setText, the release, and the push - all in
@@ -2346,7 +2346,7 @@ int __fastcall sr_init(void* self, void*)
 // shutdown - 0x10153FE0. The rain, the event handler, the paired releases, the fonts vector, the
 // VB ring + declaration, the six parameters, the effect, the FontRenderer detach.
 
-int __fastcall sr_shutdown(void* self, void*)
+int __fastcall sr_shutdown(void* self BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = static_cast<SwiffRender*>(self);
@@ -2361,9 +2361,9 @@ int __fastcall sr_shutdown(void* self, void*)
             for (void** f = r->first; f != r->last; ++f)
             {
                 void** vtbl = s->vtPrimary;
-                typedef void (__fastcall* ReleaseFontFn)(void*, void*, void*);
+                typedef void (__fastcall* ReleaseFontFn)(void* BF2_EDX_PARAM, void*);
                 if (*f)
-                    reinterpret_cast<ReleaseFontFn>(vtbl[27])(s, 0, *f);
+                    reinterpret_cast<ReleaseFontFn>(vtbl[27])(s, *f);
             }
             ::renddx9abi::engineFree(r->first);
         }
@@ -2478,7 +2478,7 @@ SwiffRender* ownerFromEcCore(void* sub)
 
 // Marks device loss, stops host rendering, and unlocks the ring buffer before the lower
 // priority BufferManager releases it. Initialization must have supplied a valid host.
-void __fastcall sr_onDeviceLost(void* sub, void*)
+void __fastcall sr_onDeviceLost(void* sub BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = ownerFromDevLost(sub);
@@ -2494,7 +2494,7 @@ void __fastcall sr_onDeviceLost(void* sub, void*)
 
 // Rebuilds cached techniques and resets menu modifier state after device reset.
 // The restart flag gates host flag updates and is re-read before requesting a menu restart.
-void __fastcall sr_onDeviceReset(void* sub, void*)
+void __fastcall sr_onDeviceReset(void* sub BF2_EDX_PARAM)
 {
     using namespace ::dice::hfe::dx9rend;
     SwiffRender* s = ownerFromDevLost(sub);
@@ -2534,10 +2534,10 @@ void __fastcall sr_onDeviceReset(void* sub, void*)
     }
 }
 
-void __fastcall sr_onDeviceDestroy(void*, void*) { }       // 0x10152870, SwiffRender's own `ret` (not the shared 0x10037D40)
+void __fastcall sr_onDeviceDestroy(void* BF2_EDX_PARAM) { }       // 0x10152870, SwiffRender's own `ret` (not the shared 0x10037D40)
 
 // the ECCore handler: event (11,3) disables font rendering.
-void __fastcall sr_handleECCoreEvent(void* sub, void*, int category, int id, int, int)
+void __fastcall sr_handleECCoreEvent(void* sub BF2_EDX_PARAM, int category, int id, int, int)
 {
     SwiffRender* s = ownerFromEcCore(sub);
     if (category == 11 && id == 3)
@@ -2715,7 +2715,7 @@ void swiffRenderDestroy(SwiffRender* s)
     s->vtDevLost = const_cast<void**>(kSwiffRenderVtableDevLost);
     s->vtEcCore  = const_cast<void**>(kSwiffRenderVtableEcCore);
 
-    sr_shutdown(s, 0);
+    sr_shutdown(s);
 
     // sub_100111E0 - the credits names at +1104.
     if (s->creditsFirst)
@@ -2776,9 +2776,9 @@ IBase* __fastcall createSwiffRender(unsigned int iid, IBase* outer)
     if (!storage)
         return 0;
     SwiffRender* self = swiffRenderConstruct(storage);
-    void* itf = sr_queryInterfaceById(self, 0, iid);
+    void* itf = sr_queryInterfaceById(self, iid);
     if (!itf)
-        sr_release(self, 0);
+        sr_release(self);
     return static_cast<IBase*>(itf);
 }
 

@@ -228,14 +228,14 @@ void* VideoTarget::queryInterface(unsigned int iid) const
 }
 
 namespace {
-void  __fastcall vt_addRef(void* s, void*)  { static_cast<VideoTarget*>(s)->addRef(); }
-int   __fastcall vt_getRef(void* s, void*)  { return static_cast<VideoTarget*>(s)->getRef(); }
-int   __fastcall vt_release(void* s, void*) { return static_cast<VideoTarget*>(s)->release(); }
-void* __fastcall vt_queryInterface(void* s, void*, unsigned int iid)
+void  __fastcall vt_addRef(void* s BF2_EDX_PARAM)  { static_cast<VideoTarget*>(s)->addRef(); }
+int   __fastcall vt_getRef(void* s BF2_EDX_PARAM)  { return static_cast<VideoTarget*>(s)->getRef(); }
+int   __fastcall vt_release(void* s BF2_EDX_PARAM) { return static_cast<VideoTarget*>(s)->release(); }
+void* __fastcall vt_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return static_cast<VideoTarget*>(s)->queryInterface(iid); }
-unsigned int __fastcall vt_getWidth(void* s, void*)  { return static_cast<VideoTarget*>(s)->width(); }
-unsigned int __fastcall vt_getHeight(void* s, void*) { return static_cast<VideoTarget*>(s)->height(); }
-void* __fastcall vt_dtor(void* s, void*, char flags)
+unsigned int __fastcall vt_getWidth(void* s BF2_EDX_PARAM)  { return static_cast<VideoTarget*>(s)->width(); }
+unsigned int __fastcall vt_getHeight(void* s BF2_EDX_PARAM) { return static_cast<VideoTarget*>(s)->height(); }
+void* __fastcall vt_dtor(void* s BF2_EDX_PARAM, char flags)
 { static_cast<VideoTarget*>(s)->dtor(flags); return s; }
 
 // VideoTarget_vftable_primary 0x1021E7D4, seven slots in the shipped order.
@@ -251,9 +251,9 @@ const void* kVideoTargetVtable[7] =
 };
 
 // Listener adapters receive the secondary subobject; unused edx preserves the x86 call convention.
-void __fastcall vt_onDeviceLost(void* sub, void*)  { VideoTarget::fromListener(sub)->onDeviceLost(); }
-void __fastcall vt_onDeviceReset(void* sub, void*) { VideoTarget::fromListener(sub)->onDeviceReset(); }
-void __fastcall vt_onDeviceDestroy(void*, void*)   { /* 0x1015A680: ret */ }
+void __fastcall vt_onDeviceLost(void* sub BF2_EDX_PARAM)  { VideoTarget::fromListener(sub)->onDeviceLost(); }
+void __fastcall vt_onDeviceReset(void* sub BF2_EDX_PARAM) { VideoTarget::fromListener(sub)->onDeviceReset(); }
+void __fastcall vt_onDeviceDestroy(void* BF2_EDX_PARAM)   { /* 0x1015A680: ret */ }
 
 const void* kVideoTargetListenerVtable[3] =
 {
@@ -535,24 +535,24 @@ void* Video::queryInterface(unsigned int iid) const
 }
 
 namespace {
-void  __fastcall vid_addRef(void* s, void*)  { static_cast<Video*>(s)->addRef(); }
-int   __fastcall vid_getRef(void* s, void*)  { return static_cast<Video*>(s)->getRef(); }
-int   __fastcall vid_release(void* s, void*) { return static_cast<Video*>(s)->release(); }
-void* __fastcall vid_queryInterface(void* s, void*, unsigned int iid)
+void  __fastcall vid_addRef(void* s BF2_EDX_PARAM)  { static_cast<Video*>(s)->addRef(); }
+int   __fastcall vid_getRef(void* s BF2_EDX_PARAM)  { return static_cast<Video*>(s)->getRef(); }
+int   __fastcall vid_release(void* s BF2_EDX_PARAM) { return static_cast<Video*>(s)->release(); }
+void* __fastcall vid_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return static_cast<Video*>(s)->queryInterface(iid); }
-unsigned int  __fastcall vid_getWidth(void* s, void*)  { return static_cast<Video*>(s)->width(); }
-unsigned int  __fastcall vid_getHeight(void* s, void*) { return static_cast<Video*>(s)->height(); }
-unsigned char __fastcall vid_open(void* s, void*, const HostString* path)
+unsigned int  __fastcall vid_getWidth(void* s BF2_EDX_PARAM)  { return static_cast<Video*>(s)->width(); }
+unsigned int  __fastcall vid_getHeight(void* s BF2_EDX_PARAM) { return static_cast<Video*>(s)->height(); }
+unsigned char __fastcall vid_open(void* s BF2_EDX_PARAM, const HostString* path)
 { return static_cast<Video*>(s)->open(path ? path->c_str() : 0) ? 1 : 0; }
-void* __fastcall vid_getFrame(void* s, void*) { return static_cast<Video*>(s)->acquireFrame(); }
-void  __fastcall vid_doFrame(void* s, void*)  { static_cast<Video*>(s)->doFrame(); }
-const HostString* __fastcall vid_getPath(void* s, void*)
+void* __fastcall vid_getFrame(void* s BF2_EDX_PARAM) { return static_cast<Video*>(s)->acquireFrame(); }
+void  __fastcall vid_doFrame(void* s BF2_EDX_PARAM)  { static_cast<Video*>(s)->doFrame(); }
+const HostString* __fastcall vid_getPath(void* s BF2_EDX_PARAM)
 { return &static_cast<Video*>(s)->path(); }
-unsigned char __fastcall vid_initSound(void* s, void*)
+unsigned char __fastcall vid_initSound(void* s BF2_EDX_PARAM)
 { return static_cast<Video*>(s)->initSound() ? 1 : 0; }
-void  __fastcall vid_shutdownSound(void* s, void*) { static_cast<Video*>(s)->shutdownSound(); }
-int   __fastcall vid_isDone(void* s, void*) { return static_cast<Video*>(s)->isDone() ? 1 : 0; }
-void* __fastcall vid_dtor(void* s, void*, char flags)
+void  __fastcall vid_shutdownSound(void* s BF2_EDX_PARAM) { static_cast<Video*>(s)->shutdownSound(); }
+int   __fastcall vid_isDone(void* s BF2_EDX_PARAM) { return static_cast<Video*>(s)->isDone() ? 1 : 0; }
+void* __fastcall vid_dtor(void* s BF2_EDX_PARAM, char flags)
 { static_cast<Video*>(s)->dtor(flags); return s; }
 
 // Video_vftable_primary 0x1021E81C, fourteen slots in the shipped order.
@@ -575,9 +575,9 @@ const void* kVideoVtable[14] =
 };
 
 // The DeviceLostResetListener table, 0x1021E810 (the three dwords before the primary table).
-void __fastcall vid_onDeviceLost(void* sub, void*)  { Video::fromListener(sub)->onDeviceLost(); }
-void __fastcall vid_onDeviceReset(void* sub, void*) { Video::fromListener(sub)->onDeviceReset(); }
-void __fastcall vid_onDeviceDestroy(void*, void*)   { /* 0x10037D40: ret, the shared nullsub */ }
+void __fastcall vid_onDeviceLost(void* sub BF2_EDX_PARAM)  { Video::fromListener(sub)->onDeviceLost(); }
+void __fastcall vid_onDeviceReset(void* sub BF2_EDX_PARAM) { Video::fromListener(sub)->onDeviceReset(); }
+void __fastcall vid_onDeviceDestroy(void* BF2_EDX_PARAM)   { /* 0x10037D40: ret, the shared nullsub */ }
 
 const void* kVideoListenerVtable[3] =
 {

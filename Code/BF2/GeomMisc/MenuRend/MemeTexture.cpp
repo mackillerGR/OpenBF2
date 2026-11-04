@@ -109,17 +109,17 @@ static_assert(sizeof(MemeTexture) == 0x88,
 
 namespace {
 
-void __fastcall meme_addRef(void* s, void*) { static_cast<MemeTexture*>(s)->addRef(); }
-int  __fastcall meme_getRef(void* s, void*) { return static_cast<MemeTexture*>(s)->getRef(); }
-int  __fastcall meme_release(void* s, void*) { return static_cast<MemeTexture*>(s)->release(); }
+void __fastcall meme_addRef(void* s BF2_EDX_PARAM) { static_cast<MemeTexture*>(s)->addRef(); }
+int  __fastcall meme_getRef(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getRef(); }
+int  __fastcall meme_release(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->release(); }
 
-void* __fastcall meme_queryInterface(void* s, void*, unsigned int iid)
+void* __fastcall meme_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<MemeTexture*>(s)->queryInterface(iid);
 }
 
 // +0x10, sub_10088EA0. the one BF2 calls.
-void __fastcall meme_setTexture(void* s, void*, const char* name, const char* prefix, int flags)
+void __fastcall meme_setTexture(void* s BF2_EDX_PARAM, const char* name, const char* prefix, int flags)
 {
     RD9_TRACE_AT("dice::hfe::geom::Meme::Texture::setTexture", s, 0x10);
     static_cast<MemeTexture*>(s)->setTexture(name, prefix, flags);
@@ -129,42 +129,42 @@ void __fastcall meme_setTexture(void* s, void*, const char* name, const char* pr
 // Float-returning adapters use the x86 FPU return convention expected by callers.
 
 
-bool __fastcall meme_s14(void* s, void*, unsigned int w, unsigned int h)
+bool __fastcall meme_s14(void* s BF2_EDX_PARAM, unsigned int w, unsigned int h)
 {
     RD9_TRACE_AT("dice::hfe::geom::Meme::Texture::createTexture", s, 0x14);
     return static_cast<MemeTexture*>(s)->createTexture(w, h);
 }
 
-bool __fastcall meme_s18(void* s, void*, void* request, float u0, float v0, float u1, float v1)
+bool __fastcall meme_s18(void* s BF2_EDX_PARAM, void* request, float u0, float v0, float u1, float v1)
 {
     return static_cast<MemeTexture*>(s)->drawUV(request, u0, v0, u1, v1);
 }
 
-bool __fastcall meme_s1C(void* s, void*, void* other, void* request)
+bool __fastcall meme_s1C(void* s BF2_EDX_PARAM, void* other, void* request)
 {
     return static_cast<MemeTexture*>(s)->drawOther(static_cast<MemeTexture*>(other), request);
 }
 
-const char*   __fastcall meme_s20(void* s, void*) { return static_cast<MemeTexture*>(s)->getName(); }
-void          __fastcall meme_s24(void* s, void*, void* p) { static_cast<MemeTexture*>(s)->setUserObject(p); }
-void*         __fastcall meme_s28(void* s, void*) { return static_cast<MemeTexture*>(s)->getUserObject(); }
-float         __fastcall meme_s2C(void* s, void*) { return static_cast<MemeTexture*>(s)->getUvWidthCopy(); }
-float         __fastcall meme_s30(void* s, void*) { return static_cast<MemeTexture*>(s)->getUvHeightCopy(); }
-int           __fastcall meme_s34(void* s, void*) { return static_cast<MemeTexture*>(s)->getPixelWidth(); }
-int           __fastcall meme_s38(void* s, void*) { return static_cast<MemeTexture*>(s)->getPixelHeight(); }
-int           __fastcall meme_s3C(void* s, void*) { return static_cast<MemeTexture*>(s)->getPageWidth(); }
-int           __fastcall meme_s40(void* s, void*) { return static_cast<MemeTexture*>(s)->getPageHeight(); }
-unsigned char __fastcall meme_s44(void* s, void*, unsigned char v) { return static_cast<MemeTexture*>(s)->setByte66(v); }
-unsigned char __fastcall meme_s48(void* s, void*) { return static_cast<MemeTexture*>(s)->getByte66(); }
-float         __fastcall meme_s4C(void* s, void*) { return static_cast<MemeTexture*>(s)->getUOffset(); }
-float         __fastcall meme_s50(void* s, void*) { return static_cast<MemeTexture*>(s)->getVOffset(); }
-float         __fastcall meme_s54(void* s, void*) { return static_cast<MemeTexture*>(s)->getUvWidth(); }
-float         __fastcall meme_s58(void* s, void*) { return static_cast<MemeTexture*>(s)->getUvHeight(); }
-void          __fastcall meme_s5C(void* s, void*) { static_cast<MemeTexture*>(s)->releaseTexture(); }
-void          __fastcall meme_s60(void* s, void*) { static_cast<MemeTexture*>(s)->unload(); }
+const char*   __fastcall meme_s20(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getName(); }
+void          __fastcall meme_s24(void* s BF2_EDX_PARAM, void* p) { static_cast<MemeTexture*>(s)->setUserObject(p); }
+void*         __fastcall meme_s28(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUserObject(); }
+float         __fastcall meme_s2C(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUvWidthCopy(); }
+float         __fastcall meme_s30(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUvHeightCopy(); }
+int           __fastcall meme_s34(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getPixelWidth(); }
+int           __fastcall meme_s38(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getPixelHeight(); }
+int           __fastcall meme_s3C(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getPageWidth(); }
+int           __fastcall meme_s40(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getPageHeight(); }
+unsigned char __fastcall meme_s44(void* s BF2_EDX_PARAM, unsigned char v) { return static_cast<MemeTexture*>(s)->setByte66(v); }
+unsigned char __fastcall meme_s48(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getByte66(); }
+float         __fastcall meme_s4C(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUOffset(); }
+float         __fastcall meme_s50(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getVOffset(); }
+float         __fastcall meme_s54(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUvWidth(); }
+float         __fastcall meme_s58(void* s BF2_EDX_PARAM) { return static_cast<MemeTexture*>(s)->getUvHeight(); }
+void          __fastcall meme_s5C(void* s BF2_EDX_PARAM) { static_cast<MemeTexture*>(s)->releaseTexture(); }
+void          __fastcall meme_s60(void* s BF2_EDX_PARAM) { static_cast<MemeTexture*>(s)->unload(); }
 
 // Reports the original unsupported-operation diagnostic and returns a truthy value.
-int __fastcall meme_s64(void* s, void*)
+int __fastcall meme_s64(void* s BF2_EDX_PARAM)
 {
     RD9_TRACE_AT("dice::hfe::geom::Meme::Texture::slot_0x64", s, 0x64);
     ::renddx9abi::logf("MemeTexture.cpp:291: hmm");
@@ -173,20 +173,20 @@ int __fastcall meme_s64(void* s, void*)
 
 // +0x68 / +0x70 take a 16-byte vector<pair<float,float>> by value (alloc/first/last/end) plus a
 // colour byte - five stack dwords, matching the shipped retn 0x14.
-void __fastcall meme_s68(void* s, void*, void* /*alloc*/, float* first, float* last,
+void __fastcall meme_s68(void* s BF2_EDX_PARAM, void* /*alloc*/, float* first, float* last,
                          float* /*end*/, unsigned char color)
 {
     static_cast<MemeTexture*>(s)->plotOutline(first, last, color);
 }
 
-void __fastcall meme_s6C(void* s, void*, unsigned char color)
+void __fastcall meme_s6C(void* s BF2_EDX_PARAM, unsigned char color)
 {
     static_cast<MemeTexture*>(s)->fillCanvas(color);
 }
 
 // +0x70, 0x10089480 - copy the caller's point pairs, run the outline plot (its OWN vslot +0x68,
 // which frees the copy), run the fill (vslot +0x6C), then free the caller's buffer.
-void __fastcall meme_s70(void* s, void*, void* alloc, float* first, float* last,
+void __fastcall meme_s70(void* s BF2_EDX_PARAM, void* alloc, float* first, float* last,
                          float* end, unsigned char color)
 {
     MemeTexture* self = static_cast<MemeTexture*>(s);
@@ -204,22 +204,22 @@ void __fastcall meme_s70(void* s, void*, void* alloc, float* first, float* last,
 
     // the two virtual dispatches, exactly as the shipped body makes them
     void** vtbl = *reinterpret_cast<void***>(self);
-    typedef void (__fastcall* PlotFn)(void*, void*, void*, float*, float*, float*, unsigned char);
-    typedef void (__fastcall* FillFn)(void*, void*, unsigned char);
-    reinterpret_cast<PlotFn>(vtbl[0x68 / 4])(self, 0, 0, copy, copyLast, copyLast, color);
-    reinterpret_cast<FillFn>(vtbl[0x6C / 4])(self, 0, color);
+    typedef void (__fastcall* PlotFn)(void* BF2_EDX_PARAM, void*, float*, float*, float*, unsigned char);
+    typedef void (__fastcall* FillFn)(void* BF2_EDX_PARAM, unsigned char);
+    reinterpret_cast<PlotFn>(vtbl[0x68 / 4])(self, 0, copy, copyLast, copyLast, color);
+    reinterpret_cast<FillFn>(vtbl[0x6C / 4])(self, color);
 
     (void)alloc; (void)end;
     if (first)
         ::renddx9abi::engineFree(first);                   // the shipped body frees the original
 }
 
-void __fastcall meme_s74(void* s, void*, unsigned char clearValue)
+void __fastcall meme_s74(void* s BF2_EDX_PARAM, unsigned char clearValue)
 {
     static_cast<MemeTexture*>(s)->beginShape(clearValue);
 }
 
-void __fastcall meme_s78(void* s, void*, short mode)
+void __fastcall meme_s78(void* s BF2_EDX_PARAM, short mode)
 {
     static_cast<MemeTexture*>(s)->applyCanvas(mode);
 }
@@ -260,15 +260,15 @@ void* const kMemeTextureVtable[31] =
 };
 
 // Listener thunks receive the secondary subobject and adjust back to the texture owner.
-void __fastcall meme_onDeviceLost(void* s, void*)
+void __fastcall meme_onDeviceLost(void* s BF2_EDX_PARAM)
 {
     reinterpret_cast<MemeTexture*>(reinterpret_cast<char*>(s) - 4)->onDeviceLost();
 }
-void __fastcall meme_onDeviceReset(void* s, void*)
+void __fastcall meme_onDeviceReset(void* s BF2_EDX_PARAM)
 {
     reinterpret_cast<MemeTexture*>(reinterpret_cast<char*>(s) - 4)->onDeviceReset();
 }
-void __fastcall meme_listenerNullsub(void*, void*) { /* nullsub_15 - empty in the original */ }
+void __fastcall meme_listenerNullsub(void* BF2_EDX_PARAM) { /* nullsub_15 - empty in the original */ }
 
 void* const kMemeTextureListenerVtable[3] =
 {

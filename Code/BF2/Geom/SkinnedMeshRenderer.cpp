@@ -44,14 +44,14 @@ struct SkinnedMeshRenderer
 namespace {
 
 // primary vtable (0x1021C928, 6 slots) - refcount at +0x0C
-int __fastcall skm_addRef(void* self, void*) { return ++static_cast<SkinnedMeshRenderer*>(self)->m_refCount; }
-int __fastcall skm_getRc (void* self, void*) { return   static_cast<SkinnedMeshRenderer*>(self)->m_refCount; }
-int __fastcall skm_release(void* self, void*);
+int __fastcall skm_addRef(void* self BF2_EDX_PARAM) { return ++static_cast<SkinnedMeshRenderer*>(self)->m_refCount; }
+int __fastcall skm_getRc (void* self BF2_EDX_PARAM) { return   static_cast<SkinnedMeshRenderer*>(self)->m_refCount; }
+int __fastcall skm_release(void* self BF2_EDX_PARAM);
 // queryInterface (0x10025930): iid 1 only.
-void* __fastcall skm_qi(void* self, void*, unsigned int iid) { return (iid == RD9_IID_IBASE) ? self : 0; }
+void* __fastcall skm_qi(void* self BF2_EDX_PARAM, unsigned int iid) { return (iid == RD9_IID_IBASE) ? self : 0; }
 // +0x10 setBool([+0x34]), +0x14 getBool.
-void __fastcall skm_setBool(void* self, void*, int v) { static_cast<SkinnedMeshRenderer*>(self)->m_bool = static_cast<unsigned char>(v); }
-int  __fastcall skm_getBool(void* self, void*)        { return static_cast<SkinnedMeshRenderer*>(self)->m_bool; }
+void __fastcall skm_setBool(void* self BF2_EDX_PARAM, int v) { static_cast<SkinnedMeshRenderer*>(self)->m_bool = static_cast<unsigned char>(v); }
+int  __fastcall skm_getBool(void* self BF2_EDX_PARAM)        { return static_cast<SkinnedMeshRenderer*>(self)->m_bool; }
 
 // secondary vtable (0x1021C910, RenderPathListener, 6 slots). `self` is the subobject pointer at
 // object+0x04, so the object is `self - 4` and the render-path back-pointer is object+0x08.
@@ -59,18 +59,18 @@ inline SkinnedMeshRenderer* objOfListener(void* self)
 {
     return reinterpret_cast<SkinnedMeshRenderer*>(reinterpret_cast<char*>(self) - 4);
 }
-void  __fastcall skm_setRenderPath(void* self, void*, void* path) { objOfListener(self)->m_renderPath = path; }
-void* __fastcall skm_getRenderPath(void* self, void*)             { return objOfListener(self)->m_renderPath; }
-void  __fastcall skm_lisNull1(void*, void*)      { }   // +0x04 nullsub_15
-void  __fastcall skm_lisNull2(void*, void*, int) { }   // +0x08 nullsub_53
+void  __fastcall skm_setRenderPath(void* self BF2_EDX_PARAM, void* path) { objOfListener(self)->m_renderPath = path; }
+void* __fastcall skm_getRenderPath(void* self BF2_EDX_PARAM)             { return objOfListener(self)->m_renderPath; }
+void  __fastcall skm_lisNull1(void* BF2_EDX_PARAM)      { }   // +0x04 nullsub_15
+void  __fastcall skm_lisNull2(void* BF2_EDX_PARAM, int) { }   // +0x08 nullsub_53
 // +0x0C: the shipped "This path is invalid" error emitter (SkinnedMeshRenderer.cpp:29). Reproduced as
 // a one-line diagnostic rather than the full dice error machinery.
-void __fastcall skm_lisPathInvalid(void*, void*, void*)
+void __fastcall skm_lisPathInvalid(void* BF2_EDX_PARAM, void*)
 {
     ::renddx9abi::logf("SkinnedMeshRenderer.cpp:29: This path is invalid");
 }
 // +0x14 getRenderPathListenerName -> returns "SkinnedMeshRenderer" by value (hidden out-pointer).
-void* __fastcall skm_lisGetName(void*, void*, void* out)
+void* __fastcall skm_lisGetName(void* BF2_EDX_PARAM, void* out)
 {
     new (out) vc71::string("SkinnedMeshRenderer");
     return out;
@@ -96,7 +96,7 @@ const void* const kListenerVtable[6] =
     reinterpret_cast<void*>(&skm_lisGetName),     // +0x14  getName
 };
 
-int __fastcall skm_release(void* self, void*)
+int __fastcall skm_release(void* self BF2_EDX_PARAM)
 {
     SkinnedMeshRenderer* p = static_cast<SkinnedMeshRenderer*>(self);
     const int remaining = --p->m_refCount;
@@ -148,9 +148,9 @@ IBase* __fastcall createSkinnedMeshRenderer(unsigned int iid, IBase* outer)
     SkinnedMeshRenderer* self = static_cast<SkinnedMeshRenderer*>(storage);
     constructSkinnedMeshRenderer(self);
 
-    void* itf = skm_qi(self, 0, iid);
+    void* itf = skm_qi(self, iid);
     if (!itf)
-        skm_release(self, 0);
+        skm_release(self);
     return static_cast<IBase*>(itf);
 }
 

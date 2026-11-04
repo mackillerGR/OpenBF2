@@ -250,7 +250,7 @@ private:
 
 inline void* geometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 IGeometryTemplate* geometryGetTemplate(void* geometry)                         // +0x38
 {

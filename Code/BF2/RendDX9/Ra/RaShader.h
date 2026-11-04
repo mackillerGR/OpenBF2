@@ -465,7 +465,7 @@ void* raHolderLightRecordPointer();   // off_101DD3FC  SetValue(68) of the point
 
 // sub_10046660 - the "Lights_1X" resolver the light-array block stores at +0x18: the pointed-at
 // RaLightRecord copied over a file-scope record with its colour halved.  Defined in RaShader.cpp.
-void* __fastcall raLightArrayUpdate(void* lightsValue, void*);
+void* __fastcall raLightArrayUpdate(void* lightsValue BF2_EDX_PARAM);
 
 
 // Vertex-stream requirements used by StaticMeshMaterial::applyStreams.

@@ -150,17 +150,17 @@ void shaderMaterialDestroyMembers(ShaderMaterial* self)
     self->name.~string();
 }
 
-int __fastcall shaderMaterial_addRef(void* self, void*)
+int __fastcall shaderMaterial_addRef(void* self BF2_EDX_PARAM)
 {
     return ++static_cast<ShaderMaterial*>(self)->refCount;
 }
 
-int __fastcall shaderMaterial_getRef(void* self, void*)
+int __fastcall shaderMaterial_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<ShaderMaterial*>(self)->refCount;
 }
 
-void* __fastcall shaderMaterial_destroy(void* self, void*, unsigned char flags)
+void* __fastcall shaderMaterial_destroy(void* self BF2_EDX_PARAM, unsigned char flags)
 {
 
     shaderMaterialDestroyMembers(static_cast<ShaderMaterial*>(self));
@@ -169,17 +169,17 @@ void* __fastcall shaderMaterial_destroy(void* self, void*, unsigned char flags)
     return self;
 }
 
-int __fastcall shaderMaterial_release(void* self, void*)
+int __fastcall shaderMaterial_release(void* self BF2_EDX_PARAM)
 {
     // decrement, and on zero dispatch through slot +0x10 with 1.
     ShaderMaterial* const p = static_cast<ShaderMaterial*>(self);
     const int remaining = --p->refCount;
     if (remaining == 0)
-        shaderMaterial_destroy(self, 0, 1);
+        shaderMaterial_destroy(self, 1);
     return remaining;
 }
 
-void* __fastcall shaderMaterial_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall shaderMaterial_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return iid != 1u ? 0 : self;
 }
@@ -204,9 +204,9 @@ void* const* shaderMaterialVtable() { return kShaderMaterialVtable; }
 // record's own vptr rather than calling the body directly keeps that property.
 int shaderMaterialRelease(ShaderMaterial* material)
 {
-    typedef int (__fastcall* ReleaseFn)(void*, void*);
+    typedef int (__fastcall* ReleaseFn)(void* BF2_EDX_PARAM);
     void** const table = reinterpret_cast<void**>(material->vptr);
-    return reinterpret_cast<ReleaseFn>(table[2])(material, 0);
+    return reinterpret_cast<ReleaseFn>(table[2])(material);
 }
 
 StaticMeshStateManager::StaticMeshStateManager()
@@ -444,7 +444,7 @@ void staticMeshCachePush(vc71::vector_layout& cache, ShaderMaterial* value)
 // exactly once - by shaderMaterialDestroyMembers - on every one of the shipped body's four exits.
 struct ShaderMaterialScratch
 {
-    void* words[(sizeof(ShaderMaterial) + sizeof(void*) - 1) / sizeof(void*)];
+    void* words[(sizeof(ShaderMaterial) + sizeof(void*) - 1)  / 4];
     ShaderMaterial& get() { return *reinterpret_cast<ShaderMaterial*>(words); }
 };
 
@@ -559,7 +559,7 @@ ShaderMaterial* StaticMeshStateManager::createMaterial(const vc71::string& path,
 
     if (ShaderMaterial* const cached = staticMeshFindCachedMaterial(this, &temp))
     {
-        shaderMaterial_addRef(cached, 0);        // the shipped `(v23)(v23)` - slot +0x00
+        shaderMaterial_addRef(cached);        // the shipped `(v23)(v23)` - slot +0x00
         shaderMaterialDestroyMembers(&temp);
         return cached;
     }

@@ -66,9 +66,9 @@ static_assert(sizeof(Query) == 0x1C, "sub_10004420 allocates 0x1C - see 0x100044
 // function be __thiscall and the table has to hold real entries rather than a null.
 namespace {
 
-int  __fastcall query_getRef(void* self, void*)  { return static_cast<Query*>(self)->getRef(); }
-void __fastcall query_nullsub(void*, void*)      { /* nullsub_53 - empty in the original too */ }
-void __fastcall query_addRef(void* self, void*)  { static_cast<Query*>(self)->addRef(); }
+int  __fastcall query_getRef(void* self BF2_EDX_PARAM)  { return static_cast<Query*>(self)->getRef(); }
+void __fastcall query_nullsub(void* BF2_EDX_PARAM)      { /* nullsub_53 - empty in the original too */ }
+void __fastcall query_addRef(void* self BF2_EDX_PARAM)  { static_cast<Query*>(self)->addRef(); }
 
 void* const kQueryVtable[3] =
 {
@@ -158,9 +158,9 @@ static_assert(sizeof(QueryManager) == 0x20,
 
 namespace {
 
-void __fastcall qm_onDeviceLost(void* self, void*)  { static_cast<QueryManager*>(self)->onDeviceLost(); }
-void __fastcall qm_onDeviceReset(void* self, void*) { static_cast<QueryManager*>(self)->onDeviceReset(); }
-void __fastcall qm_nullsub(void*, void*)            { /* nullsub_21 - empty in the original too */ }
+void __fastcall qm_onDeviceLost(void* self BF2_EDX_PARAM)  { static_cast<QueryManager*>(self)->onDeviceLost(); }
+void __fastcall qm_onDeviceReset(void* self BF2_EDX_PARAM) { static_cast<QueryManager*>(self)->onDeviceReset(); }
+void __fastcall qm_nullsub(void* BF2_EDX_PARAM)            { /* nullsub_21 - empty in the original too */ }
 
 void* const kQueryManagerVtable[3] =
 {

@@ -168,10 +168,10 @@ struct VertexBuffer
 static_assert(sizeof(VertexBuffer) == 0x2C, "createVertexBuffer allocates 0x2C - see 0x100120A0");
 
 // Both buffer wrappers share this +4 reference-count getter.
-int   __fastcall vb_getRef(void* self, void*)
+int   __fastcall vb_getRef(void* self BF2_EDX_PARAM)
 { return *reinterpret_cast<int*>(static_cast<unsigned char*>(self) + 4); }
-void  __fastcall vb_nullsub(void*, void*) { }
-void  __fastcall vb_addRef(void* s, void*) { ++static_cast<VertexBuffer*>(s)->refCount; }
+void  __fastcall vb_nullsub(void* BF2_EDX_PARAM) { }
+void  __fastcall vb_addRef(void* s BF2_EDX_PARAM) { ++static_cast<VertexBuffer*>(s)->refCount; }
 
 void* const kVertexBufferVtable[3] =
 {
@@ -375,7 +375,7 @@ unsigned int vertexBufferVertexCount(void* wrapper)
 
 
 // Adds an owner reference to the shared vertex-buffer wrapper.
-void vertexBufferAddRef(void* wrapper) { vb_addRef(wrapper, 0); }
+void vertexBufferAddRef(void* wrapper) { vb_addRef(wrapper); }
 
 // The shipped call sites release a VertexBuffer wrapper inline: `if (!--wrapper[1])
 // { sub_10014510(wrapper); engineFree(wrapper); }`. sub_10014510, read in full: restore the base
@@ -541,9 +541,9 @@ struct VertexDeclaration
     IDirect3DVertexDeclaration9*    decl;       // +0x08
 };
 
-void __fastcall vd_getRef(void* s, void*) { (void)s; }
-void __fastcall vd_nullsub(void*, void*) { }
-void __fastcall vd_addRef(void* s, void*) { ++static_cast<VertexDeclaration*>(s)->refCount; }
+void __fastcall vd_getRef(void* s BF2_EDX_PARAM) { (void)s; }
+void __fastcall vd_nullsub(void* BF2_EDX_PARAM) { }
+void __fastcall vd_addRef(void* s BF2_EDX_PARAM) { ++static_cast<VertexDeclaration*>(s)->refCount; }
 
 void* const kVertexDeclVtable[3] =
 {

@@ -70,8 +70,8 @@ template<class T> const T& field(const void* object, unsigned int offset)
 // table, the ObjectDrawer's hand-built table) - the house `dispatch` from BundledMesh.cpp.
 template<class R, class... A> R dispatch(void* self, unsigned int offset, A... args)
 {
-    typedef R(__fastcall* Fn)(void*, void*, A...);
-    return reinterpret_cast<Fn>((*static_cast<void***>(self))[offset / 4])(self, 0, args...);
+    typedef R(__fastcall* Fn)(void* BF2_EDX_PARAM, A...);
+    return reinterpret_cast<Fn>((*static_cast<void***>(self))[offset / 4])(self, args...);
 }
 
 // [TEMP] [CHOSEN, not recovered] Known-signature boundaries always report, flush and stop

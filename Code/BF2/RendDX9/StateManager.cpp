@@ -54,9 +54,9 @@ struct StateCell
 // call-compatible with the shipped __thiscall sites.
 //     slot 0 = issue(index, value)  - the one D3D call this block family makes
 //     slot 1 = copy(dst, src)       - *dst = *src; the texture block overrides it refcounted
-typedef void (__fastcall* BlockIssueFn)(void* self, void* edx, unsigned int index,
+typedef void (__fastcall* BlockIssueFn)(void* self BF2_EDX_PARAM, unsigned int index,
                                         unsigned int value);
-typedef void (__fastcall* BlockCopyFn)(void* self, void* edx, unsigned int* dst,
+typedef void (__fastcall* BlockCopyFn)(void* self BF2_EDX_PARAM, unsigned int* dst,
                                        unsigned int* src);
 
 template <unsigned int N>
@@ -184,7 +184,7 @@ inline StateManager* sm() { return static_cast<StateManager*>(g_stateManager); }
 
 
 // Shared copy, 0x10027350 (comdat-folded into every non-texture vtable): *dst = *src.
-void __fastcall blockCopyPlain(void*, void*, unsigned int* dst, unsigned int* src)
+void __fastcall blockCopyPlain(void* BF2_EDX_PARAM, unsigned int* dst, unsigned int* src)
 {
     *dst = *src;
 }
@@ -193,7 +193,7 @@ void __fastcall blockCopyPlain(void*, void*, unsigned int* dst, unsigned int* sr
 // The shipped body calls vtable +0x08 to release and +0x04 to add - IUnknown's Release/AddRef
 // slots, __stdcall with the object pushed - because what travels through these cells is the RAW
 // IDirect3DBaseTexture9 the setter was handed (see smSetTexture).
-void __fastcall blockCopyTextureRef(void*, void*, unsigned int* dst, unsigned int* src)
+void __fastcall blockCopyTextureRef(void* BF2_EDX_PARAM, unsigned int* dst, unsigned int* src)
 {
     if (*dst)
         reinterpret_cast<IUnknown*>(*dst)->Release();
@@ -204,7 +204,7 @@ void __fastcall blockCopyTextureRef(void*, void*, unsigned int* dst, unsigned in
 
 // Applies render state with vendor-specific transparency AA codes.
 // Any nonzero unsigned request enables it when multisample AA is active.
-void __fastcall rsIssue(void* self, void*, unsigned int state, unsigned int value)
+void __fastcall rsIssue(void* self BF2_EDX_PARAM, unsigned int state, unsigned int value)
 {
     RenderStateBlock* block = static_cast<RenderStateBlock*>(self);
     IDirect3DDevice9* dev = rendererDevice();
@@ -238,20 +238,20 @@ void __fastcall rsIssue(void* self, void*, unsigned int state, unsigned int valu
 // unwrapped by its callers. What travels through the texture cells is therefore the RAW
 // IDirect3DBaseTexture9 on the issue side and the refcounted wrapper never reaches the device.
 // See smSetTexture below - D3DX calls it with the raw pointer it got from FXParameter's unwrap.
-void __fastcall texIssue(void*, void*, unsigned int stage, unsigned int value)
+void __fastcall texIssue(void* BF2_EDX_PARAM, unsigned int stage, unsigned int value)
 {
     rendererDevice()->SetTexture(stage, reinterpret_cast<IDirect3DBaseTexture9*>(value));
 }
 
 // Sampler issue, the stage rides in the block's own tail dword.
-void __fastcall samplerIssue(void* self, void*, unsigned int type, unsigned int value)
+void __fastcall samplerIssue(void* self BF2_EDX_PARAM, unsigned int type, unsigned int value)
 {
     rendererDevice()->SetSamplerState(static_cast<SamplerBlock*>(self)->stage,
                                       static_cast<D3DSAMPLERSTATETYPE>(type), value);
 }
 
 // Texture-transform issue, always D3DTSS 24 (texturetransformflags), index ignored.
-void __fastcall ttfIssue(void* self, void*, unsigned int, unsigned int value)
+void __fastcall ttfIssue(void* self BF2_EDX_PARAM, unsigned int, unsigned int value)
 {
     rendererDevice()->SetTextureStageState(static_cast<TtfBlock*>(self)->stage,
                                            D3DTSS_TEXTURETRANSFORMFLAGS, value);
@@ -260,7 +260,7 @@ void __fastcall ttfIssue(void* self, void*, unsigned int, unsigned int value)
 // The five block vtables, mirroring off_101DFF10..off_101DFF30. The abstract base's issue slot is
 // pure (0x101C450E is _purecall); nothing here ever dispatches through the base vtable because the
 // constructor immediately overwrites it, so the base slot aborts if it is ever reached.
-void __fastcall blockIssuePure(void* self, void*, unsigned int, unsigned int)
+void __fastcall blockIssuePure(void* self BF2_EDX_PARAM, unsigned int, unsigned int)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::StateManager - _purecall on a mirror block "
                     "(the base vtable at off_101DFF10 was left installed)", self, 0x00);
@@ -322,7 +322,7 @@ void blockSet(StateMirrorBlock<N>* b, unsigned int index, unsigned int value)
         b->listPending[b->countPending++] = static_cast<unsigned char>(index);
         cell.flags |= 2u;
     }
-    blockCopySlot(b)(b, 0, &cell.f2Wanted, &value);
+    blockCopySlot(b)(b, &cell.f2Wanted, &value);
     if ((cell.flags & 1u) == 0)
     {
         b->listTouched[b->countTouched++] = static_cast<unsigned char>(index);
@@ -347,8 +347,8 @@ int blockIssuePending(StateMirrorBlock<N>* b)
         cell.flags &= ~2u;
         if (cell.f2Wanted != cell.f0Device)
         {
-            blockCopySlot(b)(b, 0, &cell.f0Device, &cell.f2Wanted);
-            blockIssueSlot(b)(b, 0, index, cell.f0Device);
+            blockCopySlot(b)(b, &cell.f0Device, &cell.f2Wanted);
+            blockIssueSlot(b)(b, index, cell.f0Device);
             ++issued;
         }
     }
@@ -398,7 +398,7 @@ void blockScheduleRestore(StateMirrorBlock<N>* b)
             {
                 b->listPending[b->countPending++] = index;
                 cell.flags |= 2u;
-                blockCopySlot(b)(b, 0, &cell.f2Wanted, &cell.f1Base);
+                blockCopySlot(b)(b, &cell.f2Wanted, &cell.f1Base);
             }
         }
     }
@@ -423,9 +423,9 @@ void blockReissueSeeded(StateMirrorBlock<N>* b)
         StateCell& cell = b->cells[i];
         if (cell.flags & 4u)
         {
-            blockCopySlot(b)(b, 0, &cell.f0Device, &cell.f1Base);
+            blockCopySlot(b)(b, &cell.f0Device, &cell.f1Base);
             cell.flags &= 0xFCu;
-            blockIssueSlot(b)(b, 0, i, cell.f0Device);
+            blockIssueSlot(b)(b, i, cell.f0Device);
         }
     }
     b->countPending = 0;
@@ -529,10 +529,10 @@ void resetToDefaults(StateManager* self)
         StateCell& cell = tb.cells[0];
         cell.flags |= 4u;
         cell.f1Base = 0;
-        blockCopySlot(&tb)(&tb, 0, &cell.f0Device, &cell.f1Base);
+        blockCopySlot(&tb)(&tb, &cell.f0Device, &cell.f1Base);
         const unsigned int value = cell.f0Device;
         cell.flags &= 0xFCu;
-        blockIssueSlot(&tb)(&tb, 0, 0, value);
+        blockIssueSlot(&tb)(&tb, 0, value);
         tb.countTouched = 0;
         tb.countPending = 0;
     }
@@ -1000,7 +1000,7 @@ void dropTextureBlockRefs(TextureBlock* block)
     }
 }
 
-void __fastcall listenerOnDeviceLost(void* listener, void*)
+void __fastcall listenerOnDeviceLost(void* listener BF2_EDX_PARAM)
 {
     StateManager* self = fromListener(listener);
     dropTextureBlockRefs(&self->textures);
@@ -1023,7 +1023,7 @@ void __fastcall listenerOnDeviceLost(void* listener, void*)
     self->pixelShader  = 0;  self->pixelShaderDirty  = 0;
 }
 
-void __fastcall listenerOnDeviceReset(void* listener, void*)
+void __fastcall listenerOnDeviceReset(void* listener BF2_EDX_PARAM)
 {
     StateManager* self = fromListener(listener);
     blockReissueSeeded(&self->renderStates);
@@ -1035,19 +1035,19 @@ void __fastcall listenerOnDeviceReset(void* listener, void*)
         StateCell& cell = tb.cells[0];
         if (cell.flags & 4u)
         {
-            blockCopySlot(&tb)(&tb, 0, &cell.f0Device, &cell.f1Base);
+            blockCopySlot(&tb)(&tb, &cell.f0Device, &cell.f1Base);
             const unsigned int value = cell.f0Device;
             cell.flags &= 0xFCu;
-            blockIssueSlot(&tb)(&tb, 0, 0, value);
+            blockIssueSlot(&tb)(&tb, 0, value);
         }
         tb.countPending = 0;
         tb.countTouched = 0;
     }
 }
 
-void __fastcall listenerOnDeviceDestroy(void* listener, void* edx)
+void __fastcall listenerOnDeviceDestroy(void* listener BF2_EDX_PARAM)
 {
-    listenerOnDeviceLost(listener, edx);
+    listenerOnDeviceLost(listener);
 }
 
 } // anonymous namespace
@@ -1235,7 +1235,7 @@ void StateManager::setRenderStatePersistent(unsigned int state, unsigned int val
     cell.flags |= 4u;
     cell.f0Device = value;
     cell.f1Base   = value;
-    rsIssue(&renderStates, 0, state, value);
+    rsIssue(&renderStates, state, value);
 }
 
 void stateManagerSetRenderStatePersistent(unsigned int state, unsigned int value)

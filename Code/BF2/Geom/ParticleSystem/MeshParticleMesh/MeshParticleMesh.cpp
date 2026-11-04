@@ -185,8 +185,8 @@ int MeshParticleMesh::release()
     const int remaining = --m_refCount;
     if (!remaining)
     {
-        typedef void* (__fastcall* DestroyFn)(void*, void*, unsigned int);
-        reinterpret_cast<DestroyFn>(m_vptr[0x34 / sizeof(void*)])(this, 0, 1u);   // [eax+34h] (1)
+        typedef void* (__fastcall* DestroyFn)(void* BF2_EDX_PARAM, unsigned int);
+        reinterpret_cast<DestroyFn>(m_vptr[0x34  / 4])(this, 1u);   // [eax+34h] (1)
     }
     return remaining;
 }
@@ -277,8 +277,8 @@ void MeshParticleMesh::setPartTransformation(const Mat4* value, int part)
 // +0x50, through THE table: `call [eax+4Ch]` with (value, 0).
 void MeshParticleMesh::setGeometryTransformation(const Mat4* value)
 {
-    typedef void (__fastcall* SetPartFn)(void*, void*, const Mat4*, int);
-    reinterpret_cast<SetPartFn>(m_vptr[0x4C / sizeof(void*)])(this, 0, value, 0);
+    typedef void (__fastcall* SetPartFn)(void* BF2_EDX_PARAM, const Mat4*, int);
+    reinterpret_cast<SetPartFn>(m_vptr[0x4C  / 4])(this, value, 0);
 }
 
 // Selects geom and the current LOD without checking their range or loaded state.
@@ -486,67 +486,67 @@ MeshParticleMesh* fromScaleable(void* p)
     return reinterpret_cast<MeshParticleMesh*>(static_cast<unsigned char*>(p) - 0x30);
 }
 
-int   __fastcall mpm_addRef(void* s, void*)                   { return self(s)->addRef(); }
-int   __fastcall mpm_getRef(void* s, void*)                   { return self(s)->getRef(); }
-int   __fastcall mpm_release(void* s, void*)                  { return self(s)->release(); }
-void* __fastcall mpm_queryInterface(void* s, void*, unsigned int iid)
+int   __fastcall mpm_addRef(void* s BF2_EDX_PARAM)                   { return self(s)->addRef(); }
+int   __fastcall mpm_getRef(void* s BF2_EDX_PARAM)                   { return self(s)->getRef(); }
+int   __fastcall mpm_release(void* s BF2_EDX_PARAM)                  { return self(s)->release(); }
+void* __fastcall mpm_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return self(s)->queryInterface(iid); }
-void  __fastcall mpm_setFov(void* s, void*, float v)          { self(s)->setFov(v); }
-float __fastcall mpm_getFov(void* s, void*)                   { return self(s)->getFov(); }
-void  __fastcall mpm_queueDraw(void* s, void*, void* a, void* b, int c)
+void  __fastcall mpm_setFov(void* s BF2_EDX_PARAM, float v)          { self(s)->setFov(v); }
+float __fastcall mpm_getFov(void* s BF2_EDX_PARAM)                   { return self(s)->getFov(); }
+void  __fastcall mpm_queueDraw(void* s BF2_EDX_PARAM, void* a, void* b, int c)
 { self(s)->queueDraw(a, b, c); }
-int   __fastcall mpm_getGeometryType(void* s, void*)          { return self(s)->getGeometryType(); }
-void* __fastcall mpm_destroy(void* s, void*, unsigned int flags)
+int   __fastcall mpm_getGeometryType(void* s BF2_EDX_PARAM)          { return self(s)->getGeometryType(); }
+void* __fastcall mpm_destroy(void* s BF2_EDX_PARAM, unsigned int flags)
 { return meshParticleMeshDestroyFlags(s, static_cast<unsigned char>(flags)); }
-void* __fastcall mpm_getTemplate(void* s, void*)              { return self(s)->getTemplate(); }
-const void* __fastcall mpm_getLocalBounds(void* s, void*)     { return self(s)->getLocalBounds(); }
-float __fastcall mpm_getBoundingRadius(void* s, void*)        { return self(s)->getBoundingRadius(); }
-const Mat4* __fastcall mpm_getGeometryTransformation(void* s, void*)
+void* __fastcall mpm_getTemplate(void* s BF2_EDX_PARAM)              { return self(s)->getTemplate(); }
+const void* __fastcall mpm_getLocalBounds(void* s BF2_EDX_PARAM)     { return self(s)->getLocalBounds(); }
+float __fastcall mpm_getBoundingRadius(void* s BF2_EDX_PARAM)        { return self(s)->getBoundingRadius(); }
+const Mat4* __fastcall mpm_getGeometryTransformation(void* s BF2_EDX_PARAM)
 { return self(s)->getGeometryTransformation(); }
-void  __fastcall mpm_setPartTransformation(void* s, void*, const Mat4* v, int part)
+void  __fastcall mpm_setPartTransformation(void* s BF2_EDX_PARAM, const Mat4* v, int part)
 { self(s)->setPartTransformation(v, part); }
-void  __fastcall mpm_setGeometryTransformation(void* s, void*, const Mat4* v)
+void  __fastcall mpm_setGeometryTransformation(void* s BF2_EDX_PARAM, const Mat4* v)
 { self(s)->setGeometryTransformation(v); }
-void  __fastcall mpm_setName(void* s, void*, const vc71::string& name) { self(s)->m_name = name.c_str(); }
-void  __fastcall mpm_setGeomIndex(void* s, void*, int g)      { self(s)->setGeomIndex(g); }
-int   __fastcall mpm_getGeomIndex(void* s, void*)             { return self(s)->getGeomIndex(); }
-int   __fastcall mpm_getGeomCount(void* s, void*)             { return self(s)->getGeomCount(); }
-void  __fastcall mpm_setLodIndex(void* s, void*, int l)       { self(s)->setLodIndex(l); }
-int   __fastcall mpm_getLodIndex(void* s, void*)              { return self(s)->getLodIndex(); }
-int   __fastcall mpm_getLodCount(void* s, void*)              { return self(s)->getLodCount(); }
-void  __fastcall mpm_setDword58(void* s, void*, unsigned int v) { self(s)->setDword58(v); }
-unsigned char __fastcall mpm_getFirstPerson(void* s, void*)   { return self(s)->getFirstPerson(); }
-void  __fastcall mpm_setFirstPerson(void* s, void*, unsigned int v)
+void  __fastcall mpm_setName(void* s BF2_EDX_PARAM, const vc71::string& name) { self(s)->m_name = name.c_str(); }
+void  __fastcall mpm_setGeomIndex(void* s BF2_EDX_PARAM, int g)      { self(s)->setGeomIndex(g); }
+int   __fastcall mpm_getGeomIndex(void* s BF2_EDX_PARAM)             { return self(s)->getGeomIndex(); }
+int   __fastcall mpm_getGeomCount(void* s BF2_EDX_PARAM)             { return self(s)->getGeomCount(); }
+void  __fastcall mpm_setLodIndex(void* s BF2_EDX_PARAM, int l)       { self(s)->setLodIndex(l); }
+int   __fastcall mpm_getLodIndex(void* s BF2_EDX_PARAM)              { return self(s)->getLodIndex(); }
+int   __fastcall mpm_getLodCount(void* s BF2_EDX_PARAM)              { return self(s)->getLodCount(); }
+void  __fastcall mpm_setDword58(void* s BF2_EDX_PARAM, unsigned int v) { self(s)->setDword58(v); }
+unsigned char __fastcall mpm_getFirstPerson(void* s BF2_EDX_PARAM)   { return self(s)->getFirstPerson(); }
+void  __fastcall mpm_setFirstPerson(void* s BF2_EDX_PARAM, unsigned int v)
 { self(s)->setFirstPerson(static_cast<unsigned char>(v)); }  // `mov al, [ebp+8]` - the low byte
-unsigned char __fastcall mpm_getAlternateView(void* s, void*) { return self(s)->getAlternateView(); }
-void  __fastcall mpm_setAlternateView(void* s, void*, unsigned int v)
+unsigned char __fastcall mpm_getAlternateView(void* s BF2_EDX_PARAM) { return self(s)->getAlternateView(); }
+void  __fastcall mpm_setAlternateView(void* s BF2_EDX_PARAM, unsigned int v)
 { self(s)->setAlternateView(static_cast<unsigned char>(v)); }
-void  __fastcall mpm_slotF8(void* s, void*, unsigned int a, unsigned int b, unsigned int c)
+void  __fastcall mpm_slotF8(void* s BF2_EDX_PARAM, unsigned int a, unsigned int b, unsigned int c)
 { self(s)->slotF8(a, b, c); }
-void  __fastcall mpm_setAlpha(void* s, void*, float v)        { self(s)->setAlpha(v); }
+void  __fastcall mpm_setAlpha(void* s BF2_EDX_PARAM, float v)        { self(s)->setAlpha(v); }
 
 // The shared bodies.
-void  __fastcall mpm_empty0(void*, void*) {}
-void  __fastcall mpm_empty1(void*, void*, unsigned int) {}
-void  __fastcall mpm_empty2(void*, void*, unsigned int, unsigned int) {}
-void  __fastcall mpm_empty3(void*, void*, unsigned int, unsigned int, unsigned int) {}
-void  __fastcall mpm_empty6(void*, void*, unsigned int, unsigned int, unsigned int,
+void  __fastcall mpm_empty0(void* BF2_EDX_PARAM) {}
+void  __fastcall mpm_empty1(void* BF2_EDX_PARAM, unsigned int) {}
+void  __fastcall mpm_empty2(void* BF2_EDX_PARAM, unsigned int, unsigned int) {}
+void  __fastcall mpm_empty3(void* BF2_EDX_PARAM, unsigned int, unsigned int, unsigned int) {}
+void  __fastcall mpm_empty6(void* BF2_EDX_PARAM, unsigned int, unsigned int, unsigned int,
                             unsigned int, unsigned int, unsigned int) {}
-unsigned int __fastcall mpm_zero0(void*, void*) { return 0; }
-unsigned int __fastcall mpm_zero1(void*, void*, unsigned int) { return 0; }
-bool  __fastcall mpm_false0(void*, void*) { return false; }
-bool  __fastcall mpm_false1(void*, void*, unsigned int) { return false; }
-int   __fastcall mpm_minusOne(void*, void*) { return -1; }
-int   __fastcall mpm_seven(void*, void*) { return 7; }
+unsigned int __fastcall mpm_zero0(void* BF2_EDX_PARAM) { return 0; }
+unsigned int __fastcall mpm_zero1(void* BF2_EDX_PARAM, unsigned int) { return 0; }
+bool  __fastcall mpm_false0(void* BF2_EDX_PARAM) { return false; }
+bool  __fastcall mpm_false1(void* BF2_EDX_PARAM, unsigned int) { return false; }
+int   __fastcall mpm_minusOne(void* BF2_EDX_PARAM) { return -1; }
+int   __fastcall mpm_seven(void* BF2_EDX_PARAM) { return 7; }
 
 // IScaleable - four adjustor thunks (`sub ecx, 30h; jmp`) and the two bodies.
-int   __fastcall mpms_addRef(void* s, void*)                  { return fromScaleable(s)->addRef(); }
-int   __fastcall mpms_getRef(void* s, void*)                  { return fromScaleable(s)->getRef(); }
-int   __fastcall mpms_release(void* s, void*)                 { return fromScaleable(s)->release(); }
-void* __fastcall mpms_queryInterface(void* s, void*, unsigned int iid)
+int   __fastcall mpms_addRef(void* s BF2_EDX_PARAM)                  { return fromScaleable(s)->addRef(); }
+int   __fastcall mpms_getRef(void* s BF2_EDX_PARAM)                  { return fromScaleable(s)->getRef(); }
+int   __fastcall mpms_release(void* s BF2_EDX_PARAM)                 { return fromScaleable(s)->release(); }
+void* __fastcall mpms_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 { return fromScaleable(s)->queryInterface(iid); }
-void  __fastcall mpms_setScale(void* s, void*, const Vec3& v) { fromScaleable(s)->setScale(v); }
-const Vec3& __fastcall mpms_getScale(void* s, void*)          { return fromScaleable(s)->getScale(); }
+void  __fastcall mpms_setScale(void* s BF2_EDX_PARAM, const Vec3& v) { fromScaleable(s)->setScale(v); }
+const Vec3& __fastcall mpms_getScale(void* s BF2_EDX_PARAM)          { return fromScaleable(s)->getScale(); }
 
 } // anonymous namespace
 

@@ -29,9 +29,9 @@ namespace {
 // this interface has no release slot.
 
 
-int  __fastcall tex_getRef(void* self, void*)  { return static_cast<EngineTexture*>(self)->refCount; }
-void __fastcall tex_nullsub(void*, void*)      { /* nullsub - empty in the original too */ }
-void __fastcall tex_addRef(void* self, void*)  { ++static_cast<EngineTexture*>(self)->refCount; }
+int  __fastcall tex_getRef(void* self BF2_EDX_PARAM)  { return static_cast<EngineTexture*>(self)->refCount; }
+void __fastcall tex_nullsub(void* BF2_EDX_PARAM)      { /* nullsub - empty in the original too */ }
+void __fastcall tex_addRef(void* self BF2_EDX_PARAM)  { ++static_cast<EngineTexture*>(self)->refCount; }
 
 void* const kTextureVtable[3] =
 {

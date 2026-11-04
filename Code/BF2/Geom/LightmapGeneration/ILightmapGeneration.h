@@ -39,8 +39,7 @@ struct LightmapGenerationProgress
 
 // Answer false to abort the run: the generator then stops after the current batch.
 // `user` is the value given to setProgressCallback. __fastcall: progress in ECX, user in EDX.
-typedef bool (__fastcall* LightmapProgressCallback)(LightmapGenerationProgress* progress,
-                                                    void* user);
+typedef bool (__fastcall* LightmapProgressCallback)(LightmapGenerationProgress* progress, void* user);
 
 class ILightmapGeneration : public IBase
 {

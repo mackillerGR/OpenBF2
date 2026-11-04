@@ -89,13 +89,13 @@ namespace {
 
 // The primary table has 63 slots; ILightSampleable has seven.
 // Explicit tables preserve the ABI while remaining interface signatures are unknown.
-void __fastcall sm_drawSilhouette(void* self, void*, void* unused, int legacyArm)
+void __fastcall sm_drawSilhouette(void* self BF2_EDX_PARAM, void* unused, int legacyArm)
 {
     static_cast<StaticMesh*>(self)->drawSilhouette(unused, legacyArm);
 }
 
 // +0x20, the shadow-map draw.  `retn 18h`.
-void __fastcall sm_drawShadowMap(void* self, void*, void* caster, unsigned int a2,
+void __fastcall sm_drawShadowMap(void* self BF2_EDX_PARAM, void* caster, unsigned int a2,
                                  unsigned int a3, unsigned int a4, unsigned int a5,
                                  unsigned int a6)
 {
@@ -115,7 +115,7 @@ void staticMeshDrawExpansionStop(void* self)
 
 // +0x34, the scalar deleting destructor. Bit 0 of the flag means "and
 // free the storage", which is the MSVC convention release() relies on.
-void* __fastcall sm_deletingDestructor(void* self, void*, int flags)
+void* __fastcall sm_deletingDestructor(void* self BF2_EDX_PARAM, int flags)
 {
     static_cast<StaticMesh*>(self)->~StaticMesh();
     if ((flags & 1) != 0)
@@ -123,89 +123,89 @@ void* __fastcall sm_deletingDestructor(void* self, void*, int flags)
     return self;
 }
 
-int __fastcall sm_addRef(void* self, void*)
+int __fastcall sm_addRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->addRef();
 }
 
-int __fastcall sm_getRef(void* self, void*)
+int __fastcall sm_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getRef();
 }
 
-int __fastcall sm_release(void* self, void*)
+int __fastcall sm_release(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->release();
 }
 
-void* __fastcall sm_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall sm_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<StaticMesh*>(self)->queryInterface(iid);
 }
 
 // +0x18, the draw.  `retn 0Ch`: renderView, occluder, flag.
-void __fastcall sm_draw(void* self, void*, void* renderView, void* occluder, int flag)
+void __fastcall sm_draw(void* self BF2_EDX_PARAM, void* renderView, void* occluder, int flag)
 {
     static_cast<StaticMesh*>(self)->draw(renderView, occluder, flag);
 }
 
 // +0x14, 0x10082D10 - `fld -1.0; retn`.  Shared with the base family (fifteen constructors
 // install the base table this slot comes from).
-float __fastcall sm_slot14(void* self, void*)
+float __fastcall sm_slot14(void* self BF2_EDX_PARAM)
 {
     return static_cast<const StaticMesh*>(self)->slot14ReturnsMinusOne();
 }
 
 // +0x30, 0x1005DA00 - `xor al,al; retn 4`.
-bool __fastcall sm_slot30(void* self, void*, int argument)
+bool __fastcall sm_slot30(void* self BF2_EDX_PARAM, int argument)
 {
     return static_cast<const StaticMesh*>(self)->slot30ReturnsFalse(argument);
 }
 
 // +0x3C and +0xC8, 0x10088060 - `xor eax,eax; retn 4`.  One body, two slots, one arity.
-int __fastcall sm_slot3C(void* self, void*, int argument)
+int __fastcall sm_slot3C(void* self BF2_EDX_PARAM, int argument)
 {
     return static_cast<const StaticMesh*>(self)->slot3CReturnsZero(argument);
 }
 
 // +0x44, the bounding radius.
-float __fastcall sm_getBoundingRadius(void* self, void*)
+float __fastcall sm_getBoundingRadius(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getBoundingRadius();
 }
 
 // +0x48, the transform, or the shared identity.
-const Mat4* __fastcall sm_getGeometryTransformation(void* self, void*)
+const Mat4* __fastcall sm_getGeometryTransformation(void* self BF2_EDX_PARAM)
 {
     return static_cast<const StaticMesh*>(self)->getGeometryTransformation();
 }
 
 // +0x4C, 0x100FB320 - `retn 8`.
-void __fastcall sm_setDynamicPartTransformation(void* self, void*, unsigned int part,
+void __fastcall sm_setDynamicPartTransformation(void* self BF2_EDX_PARAM, unsigned int part,
                                                 const Mat4* transform)
 {
     static_cast<StaticMesh*>(self)->setDynamicPartTransformation(part, transform);
 }
 
-void __fastcall sm_setGeometryTransformation(void* self, void*, const Mat4* transform)
+void __fastcall sm_setGeometryTransformation(void* self BF2_EDX_PARAM, const Mat4* transform)
 {
     static_cast<StaticMesh*>(self)->setGeometryTransformation(transform);
 }
 
 // +0x54, +0x60, +0x94, +0x98 - 0x100E1480, `retn 8`: an empty virtual taking two dwords.  The
 // one body sits in four slots; its arity is its own, so the four adapters are one function.
-void __fastcall sm_emptyTwoArgs(void*, void*, unsigned int, unsigned int)
+void __fastcall sm_emptyTwoArgs(void* BF2_EDX_PARAM, unsigned int, unsigned int)
 {
 }
 
 // +0x58, +0x64, +0xB4, +0xD4, +0xDC - 0x100E13B0, `retn 4`: an empty virtual taking one dword.
-void __fastcall sm_emptyOneArg(void*, void*, unsigned int)
+void __fastcall sm_emptyOneArg(void* BF2_EDX_PARAM, unsigned int)
 {
 }
 
 // +0x5C, +0xA0, +0xCC - 0x100ED3B0, `xor eax,eax; retn`: zero, no arguments.  +0xCC is the
 // "next geometry in the chain" slot the object walkers follow; see getNextGeometry.
-int __fastcall sm_returnsZero(void*, void*)
+int __fastcall sm_returnsZero(void* BF2_EDX_PARAM)
 {
     return 0;
 }
@@ -214,168 +214,168 @@ int __fastcall sm_returnsZero(void*, void*)
 // name at +0x04 assigned from the argument.  The argument is a VC7.1 std::string in the
 // shipped image; whether the host ever calls this slot (with its own string layout) is not known -
 // no recovered host body does - so it is typed as the image types it.
-void __fastcall sm_setName(void* self, void*, const vc71::string* value)
+void __fastcall sm_setName(void* self BF2_EDX_PARAM, const vc71::string* value)
 {
     static_cast<StaticMesh*>(self)->setName(*value);
 }
 
 // +0x84, 0x100FC010 - `retn 4`.
-void __fastcall sm_setMaterialOverride(void* self, void*, int index)
+void __fastcall sm_setMaterialOverride(void* self BF2_EDX_PARAM, int index)
 {
     static_cast<StaticMesh*>(self)->setMaterialOverride(index);
 }
 
 // +0x8C
-int __fastcall sm_getMaterialCount(void* self, void*)
+int __fastcall sm_getMaterialCount(void* self BF2_EDX_PARAM)
 {
     return static_cast<const StaticMesh*>(self)->getMaterialCount();
 }
 
 // +0x90, 0x10083AB0 - `retn 0Ch`: an empty virtual taking three dwords.
-void __fastcall sm_emptyThreeArgs(void*, void*, unsigned int, unsigned int, unsigned int)
+void __fastcall sm_emptyThreeArgs(void* BF2_EDX_PARAM, unsigned int, unsigned int, unsigned int)
 {
 }
 
 // +0xA8, +0xD0, +0xD8 - 0x10083AF0, `xor al,al; retn`: false, no arguments.
-bool __fastcall sm_returnsFalse(void*, void*)
+bool __fastcall sm_returnsFalse(void* BF2_EDX_PARAM)
 {
     return false;
 }
 
 // +0xE8
-int __fastcall sm_getOccluderRecordCount(void* self, void*)
+int __fastcall sm_getOccluderRecordCount(void* self BF2_EDX_PARAM)
 {
     return static_cast<const StaticMesh*>(self)->getOccluderRecordCount();
 }
 
 // +0xEC, 0x100FC120 - `retn 4`.
-const void* __fastcall sm_getOccluderRecord(void* self, void*, unsigned int index)
+const void* __fastcall sm_getOccluderRecord(void* self BF2_EDX_PARAM, unsigned int index)
 {
     return static_cast<const StaticMesh*>(self)->getOccluderRecord(index);
 }
 
-int __fastcall sm_getNextGeometry(void* self, void*)
+int __fastcall sm_getNextGeometry(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getNextGeometry();
 }
 
-void __fastcall sm_setDword28C(void* self, void*, void* value)
+void __fastcall sm_setDword28C(void* self BF2_EDX_PARAM, void* value)
 {
     static_cast<StaticMesh*>(self)->setDword28C(value);
 }
 
-void* __fastcall sm_getDword28C(void* self, void*)
+void* __fastcall sm_getDword28C(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getDword28C();
 }
 
-void __fastcall sm_setGeom(void* self, void*, int geom)
+void __fastcall sm_setGeom(void* self BF2_EDX_PARAM, int geom)
 {
     static_cast<StaticMesh*>(self)->setGeom(geom);
 }
 
-void __fastcall sm_setLod(void* self, void*, int lod)
+void __fastcall sm_setLod(void* self BF2_EDX_PARAM, int lod)
 {
     static_cast<StaticMesh*>(self)->setLod(lod);
 }
 
-int __fastcall sm_getGeomCount(void* self, void*)
+int __fastcall sm_getGeomCount(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getGeomCount();
 }
 
-int __fastcall sm_getLodCount(void* self, void*)
+int __fastcall sm_getLodCount(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getLodCount();
 }
 
-int __fastcall sm_getGeomIndex(void* self, void*)
+int __fastcall sm_getGeomIndex(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getGeomIndex();
 }
 
-int __fastcall sm_getLodIndex(void* self, void*)
+int __fastcall sm_getLodIndex(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getLodIndex();
 }
 
-int __fastcall sm_getDword31C(void* self, void*)
+int __fastcall sm_getDword31C(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getDword31C();
 }
 
-void __fastcall sm_updateFlags(void* self, void*, unsigned int set, unsigned int clear)
+void __fastcall sm_updateFlags(void* self BF2_EDX_PARAM, unsigned int set, unsigned int clear)
 {
     static_cast<StaticMesh*>(self)->updateFlags(set, clear);
 }
 
-unsigned int __fastcall sm_getFlags(void* self, void*)
+unsigned int __fastcall sm_getFlags(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getFlags();
 }
 
-void __fastcall sm_stampFrameOrdinal(void* self, void*)
+void __fastcall sm_stampFrameOrdinal(void* self BF2_EDX_PARAM)
 {
     static_cast<StaticMesh*>(self)->stampFrameOrdinal();
 }
 
-void __fastcall sm_setDword350(void* self, void*, void* value)
+void __fastcall sm_setDword350(void* self BF2_EDX_PARAM, void* value)
 {
     static_cast<StaticMesh*>(self)->setDword350(value);
 }
 
-void* __fastcall sm_getDword350(void* self, void*)
+void* __fastcall sm_getDword350(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getDword350();
 }
 
-void __fastcall sm_setOwnerObject(void* self, void*, void* object)
+void __fastcall sm_setOwnerObject(void* self BF2_EDX_PARAM, void* object)
 {
     static_cast<StaticMesh*>(self)->setOwnerObject(object);
 }
 
-void* __fastcall sm_refreshRootObject(void* self, void*)
+void* __fastcall sm_refreshRootObject(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->refreshRootObject();
 }
 
-void __fastcall sm_setFade(void* self, void*, float value)
+void __fastcall sm_setFade(void* self BF2_EDX_PARAM, float value)
 {
     static_cast<StaticMesh*>(self)->setFade(value);
 }
 
 // the nine accessors
-void* __fastcall sm_getTemplate(void* self, void*)
+void* __fastcall sm_getTemplate(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getTemplate();
 }
 
-const void* __fastcall sm_getLocalBounds(void* self, void*)
+const void* __fastcall sm_getLocalBounds(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getLocalBounds();
 }
 
-void* __fastcall sm_getRootObject(void* self, void*)
+void* __fastcall sm_getRootObject(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getRootObject();
 }
 
-void __fastcall sm_setFloat308(void* self, void*, float value)
+void __fastcall sm_setFloat308(void* self BF2_EDX_PARAM, float value)
 {
     static_cast<StaticMesh*>(self)->setFloat308(value);
 }
 
-void __fastcall sm_setDword34C(void* self, void*, unsigned int value)
+void __fastcall sm_setDword34C(void* self BF2_EDX_PARAM, unsigned int value)
 {
     static_cast<StaticMesh*>(self)->setDword34C(value);
 }
 
-unsigned int __fastcall sm_getDword34C(void* self, void*)
+unsigned int __fastcall sm_getDword34C(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getDword34C();
 }
 
-int __fastcall sm_getGeometryType(void* self, void*)
+int __fastcall sm_getGeometryType(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getGeometryType();
 }
@@ -383,12 +383,12 @@ int __fastcall sm_getGeometryType(void* self, void*)
 // THE truncation IS THE point. The shipped body compares the low byte of the argument
 // slot, so 0x100 is false to it and would be true to an `int != 0` test. Taking the raw dword
 // here and narrowing it is what keeps that.
-void __fastcall sm_setFlagBit1(void* self, void*, int raw)
+void __fastcall sm_setFlagBit1(void* self BF2_EDX_PARAM, int raw)
 {
     static_cast<StaticMesh*>(self)->setFlagBit1(static_cast<unsigned char>(raw));
 }
 
-bool __fastcall sm_getFlagBit1(void* self, void*)
+bool __fastcall sm_getFlagBit1(void* self BF2_EDX_PARAM)
 {
     return static_cast<StaticMesh*>(self)->getFlagBit1();
 }
@@ -468,27 +468,27 @@ inline StaticMesh* fromLightSampleable(void* subobject)
     return reinterpret_cast<StaticMesh*>(static_cast<unsigned char*>(subobject) - 0x30);
 }
 
-int __fastcall sm_ls_addRef(void* self, void*)
+int __fastcall sm_ls_addRef(void* self BF2_EDX_PARAM)
 {
     return fromLightSampleable(self)->addRef();
 }
 
-int __fastcall sm_ls_getRef(void* self, void*)
+int __fastcall sm_ls_getRef(void* self BF2_EDX_PARAM)
 {
     return fromLightSampleable(self)->getRef();
 }
 
-int __fastcall sm_ls_release(void* self, void*)
+int __fastcall sm_ls_release(void* self BF2_EDX_PARAM)
 {
     return fromLightSampleable(self)->release();
 }
 
-void* __fastcall sm_ls_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall sm_ls_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return fromLightSampleable(self)->queryInterface(iid);
 }
 
-bool __fastcall sm_ls_slot10(void* self, void*)
+bool __fastcall sm_ls_slot10(void* self BF2_EDX_PARAM)
 {
     return fromLightSampleable(self)->lightSampleableSlot10ReturnsTrue();
 }
@@ -504,15 +504,15 @@ void staticMeshLightmapName(const StaticMesh* self, vc71::string& out);
 // when the file cannot be opened. The allocation is used unchecked, as shipped.
 // [INFERRED] placement: retail keeps this body with the rest of its run in
 // StaticMeshLightmapGeneration.cpp; this tree keeps the run's other members here.
-ILightSampling* __fastcall sm_ls_createLightSampler(void* self, void*, float resolutionModifier)
+ILightSampling* __fastcall sm_ls_createLightSampler(void* self BF2_EDX_PARAM, float resolutionModifier)
 {
     StaticMesh* const mesh = fromLightSampleable(self);
     void* const storage = ::renddx9abi::engineAlloc(sizeof(MeshLightSampler));
     MeshLightSampler* const sampler = storage ? new (storage) MeshLightSampler() : 0;
 
-    typedef int (__fastcall* IndexFn)(const void*, void*);
-    const int lod  = reinterpret_cast<IndexFn>(mesh->m_vptr[0x7C / sizeof(void*)])(mesh, 0);
-    const int geom = reinterpret_cast<IndexFn>(mesh->m_vptr[0x70 / sizeof(void*)])(mesh, 0);
+    typedef int (__fastcall* IndexFn)(const void* BF2_EDX_PARAM);
+    const int lod  = reinterpret_cast<IndexFn>(mesh->m_vptr[0x7C  / 4])(mesh);
+    const int geom = reinterpret_cast<IndexFn>(mesh->m_vptr[0x70  / 4])(mesh);
     char suffix[12];
     if ((geom | lod) != 0)
         std::sprintf(suffix, ".samp_%d%d", geom, lod);
@@ -541,9 +541,9 @@ ILightSampling* __fastcall sm_ls_createLightSampler(void* self, void*, float res
     }
 
     const int geomTimesFive =
-        5 * reinterpret_cast<IndexFn>(mesh->m_vptr[0x70 / sizeof(void*)])(mesh, 0);
+        5 * reinterpret_cast<IndexFn>(mesh->m_vptr[0x70  / 4])(mesh);
     const unsigned int key = static_cast<unsigned int>(
-        reinterpret_cast<IndexFn>(mesh->m_vptr[0x7C / sizeof(void*)])(mesh, 0) + 2 * geomTimesFive);
+        reinterpret_cast<IndexFn>(mesh->m_vptr[0x7C  / 4])(mesh) + 2 * geomTimesFive);
     vc71::map_node_u32* const node = vc71::mapInsertU32(mesh->m_map260, key);
     dx9rend::EngineTexture*& slot = *reinterpret_cast<dx9rend::EngineTexture**>(node->value);
     dx9rend::EngineTexture* const cached = slot;
@@ -564,7 +564,7 @@ ILightSampling* __fastcall sm_ls_createLightSampler(void* self, void*, float res
 // ILightSampleable +0x18: destroys and frees the sampler when one is passed (its destructor
 // writes the lightmap file), then re-fetches this instance's lightmap texture from its (geom, lod)
 // map entry, lowers the "no lightmap" flag and runs the lightmap loader again. Always true.
-bool __fastcall sm_ls_destroyLightSampler(void* self, void*, ILightSampling* sampler)
+bool __fastcall sm_ls_destroyLightSampler(void* self BF2_EDX_PARAM, ILightSampling* sampler)
 {
     StaticMesh* const mesh = fromLightSampleable(self);
     if (sampler)
@@ -1304,8 +1304,8 @@ int StaticMesh::release()
     --m_refCount;
     if (m_refCount == 0)
     {
-        typedef void (__fastcall* DeletingDtorFn)(void*, void*, int);
-        reinterpret_cast<DeletingDtorFn>(m_vptr[0x34 / sizeof(void*)])(this, 0, 1);
+        typedef void (__fastcall* DeletingDtorFn)(void* BF2_EDX_PARAM, int);
+        reinterpret_cast<DeletingDtorFn>(m_vptr[0x34  / 4])(this, 1);
     }
     return m_refCount;
 }
@@ -1337,13 +1337,13 @@ void StaticMesh::setGeometryTransformation(const Mat4* transform)
     if (transform && m_byte348)
     {
         // +0xF0 is the template's part count, +0xF4 fetches one part record by index.
-        typedef int (__fastcall* PartCountFn)(void*, void*);
-        typedef unsigned char* (__fastcall* GetPartFn)(void*, void*, int);
+        typedef int (__fastcall* PartCountFn)(void* BF2_EDX_PARAM);
+        typedef unsigned char* (__fastcall* GetPartFn)(void* BF2_EDX_PARAM, int);
 
         void* const objectTemplate = m_template;
         void** const tvtbl = *reinterpret_cast<void***>(objectTemplate);
         const int partCount = reinterpret_cast<PartCountFn>(
-            tvtbl[0xF0 / sizeof(void*)])(objectTemplate, 0);
+            tvtbl[0xF0  / 4])(objectTemplate);
 
         // reached AS sixteen RAW floats, exactly as the shipped body reaches it - every
         // access below is one of its documented byte offsets, not a named Mat4 member.
@@ -1354,7 +1354,7 @@ void StaticMesh::setGeometryTransformation(const Mat4* transform)
             m_byte348 = 0;
 
             unsigned char* const source = reinterpret_cast<GetPartFn>(
-                tvtbl[0xF4 / sizeof(void*)])(objectTemplate, 0, part);
+                tvtbl[0xF4  / 4])(objectTemplate, part);
 
             // The 36-byte element, built on the stack exactly as the shipped body builds it.
             // The shipped code leaves both allocator words unwritten (that is how this
@@ -1438,8 +1438,8 @@ void StaticMesh::setOwnerObject(void* object)
 {
     m_dword330 = object;
 
-    typedef void* (__fastcall* RefreshFn)(void*, void*);
-    reinterpret_cast<RefreshFn>(m_vptr[0xF8 / sizeof(void*)])(this, 0);
+    typedef void* (__fastcall* RefreshFn)(void* BF2_EDX_PARAM);
+    reinterpret_cast<RefreshFn>(m_vptr[0xF8  / 4])(this);
 }
 
 // +0xF8, memoise the owner's root parent at +0x334, AND return IT.
@@ -1492,9 +1492,9 @@ void StaticMesh::stampFrameOrdinal()
     if (!base)
         return;
 
-    typedef unsigned int (__fastcall* FrameOrdinalFn)(void*, void*);
+    typedef unsigned int (__fastcall* FrameOrdinalFn)(void* BF2_EDX_PARAM);
     m_dword24 = reinterpret_cast<FrameOrdinalFn>(
-        (*reinterpret_cast<void***>(base))[0x54 / sizeof(void*)])(base, 0);
+        (*reinterpret_cast<void***>(base))[0x54  / 4])(base);
 }
 
 // the nine accessors
@@ -1538,23 +1538,23 @@ int StaticMesh::getGeometryType() const
 // Updates flag bit 1 through the virtual updateFlags slot, honoring overrides.
 void StaticMesh::setFlagBit1(unsigned char enable)
 {
-    typedef void (__fastcall* UpdateFlagsFn)(void*, void*, unsigned int, unsigned int);
+    typedef void (__fastcall* UpdateFlagsFn)(void* BF2_EDX_PARAM, unsigned int, unsigned int);
     const UpdateFlagsFn update =
-        reinterpret_cast<UpdateFlagsFn>(m_vptr[0xC0 / sizeof(void*)]);
+        reinterpret_cast<UpdateFlagsFn>(m_vptr[0xC0  / 4]);
 
     if (enable)
-        update(this, 0, 2u, 0u);
+        update(this, 2u, 0u);
     else
-        update(this, 0, 0u, 2u);
+        update(this, 0u, 2u);
 }
 
 // 0x10103B70 - `call [eax+0C4h]; shr eax, 1; and al, 1`. The 8-bit AND is the bool return
 // convention, not a mask over the whole register: only AL is meaningful and only AL is read.
 bool StaticMesh::getFlagBit1() const
 {
-    typedef unsigned int (__fastcall* GetFlagsFn)(const void*, void*);
+    typedef unsigned int (__fastcall* GetFlagsFn)(const void* BF2_EDX_PARAM);
     const unsigned int flags = reinterpret_cast<GetFlagsFn>(
-        m_vptr[0xC4 / sizeof(void*)])(this, 0);
+        m_vptr[0xC4  / 4])(this);
     return ((flags >> 1) & 1u) != 0u;
 }
 
@@ -2014,8 +2014,8 @@ unsigned int StaticMesh::materialShaderBits(void* material, bool pointLightPass)
         *reinterpret_cast<const ShaderMaterial* const*>(mat + 0x28);
     unsigned int bits = g_shaderComboFlags[shaderMaterial->shaderCombo];    // dword_1023A9D0
 
-    typedef unsigned int (__fastcall* GetFlagsFn)(const void*, void*);
-    if ((reinterpret_cast<GetFlagsFn>(m_vptr[0xC4 / sizeof(void*)])(this, 0) & 1u) != 0)
+    typedef unsigned int (__fastcall* GetFlagsFn)(const void* BF2_EDX_PARAM);
+    if ((reinterpret_cast<GetFlagsFn>(m_vptr[0xC4  / 4])(this) & 1u) != 0)
         bits &= ~8u;
 
     if (pointLightPass)
@@ -2026,8 +2026,8 @@ unsigned int StaticMesh::materialShaderBits(void* material, bool pointLightPass)
     {
         if (!m_byte35A && staticMeshTemplateUsesLightmaps(m_template) && m_dword26C)
             bits |= 1u;
-        typedef int (__fastcall* GetLodFn)(const void*, void*);
-        const int lod = reinterpret_cast<GetLodFn>(m_vptr[0x7C / sizeof(void*)])(this, 0);
+        typedef int (__fastcall* GetLodFn)(const void* BF2_EDX_PARAM);
+        const int lod = reinterpret_cast<GetLodFn>(m_vptr[0x7C  / 4])(this);
         if (static_cast<int>(staticMeshRenderer()->m_dword98) < lod)
             bits &= ~1u;
         if (m_byte355)
@@ -2104,9 +2104,9 @@ void StaticMesh::updateObjectParameters()
     bool casterThisFrame = false;
     if (m_dword34C)
     {
-        typedef void* (__fastcall* GetDword350Fn)(const void*, void*);
+        typedef void* (__fastcall* GetDword350Fn)(const void* BF2_EDX_PARAM);
         const void* const stamped =
-            reinterpret_cast<GetDword350Fn>(m_vptr[0xB0 / sizeof(void*)])(this, 0);
+            reinterpret_cast<GetDword350Fn>(m_vptr[0xB0  / 4])(this);
         if (reinterpret_cast<unsigned int>(stamped) == dx9rend::rendererFrameOrdinal())   // +0x54
             casterThisFrame = true;
     }
@@ -2133,9 +2133,9 @@ void StaticMesh::loadLightmap()
     if (m_byte35A && !rendererBaseByte(0x102))
         return;
 
-    typedef int (__fastcall* IndexFn)(const void*, void*);
-    const int geom = reinterpret_cast<IndexFn>(m_vptr[0x70 / sizeof(void*)])(this, 0);
-    const int lod  = reinterpret_cast<IndexFn>(m_vptr[0x7C / sizeof(void*)])(this, 0);
+    typedef int (__fastcall* IndexFn)(const void* BF2_EDX_PARAM);
+    const int geom = reinterpret_cast<IndexFn>(m_vptr[0x70  / 4])(this);
+    const int lod  = reinterpret_cast<IndexFn>(m_vptr[0x7C  / 4])(this);
     const unsigned int key = static_cast<unsigned int>(lod + 2 * (5 * geom));
 
     vc71::map_node_u32* const node = vc71::mapInsertU32(m_map260, key);
@@ -2222,9 +2222,9 @@ void StaticMesh::loadVertexLightLists()
         dx9rend::vertexBufferLock(buffer, 0, vertexCount, 0));
     std::memset(words, 0, 4u * vertexCount);
 
-    typedef int (__fastcall* IndexFn)(const void*, void*);
-    const int savedGeom = reinterpret_cast<IndexFn>(m_vptr[0x70 / sizeof(void*)])(this, 0);
-    const int savedLod  = reinterpret_cast<IndexFn>(m_vptr[0x7C / sizeof(void*)])(this, 0);
+    typedef int (__fastcall* IndexFn)(const void* BF2_EDX_PARAM);
+    const int savedGeom = reinterpret_cast<IndexFn>(m_vptr[0x70  / 4])(this);
+    const int savedLod  = reinterpret_cast<IndexFn>(m_vptr[0x7C  / 4])(this);
 
     const unsigned char* const objectTemplate = static_cast<const unsigned char*>(m_template);
     const unsigned char* const geomsFirst =
@@ -2294,10 +2294,10 @@ void StaticMesh::loadVertexLightLists()
         }
     }
 
-    typedef void (__fastcall* SetIndexFn)(void*, void*, int);
-    reinterpret_cast<SetIndexFn>(m_vptr[0x6C / sizeof(void*)])(this, 0, savedGeom);
-    reinterpret_cast<SetIndexFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, savedLod);
-    reinterpret_cast<SetIndexFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, -1);
+    typedef void (__fastcall* SetIndexFn)(void* BF2_EDX_PARAM, int);
+    reinterpret_cast<SetIndexFn>(m_vptr[0x6C  / 4])(this, savedGeom);
+    reinterpret_cast<SetIndexFn>(m_vptr[0x78  / 4])(this, savedLod);
+    reinterpret_cast<SetIndexFn>(m_vptr[0x78  / 4])(this, -1);
     dx9rend::vertexBufferUnlock(buffer);
 }
 
@@ -2403,15 +2403,15 @@ void StaticMesh::drawVanilla()
 
         if (selected != static_cast<int>(m_dword318))
         {
-            typedef void (__fastcall* SetLodFn)(void*, void*, int);
-            reinterpret_cast<SetLodFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, selected);
+            typedef void (__fastcall* SetLodFn)(void* BF2_EDX_PARAM, int);
+            reinterpret_cast<SetLodFn>(m_vptr[0x78  / 4])(this, selected);
             m_byte357 = 0;
         }
     }
     if (smr->m_byte94 && !m_byte357)
     {
-        typedef void (__fastcall* SetLodFn)(void*, void*, int);
-        reinterpret_cast<SetLodFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, 0);
+        typedef void (__fastcall* SetLodFn)(void* BF2_EDX_PARAM, int);
+        reinterpret_cast<SetLodFn>(m_vptr[0x78  / 4])(this, 0);
         m_byte357 = 0;
     }
 
@@ -2704,8 +2704,8 @@ void StaticMesh::drawVanilla()
                         const ShaderMaterial* const shaderMaterial =
                             *reinterpret_cast<const ShaderMaterial* const*>(material + 0x28);
                         unsigned int pointBits = g_shaderComboFlags[shaderMaterial->shaderCombo];
-                        typedef unsigned int (__fastcall* GetFlagsFn)(const void*, void*);
-                        if ((reinterpret_cast<GetFlagsFn>(m_vptr[0xC4 / sizeof(void*)])(this, 0)
+                        typedef unsigned int (__fastcall* GetFlagsFn)(const void* BF2_EDX_PARAM);
+                        if ((reinterpret_cast<GetFlagsFn>(m_vptr[0xC4  / 4])(this)
                              & 1u) != 0)
                             pointBits &= ~8u;
                         pointBits |= 0x400u;
@@ -2777,7 +2777,7 @@ void staticMeshEffectCommitChanges(dx9rend::Effect* effect)
 {
     void* const d3dx = *reinterpret_cast<void**>(reinterpret_cast<unsigned char*>(effect) + 8);
     reinterpret_cast<::renddx9abi::D3dxCommitChangesFn>(
-        (*reinterpret_cast<void***>(d3dx))[0x104 / sizeof(void*)])(d3dx);
+        (*reinterpret_cast<void***>(d3dx))[0x104  / 4])(d3dx);
 }
 
 dx9rend::ShaderParameter* staticMeshShadowParameter(dx9rend::Effect* effect, const char* name)
@@ -2831,9 +2831,9 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
     const Mat4* lightMatrix;
     if (!casterRecord)
     {
-        typedef void* (__fastcall* GetDword350Fn)(const void*, void*);
+        typedef void* (__fastcall* GetDword350Fn)(const void* BF2_EDX_PARAM);
         const void* const stamped =
-            reinterpret_cast<GetDword350Fn>(m_vptr[0xB0 / sizeof(void*)])(this, 0);
+            reinterpret_cast<GetDword350Fn>(m_vptr[0xB0  / 4])(this);
         if (reinterpret_cast<unsigned int>(stamped) != dx9rend::rendererFrameOrdinal())   // +0x54
             return;
         casterRecord  = reinterpret_cast<const unsigned char*>(m_dword34C);
@@ -2846,16 +2846,16 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
     }
 
     const int shadowLod  = g_LightManager->getStaticMeshShadowLod();     // +0x280
-    typedef int (__fastcall* GetIndexFn)(const void*, void*);
-    const int currentLod = reinterpret_cast<GetIndexFn>(m_vptr[0x7C / sizeof(void*)])(this, 0);
-    const int lodCount   = reinterpret_cast<GetIndexFn>(m_vptr[0x80 / sizeof(void*)])(this, 0);
+    typedef int (__fastcall* GetIndexFn)(const void* BF2_EDX_PARAM);
+    const int currentLod = reinterpret_cast<GetIndexFn>(m_vptr[0x7C  / 4])(this);
+    const int lodCount   = reinterpret_cast<GetIndexFn>(m_vptr[0x80  / 4])(this);
     if (currentLod != shadowLod)
     {
         int lod = lodCount - 1;
         if (lod >= shadowLod)
             lod = shadowLod;
-        typedef void (__fastcall* SetLodFn)(void*, void*, int);
-        reinterpret_cast<SetLodFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, lod);
+        typedef void (__fastcall* SetLodFn)(void* BF2_EDX_PARAM, int);
+        reinterpret_cast<SetLodFn>(m_vptr[0x78  / 4])(this, lod);
     }
     // setLod rewrites +0x30C; every read below is of the lod now selected (the shipped body
     // reloads the word at each use).
@@ -2992,7 +2992,7 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
 
     if (drawLastLodMaterial)
     {
-        const int lastLod = reinterpret_cast<GetIndexFn>(m_vptr[0x80 / sizeof(void*)])(this, 0) - 1;
+        const int lastLod = reinterpret_cast<GetIndexFn>(m_vptr[0x80  / 4])(this) - 1;
         const StaticMeshGeom& geom =
             reinterpret_cast<const StaticMeshGeom*>(t->m_geoms.first)[m_dword314];
         const StaticMeshLod* const lastRecord =
@@ -3014,8 +3014,8 @@ void StaticMesh::drawShadowMap(void* caster, unsigned int, unsigned int, unsigne
 
     if (currentLod != shadowLod)
     {
-        typedef void (__fastcall* SetLodFn)(void*, void*, int);
-        reinterpret_cast<SetLodFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, -1);
+        typedef void (__fastcall* SetLodFn)(void* BF2_EDX_PARAM, int);
+        reinterpret_cast<SetLodFn>(m_vptr[0x78  / 4])(this, -1);
     }
 }
 

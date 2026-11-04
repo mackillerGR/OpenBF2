@@ -100,8 +100,8 @@ void hudSetPaint(void* hudManager, unsigned char enabled)                       
 #if BF2_PLUGIN_ABI_NATIVE
     static_cast<hud::BF2HudManager*>(hudManager)->setPaint(enabled != 0);
 #else
-    typedef void (__fastcall* SetByteFn)(void*, void*, unsigned char);
-    reinterpret_cast<SetByteFn>((*static_cast<void***>(hudManager))[8])(hudManager, 0, enabled);
+    typedef void (__fastcall* SetByteFn)(void* BF2_EDX_PARAM, unsigned char);
+    reinterpret_cast<SetByteFn>((*static_cast<void***>(hudManager))[8])(hudManager, enabled);
 #endif
 }
 
@@ -113,9 +113,9 @@ void hudUpdate(void* hudManager, float timeF, void* player, float x, float y, fl
     static_cast<hud::BF2HudManager*>(hudManager)->update(
         timeF, static_cast<world::IPlayer*>(player), look);
 #else
-    typedef void (__fastcall* PrepFn)(void*, void*, float, void*, float, float, float);
+    typedef void (__fastcall* PrepFn)(void* BF2_EDX_PARAM, float, void*, float, float, float);
     reinterpret_cast<PrepFn>((*static_cast<void***>(hudManager))[10])(
-        hudManager, 0, timeF, player, x, y, z);
+        hudManager, timeF, player, x, y, z);
 #endif
 }
 
@@ -124,8 +124,8 @@ void hudPaint(void* hudManager)                                                 
 #if BF2_PLUGIN_ABI_NATIVE
     static_cast<hud::BF2HudManager*>(hudManager)->paint();
 #else
-    typedef void (__fastcall* Fn)(void*, void*);
-    reinterpret_cast<Fn>((*static_cast<void***>(hudManager))[7])(hudManager, 0);
+    typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM);
+    reinterpret_cast<Fn>((*static_cast<void***>(hudManager))[7])(hudManager);
 #endif
 }
 
@@ -147,9 +147,9 @@ void objectManagerQueryFrustum(void* frustum488, unsigned int* resultVectorAt469
         0.0f);
 #else
     void* om = objectManager;
-    typedef void (__fastcall* QueryFn)(void*, void*, void*, void*, int, int, int, int);
+    typedef void (__fastcall* QueryFn)(void* BF2_EDX_PARAM, void*, void*, int, int, int, int);
     reinterpret_cast<QueryFn>((*static_cast<void***>(om))[23])(
-        om, 0, frustum488, resultVectorAt469, 0, 0, 0, 0);
+        om, frustum488, resultVectorAt469, 0, 0, 0, 0);
 #endif
 }
 
@@ -559,7 +559,7 @@ void __fastcall renderer_handleECCoreEvent(void* self, void* /*edx, unused*/,
         {
             typedef void (__thiscall* SlotFn)(void*);
             void** const vtbl = *reinterpret_cast<void***>(geom::g_NametagManager);
-            reinterpret_cast<SlotFn>(vtbl[0x44 / sizeof(void*)])(geom::g_NametagManager);
+            reinterpret_cast<SlotFn>(vtbl[0x44  / 4])(geom::g_NametagManager);
         }
 
         // 1002F469 ->same optional guard, now backed by the real reflection owner.
@@ -603,7 +603,7 @@ void __fastcall renderer_handleECCoreEvent(void* self, void* /*edx, unused*/,
         if (envMap)
         {
             typedef void (__thiscall* SlotFn)(void*);
-            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(envMap))[0x38 / sizeof(void*)])(
+            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(envMap))[0x38  / 4])(
                 envMap);
         }
 
@@ -612,7 +612,7 @@ void __fastcall renderer_handleECCoreEvent(void* self, void* /*edx, unused*/,
         {
             // +0x10 is IHemiMapManager::clear(), which IS written - Geom/HemiMapManager.
             typedef void (__thiscall* SlotFn)(void*);
-            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(hemiMap))[0x10 / sizeof(void*)])(
+            reinterpret_cast<SlotFn>((*reinterpret_cast<void***>(hemiMap))[0x10  / 4])(
                 hemiMap);
         }
 
@@ -713,7 +713,7 @@ void createRendererPathResources(void* base)
     dx9rend::textureManagerSwapManaged(oldManaged);
 }
 
-void __fastcall renderer_renderPathActivated(void* listener, void*, int path)
+void __fastcall renderer_renderPathActivated(void* listener BF2_EDX_PARAM, int path)
 {
     unsigned char* const base = static_cast<unsigned char*>(listener) - 0x540;
     rendererField<unsigned int>(base, 0x544) = static_cast<unsigned int>(path);
@@ -733,18 +733,18 @@ void __fastcall renderer_renderPathActivated(void* listener, void*, int path)
     createRendererPathResources(base);
 }
 
-void __fastcall renderer_renderPathDeactivated(void* listener, void*)
+void __fastcall renderer_renderPathDeactivated(void* listener BF2_EDX_PARAM)
 {
     releaseRendererPathResources(static_cast<unsigned char*>(listener) - 0x540);
 }
 
-void __fastcall renderer_renderPathNull(void*, void*) {}
-void __fastcall renderer_renderPathNullWithPath(void*, void*, int) {}
-int __fastcall renderer_getCurrentRenderPath(void* listener, void*)
+void __fastcall renderer_renderPathNull(void* BF2_EDX_PARAM) {}
+void __fastcall renderer_renderPathNullWithPath(void* BF2_EDX_PARAM, int) {}
+int __fastcall renderer_getCurrentRenderPath(void* listener BF2_EDX_PARAM)
 {
     return *reinterpret_cast<int*>(static_cast<unsigned char*>(listener) + 4);
 }
-void* __fastcall renderer_getRenderPathName(void*, void*, void* out)
+void* __fastcall renderer_getRenderPathName(void* BF2_EDX_PARAM, void* out)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::Renderer::getRenderPathListenerName", out, 0x14);
     return out;
@@ -775,7 +775,7 @@ void rendererReloadOverlayTexture(unsigned char* base)
 
 // Releases overlay texture, then render-path resources on device loss.
 // StateManager's higher-priority listener has already released its surface references.
-void __fastcall renderer_onDeviceLost(void* listener, void*)
+void __fastcall renderer_onDeviceLost(void* listener BF2_EDX_PARAM)
 {
     unsigned char* const base = static_cast<unsigned char*>(listener) - 0x53C;
     dx9rend::textureReleaseRef(rendererField<dx9rend::EngineTexture*>(base, 0x8D8));
@@ -784,7 +784,7 @@ void __fastcall renderer_onDeviceLost(void* listener, void*)
 
 // Reacquires back/depth surfaces, rebuilds path resources, and reloads the overlay.
 // LightManager restores its own shadow resources; D3D acquisition results are unchecked.
-void __fastcall renderer_onDeviceReset(void* listener, void*)
+void __fastcall renderer_onDeviceReset(void* listener BF2_EDX_PARAM)
 {
     unsigned char* const base = static_cast<unsigned char*>(listener) - 0x53C;
     RendDX9Base* const renderer = reinterpret_cast<RendDX9Base*>(base);
@@ -799,7 +799,7 @@ void __fastcall renderer_onDeviceReset(void* listener, void*)
 }
 
 // 0x10027FC0 - `ret`.
-void __fastcall renderer_onDeviceDestroy(void*, void*) {}
+void __fastcall renderer_onDeviceDestroy(void* BF2_EDX_PARAM) {}
 
 void* const kRendererDeviceLostVtable[3] =
 {
@@ -1693,9 +1693,9 @@ void Renderer::update(double time)
 
     if (geom::g_SkyDome)
     {
-        typedef void (__fastcall* Fn)(void*, void*, float);
+        typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, float);
         reinterpret_cast<Fn>((*reinterpret_cast<void***>(geom::g_SkyDome))[4])(
-            geom::g_SkyDome, 0, timeF);
+            geom::g_SkyDome, timeF);
     }
     else
         noteOnce(1u, "SkyDome::update");
@@ -1719,9 +1719,9 @@ void Renderer::update(double time)
 
     if (geom::g_DecalManager)
     {
-        typedef void (__fastcall* Fn)(void*, void*, float);
+        typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, float);
         reinterpret_cast<Fn>((*reinterpret_cast<void***>(geom::g_DecalManager))[12])(
-            geom::g_DecalManager, 0, timeF);
+            geom::g_DecalManager, timeF);
     }
     else
         noteOnce(8u, "DecalManager::update");
@@ -1958,37 +1958,37 @@ bool Renderer::renderFrame(double time, float deltaTime)
         {
             void* om = objectManager;
             void*** omv = reinterpret_cast<void***>(om);
-            typedef float (__fastcall* GetF)(void*, void*);
-            typedef void  (__fastcall* SetF)(void*, void*, float);
-            const float fogA = reinterpret_cast<GetF>((*omv)[49])(om, 0);   // +196
-            const float fogB = reinterpret_cast<GetF>((*omv)[51])(om, 0);   // +204
-            const float fogC = reinterpret_cast<GetF>((*omv)[47])(om, 0);   // +188
-            reinterpret_cast<SetF>((*omv)[46])(om, 0, fl[434]);             // +184
-            reinterpret_cast<SetF>((*omv)[48])(om, 0, fl[432]);             // +192
-            reinterpret_cast<SetF>((*omv)[50])(om, 0, fl[433]);             // +200
+            typedef float (__fastcall* GetF)(void* BF2_EDX_PARAM);
+            typedef void  (__fastcall* SetF)(void* BF2_EDX_PARAM, float);
+            const float fogA = reinterpret_cast<GetF>((*omv)[49])(om);   // +196
+            const float fogB = reinterpret_cast<GetF>((*omv)[51])(om);   // +204
+            const float fogC = reinterpret_cast<GetF>((*omv)[47])(om);   // +188
+            reinterpret_cast<SetF>((*omv)[46])(om, fl[434]);             // +184
+            reinterpret_cast<SetF>((*omv)[48])(om, fl[432]);             // +192
+            reinterpret_cast<SetF>((*omv)[50])(om, fl[433]);             // +200
             if (m_objectDrawer)
             {
                 void*** dv = reinterpret_cast<void***>(m_objectDrawer);
-                typedef void (__fastcall* SetViewFn)(void*, void*, void*);
-                typedef void (__fastcall* TimeFn)(void*, void*, float);
-                reinterpret_cast<SetViewFn>((*dv)[10])(m_objectDrawer, 0, getRenderView());
-                reinterpret_cast<TimeFn>((*dv)[5])(m_objectDrawer, 0, timeF);
-                reinterpret_cast<TimeFn>((*dv)[4])(m_objectDrawer, 0, timeF);
+                typedef void (__fastcall* SetViewFn)(void* BF2_EDX_PARAM, void*);
+                typedef void (__fastcall* TimeFn)(void* BF2_EDX_PARAM, float);
+                reinterpret_cast<SetViewFn>((*dv)[10])(m_objectDrawer, getRenderView());
+                reinterpret_cast<TimeFn>((*dv)[5])(m_objectDrawer, timeF);
+                reinterpret_cast<TimeFn>((*dv)[4])(m_objectDrawer, timeF);
             }
             else
                 noteOnce(16u, "ObjectDrawer (fog block)");
-            reinterpret_cast<SetF>((*omv)[48])(om, 0, fogA);
-            reinterpret_cast<SetF>((*omv)[50])(om, 0, fogB);
-            reinterpret_cast<SetF>((*omv)[46])(om, 0, fogC);
+            reinterpret_cast<SetF>((*omv)[48])(om, fogA);
+            reinterpret_cast<SetF>((*omv)[50])(om, fogB);
+            reinterpret_cast<SetF>((*omv)[46])(om, fogC);
         }
 
         if (self[1714])
         {
             if (geom::g_SkyDome)
             {
-                typedef void (__fastcall* Fn)(void*, void*, float);
+                typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, float);
                 reinterpret_cast<Fn>((*reinterpret_cast<void***>(geom::g_SkyDome))[4])(
-                    geom::g_SkyDome, 0, timeF);
+                    geom::g_SkyDome, timeF);
             }
             else
                 noteOnce(32u, "SkyDome (frame update)");
@@ -1996,15 +1996,15 @@ bool Renderer::renderFrame(double time, float deltaTime)
 
         if (m_weatherManager && self[1695])
         {
-            typedef void (__fastcall* Fn)(void*, void*, double);
+            typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, double);
             reinterpret_cast<Fn>((*static_cast<void***>(m_weatherManager))[6])(
-                m_weatherManager, 0, time);
+                m_weatherManager, time);
         }
         if (m_rainManager && self[1695])
         {
-            typedef void (__fastcall* Fn)(void*, void*, double);
+            typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, double);
             reinterpret_cast<Fn>((*static_cast<void***>(m_rainManager))[6])(
-                m_rainManager, 0, time);
+                m_rainManager, time);
         }
         if (self[1702] && geom::g_UndergrowthSystem)
             static_cast<geom::UndergrowthSystem*>(geom::g_UndergrowthSystem)->update(timeF);   // +0x24
@@ -2018,9 +2018,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
         }
         if (geom::g_DecalManager)
         {
-            typedef void (__fastcall* Fn)(void*, void*, float);
+            typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, float);
             reinterpret_cast<Fn>((*reinterpret_cast<void***>(geom::g_DecalManager))[12])(
-                geom::g_DecalManager, 0, timeF);
+                geom::g_DecalManager, timeF);
         }
 
         // 0x1002FDED `mov eax, [ebp+arg_8]; push eax` - the second argument is forwarded verbatim
@@ -2124,9 +2124,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
 
             if (self[1693] && m_objectDrawer)
             {
-                typedef void (__fastcall* TimeFn)(void*, void*, float);
+                typedef void (__fastcall* TimeFn)(void* BF2_EDX_PARAM, float);
                 reinterpret_cast<TimeFn>((*reinterpret_cast<void***>(m_objectDrawer))[6])(
-                    m_objectDrawer, 0, timeF);
+                    m_objectDrawer, timeF);
             }
 
             renderQueueFlush(0x30, 1);                       // RSMTZOnly
@@ -2200,9 +2200,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
                 {
                     unsigned char* roadListener = reinterpret_cast<unsigned char*>(
                         geom::g_RoadCompiledRenderer) + 36;
-                    typedef void (__fastcall* Fn)(void*, void*, int);
+                    typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
                     reinterpret_cast<Fn>((*reinterpret_cast<void***>(roadListener))[3])(
-                        roadListener, 0, 0);
+                        roadListener, 0);
                 }
                 if (geom::g_RoadEditableRenderer)
                 {
@@ -2217,14 +2217,14 @@ bool Renderer::renderFrame(double time, float deltaTime)
                 if (geom::g_SkyDome)
                 {
                     unsigned char* skySub = reinterpret_cast<unsigned char*>(geom::g_SkyDome) + 4;
-                    typedef void (__fastcall* Fn)(void*, void*, int);
-                    reinterpret_cast<Fn>((*reinterpret_cast<void***>(skySub))[3])(skySub, 0, 0);
+                    typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
+                    reinterpret_cast<Fn>((*reinterpret_cast<void***>(skySub))[3])(skySub, 0);
                     if (self[1715])
                     {
-                        typedef void (__fastcall* SkyFn)(void*, void*, int);
+                        typedef void (__fastcall* SkyFn)(void* BF2_EDX_PARAM, int);
                         reinterpret_cast<SkyFn>(
                             (*reinterpret_cast<void***>(geom::g_SkyDome))[42])(
-                            geom::g_SkyDome, 0, 0);
+                            geom::g_SkyDome, 0);
                     }
                 }
                 else
@@ -2244,8 +2244,8 @@ bool Renderer::renderFrame(double time, float deltaTime)
             {
                 unsigned char* decalSub = reinterpret_cast<unsigned char*>(
                     geom::g_DecalManager) + 4;
-                typedef void (__fastcall* Fn)(void*, void*, int);
-                reinterpret_cast<Fn>((*reinterpret_cast<void***>(decalSub))[3])(decalSub, 0, 0);
+                typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
+                reinterpret_cast<Fn>((*reinterpret_cast<void***>(decalSub))[3])(decalSub, 0);
             }
             if (self[1693] && !isCameraUnderWater())
                 renderQueueFlush(0x2C, 1);                   // RSMTAdditive (above water)
@@ -2273,21 +2273,21 @@ bool Renderer::renderFrame(double time, float deltaTime)
             renderQueueFlush(0x40, 1);                       // RSMTFogTransparentPass
             if (m_weatherManager && self[1695])
             {
-                typedef void (__fastcall* Fn)(void*, void*);
+                typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM);
                 reinterpret_cast<Fn>((*static_cast<void***>(m_weatherManager))[7])(
-                    m_weatherManager, 0);
+                    m_weatherManager);
             }
             if (m_rainManager && self[1695])
             {
-                typedef void (__fastcall* Fn)(void*, void*);
+                typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM);
                 reinterpret_cast<Fn>((*static_cast<void***>(m_rainManager))[7])(
-                    m_rainManager, 0);
+                    m_rainManager);
             }
             if (self[1714] && self[1715] && geom::g_SkyDome)
             {
-                typedef void (__fastcall* SkyFn)(void*, void*, int);
+                typedef void (__fastcall* SkyFn)(void* BF2_EDX_PARAM, int);
                 reinterpret_cast<SkyFn>((*reinterpret_cast<void***>(geom::g_SkyDome))[42])(
-                    geom::g_SkyDome, 0, 1);
+                    geom::g_SkyDome, 1);
             }
             if (self[1717] && g_PostProductionFrameWorkOwner
                 && (!self[1441] || postProductionActive()))
@@ -2322,9 +2322,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
 
             if (self[1714] && self[1715] && geom::g_SkyDome)
             {
-                typedef void (__fastcall* SkyFn)(void*, void*, int);
+                typedef void (__fastcall* SkyFn)(void* BF2_EDX_PARAM, int);
                 reinterpret_cast<SkyFn>((*reinterpret_cast<void***>(geom::g_SkyDome))[42])(
-                    geom::g_SkyDome, 0, 2);
+                    geom::g_SkyDome, 2);
             }
 
             // The multisample depth detach/reattach pair skips (not multisampled), and the
@@ -2336,8 +2336,8 @@ bool Renderer::renderFrame(double time, float deltaTime)
                     ? classManager->getSingleton(renddx9abi::HostString("NametagManager")) : 0;
                 if (nametags)
                 {
-                    typedef void (__fastcall* Fn)(void*, void*);
-                    reinterpret_cast<Fn>((*static_cast<void***>(nametags))[6])(nametags, 0);
+                    typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM);
+                    reinterpret_cast<Fn>((*static_cast<void***>(nametags))[6])(nametags);
                 }
             }
             if (self[1713] && m_hudManager)
@@ -2347,19 +2347,19 @@ bool Renderer::renderFrame(double time, float deltaTime)
             // source (sub_10046E50 on the profiler counters) is the stat scaffolding this rebuild
             // does not reproduce - it samples 0 here. All three stay hidden (byte 1712 = 0).
             {
-                typedef void (__fastcall* SampleFn)(void*, void*, float);
-                typedef void (__fastcall* FlagFn)(void*, void*, unsigned char);
+                typedef void (__fastcall* SampleFn)(void* BF2_EDX_PARAM, float);
+                typedef void (__fastcall* FlagFn)(void* BF2_EDX_PARAM, unsigned char);
                 void* gRender = reinterpret_cast<void*>(dw[550]);
                 void* gFps    = reinterpret_cast<void*>(dw[549]);
                 void* gDraw   = reinterpret_cast<void*>(dw[551]);
                 if (gRender)
                     reinterpret_cast<SampleFn>((*static_cast<void***>(gRender))[16])(
-                        gRender, 0, static_cast<float>(m_frameWallTime * 1000.0));
+                        gRender, static_cast<float>(m_frameWallTime * 1000.0));
                 if (gFps)
                     reinterpret_cast<SampleFn>((*static_cast<void***>(gFps))[16])(
-                        gFps, 0, static_cast<float>(1.0 / dbl[189]));
+                        gFps, static_cast<float>(1.0 / dbl[189]));
                 if (gDraw)
-                    reinterpret_cast<SampleFn>((*static_cast<void***>(gDraw))[16])(gDraw, 0, 0.0f);
+                    reinterpret_cast<SampleFn>((*static_cast<void***>(gDraw))[16])(gDraw, 0.0f);
 
                 // the ECRenderer / ECCore frame events - the posts BF2's own menu system draws
                 // from. Delay-zero, so BF2's handlers run inside these calls.
@@ -2420,13 +2420,13 @@ bool Renderer::renderFrame(double time, float deltaTime)
 
                 if (gRender)
                     reinterpret_cast<FlagFn>((*static_cast<void***>(gRender))[10])(
-                        gRender, 0, self[1712]);
+                        gRender, self[1712]);
                 if (gFps)
                     reinterpret_cast<FlagFn>((*static_cast<void***>(gFps))[10])(
-                        gFps, 0, self[1712]);
+                        gFps, self[1712]);
                 if (gDraw)
                     reinterpret_cast<FlagFn>((*static_cast<void***>(gDraw))[10])(
-                        gDraw, 0, self[1712]);
+                        gDraw, self[1712]);
             }
 
             // Retail 0x10030AAF..0x10030ABA, just before the console gate: `cmp byte [esi+6AAh], 0;
@@ -2539,9 +2539,9 @@ world::ObjectManager* hemiObjectManager()
 // virtuals (Geom/ObjectDrawer.h). Unguarded, as every shipped caller is.
 void objectDrawerSetRenderView(void* drawer, IRenderView* view)
 {
-    typedef void (__fastcall* SetViewFn)(void*, void*, void*);
-    reinterpret_cast<SetViewFn>((*static_cast<void***>(drawer))[0x28 / sizeof(void*)])(
-        drawer, 0, view);
+    typedef void (__fastcall* SetViewFn)(void* BF2_EDX_PARAM, void*);
+    reinterpret_cast<SetViewFn>((*static_cast<void***>(drawer))[0x28  / 4])(
+        drawer, view);
 }
 
 } // anonymous namespace
@@ -2676,26 +2676,26 @@ const unsigned int kBundledMeshTemplateClassId = 0x870CA651u;   // ds:1021AEFC
 // what makes the raw callee-cleanup dispatch stack-safe for all three.
 inline void* lodGeometrySlot(void* geometry, unsigned int offset)
 {
-    return (*static_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*static_cast<void***>(geometry))[offset  / 4];
 }
 
 inline geom::IGeometryTemplate* lodGeometryTemplate(void* geometry)                    // +0x38
 {
-    typedef void* (__fastcall* GetTemplateFn)(void*, void*);
+    typedef void* (__fastcall* GetTemplateFn)(void* BF2_EDX_PARAM);
     return static_cast<geom::IGeometryTemplate*>(
-        reinterpret_cast<GetTemplateFn>(lodGeometrySlot(geometry, 0x38))(geometry, 0));
+        reinterpret_cast<GetTemplateFn>(lodGeometrySlot(geometry, 0x38))(geometry));
 }
 
 // The clamp all four arms inline.
 void forceGeometryLod(void* geometry, int lod)
 {
-    typedef int (__fastcall* GetLodCountFn)(void*, void*);
-    typedef void (__fastcall* SetLodFn)(void*, void*, int);
+    typedef int (__fastcall* GetLodCountFn)(void* BF2_EDX_PARAM);
+    typedef void (__fastcall* SetLodFn)(void* BF2_EDX_PARAM, int);
     int selected =
-        reinterpret_cast<GetLodCountFn>(lodGeometrySlot(geometry, 0x80))(geometry, 0) - 1;  // +0x80
+        reinterpret_cast<GetLodCountFn>(lodGeometrySlot(geometry, 0x80))(geometry) - 1;  // +0x80
     if (selected >= lod)
         selected = lod;
-    reinterpret_cast<SetLodFn>(lodGeometrySlot(geometry, 0x78))(geometry, 0, selected);     // +0x78
+    reinterpret_cast<SetLodFn>(lodGeometrySlot(geometry, 0x78))(geometry, selected);     // +0x78
 }
 
 // One template's live-instance set, in key order (the VC7.1 set iterator's increment: inlined for
@@ -2720,9 +2720,9 @@ void queryObjectsInRadius(const Vec3& centre, float radius, std::vector<world::I
 void queryObjectsInRadius(const Vec3& centre, float radius, vc71::vector_layout& out)
 {
     void* const manager = ::dice::hfe::objectManager;
-    typedef void (__fastcall* QueryFn)(void*, void*, const Vec3*, float, void*, void*);
-    reinterpret_cast<QueryFn>((*static_cast<void***>(manager))[0x44 / sizeof(void*)])(
-        manager, 0, &centre, radius, &out, 0);
+    typedef void (__fastcall* QueryFn)(void* BF2_EDX_PARAM, const Vec3*, float, void*, void*);
+    reinterpret_cast<QueryFn>((*static_cast<void***>(manager))[0x44  / 4])(
+        manager, &centre, radius, &out, 0);
 }
 #endif
 
@@ -3297,10 +3297,10 @@ void Renderer::beginFrame()
 
     if (m_tail1bAfterHemiScratch[0x7F0 - 0x778] != 0)
     {
-        typedef void (__fastcall* Fn)(void*, void*, unsigned int, unsigned int, unsigned int,
+        typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, unsigned int, unsigned int, unsigned int,
                                       unsigned int, unsigned int, unsigned int, unsigned int);
         reinterpret_cast<Fn>((*static_cast<void***>(static_cast<void*>(this)))[0x60 / 4])(
-            this, 0, 0, 0, 0, 0, 0, 0, 0);
+            this, 0, 0, 0, 0, 0, 0, 0);
     }
 }
 // PE 0x1002BC50, slot +0x2C: render the world according to RenderFlags.
@@ -3971,7 +3971,7 @@ bool selectShaderArchive(const char* levelName)
                                                    const renddx9abi::HostString&, HostLevelMap*);
 
         void* const modInfo = reinterpret_cast<GetModInfoFn>(
-            (*reinterpret_cast<void***>(swiffHost))[0x120 / sizeof(void*)])(swiffHost);
+            (*reinterpret_cast<void***>(swiffHost))[0x120  / 4])(swiffHost);
 #endif
 
         // var_70 = modDir; var_70 += "/levels/"; var_1C = var_70 - the PE copies it too.
@@ -3982,7 +3982,7 @@ bool selectShaderArchive(const char* levelName)
         modInfo->parseMapDesc(&mod, levelsPath, &map);                                 // +0x50
 #else
         reinterpret_cast<ParseMapDescFn>(
-            (*reinterpret_cast<void***>(modInfo))[0x50 / sizeof(void*)])(
+            (*reinterpret_cast<void***>(modInfo))[0x50  / 4])(
                 modInfo, &mod, levelsPath, &map);
 #endif
 
@@ -4030,12 +4030,12 @@ void Renderer::handleLevelPreLoad(const char* levelName)
     if (m_weatherManager)
     {
         void** const vtbl = *reinterpret_cast<void***>(m_weatherManager);
-        reinterpret_cast<VoidFn>(vtbl[0x14 / sizeof(void*)])(m_weatherManager);
+        reinterpret_cast<VoidFn>(vtbl[0x14  / 4])(m_weatherManager);
     }
     if (m_rainManager)
     {
         void** const vtbl = *reinterpret_cast<void***>(m_rainManager);
-        reinterpret_cast<VoidFn>(vtbl[0x14 / sizeof(void*)])(m_rainManager);
+        reinterpret_cast<VoidFn>(vtbl[0x14  / 4])(m_rainManager);
     }
 
     IBase* const gtm = geom::g_GeometryTemplateManager;
@@ -4063,7 +4063,7 @@ void Renderer::handleLevelPreLoad(const char* levelName)
     }
 
     reinterpret_cast<VoidFn>(
-        (*reinterpret_cast<void***>(gtm))[0x48 / sizeof(void*)])(gtm);       // the technique re-arm
+        (*reinterpret_cast<void***>(gtm))[0x48  / 4])(gtm);       // the technique re-arm
 }
 RD9_RENDERER_FRONTIER(shutdown,    0xD8)
 

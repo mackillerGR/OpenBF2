@@ -93,37 +93,37 @@ RoadCompiled* fromGeometry(void* subobject)
 // THE IRoad table, seven slots. MSVC will not make a free function __thiscall; a
 // __fastcall with an unused EDX is the same convention for these slots.
 
-int __fastcall rc_addRef(void* self, void*)
+int __fastcall rc_addRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiled*>(self)->addRef();
 }
 
-int __fastcall rc_getRef(void* self, void*)
+int __fastcall rc_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiled*>(self)->getRef();
 }
 
-int __fastcall rc_release(void* self, void*)
+int __fastcall rc_release(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiled*>(self)->release();
 }
 
-void* __fastcall rc_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall rc_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<RoadCompiled*>(self)->queryInterface(iid);
 }
 
 // +0x10, 0x1015AD30 - `ret`. [UNRESOLVED] role; nothing recovered calls it.
-void __fastcall rc_slot10(void*, void*)
+void __fastcall rc_slot10(void* BF2_EDX_PARAM)
 {
 }
 
-void __fastcall rc_updateChunkVisibility(void* self, void*, const Frustum* frustum)
+void __fastcall rc_updateChunkVisibility(void* self BF2_EDX_PARAM, const Frustum* frustum)
 {
     static_cast<RoadCompiled*>(self)->updateChunkVisibility(frustum);
 }
 
-bool __fastcall rc_anyChunkVisible(void* self, void*)
+bool __fastcall rc_anyChunkVisible(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiled*>(self)->anyChunkVisible();
 }
@@ -144,87 +144,87 @@ void* const kRoadVtable[7] =
 // are MSVC adjustor thunks (`sub ecx, 4; jmp <primary body>`); every other entry that is not this
 // class's own body is one of the image-wide default bodies, each read: its `retn N` fixes the arity.
 
-int __fastcall rg_addRef(void* self, void*)
+int __fastcall rg_addRef(void* self BF2_EDX_PARAM)
 {
     return fromGeometry(self)->addRef();
 }
 
-int __fastcall rg_getRef(void* self, void*)
+int __fastcall rg_getRef(void* self BF2_EDX_PARAM)
 {
     return fromGeometry(self)->getRef();
 }
 
-int __fastcall rg_release(void* self, void*)
+int __fastcall rg_release(void* self BF2_EDX_PARAM)
 {
     return fromGeometry(self)->release();
 }
 
-void* __fastcall rg_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall rg_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return fromGeometry(self)->queryInterface(iid);
 }
 
-void __fastcall rg_emptyNoArgs(void*, void*) { }                                  // 0x10037D40 `ret`
-void __fastcall rg_emptyOneArg(void*, void*, int) { }                             // 0x100E13B0 `retn 4`
-void __fastcall rg_emptyTwoArgs(void*, void*, int, int) { }                       // 0x100E1480 `retn 8`
-void __fastcall rg_emptyThreeArgs(void*, void*, int, int, int) { }                // 0x10083AB0 `retn 0Ch`
-void __fastcall rg_emptySixArgs(void*, void*, int, int, int, int, int, int) { }   // 0x10082D20 `retn 18h`
-int  __fastcall rg_returnsZero(void*, void*) { return 0; }
-int  __fastcall rg_returnsZeroOneArg(void*, void*, int) { return 0; }             // 0x10088060 `retn 4`
-bool __fastcall rg_returnsFalse(void*, void*) { return false; }
-bool __fastcall rg_returnsFalseOneArg(void*, void*, int) { return false; }        // 0x1005DA00 `retn 4`
-int  __fastcall rg_returnsOne(void*, void*) { return 1; }
-int  __fastcall rg_returnsMinusOne(void*, void*) { return -1; }
-int  __fastcall rg_returnsSeven(void*, void*) { return 7; }
-float __fastcall rg_returnsMinusOneF(void*, void*) { return -1.0f; }              // 0x10082D10 `fld -1.0`
+void __fastcall rg_emptyNoArgs(void* BF2_EDX_PARAM) { }                                  // 0x10037D40 `ret`
+void __fastcall rg_emptyOneArg(void* BF2_EDX_PARAM, int) { }                             // 0x100E13B0 `retn 4`
+void __fastcall rg_emptyTwoArgs(void* BF2_EDX_PARAM, int, int) { }                       // 0x100E1480 `retn 8`
+void __fastcall rg_emptyThreeArgs(void* BF2_EDX_PARAM, int, int, int) { }                // 0x10083AB0 `retn 0Ch`
+void __fastcall rg_emptySixArgs(void* BF2_EDX_PARAM, int, int, int, int, int, int) { }   // 0x10082D20 `retn 18h`
+int  __fastcall rg_returnsZero(void* BF2_EDX_PARAM) { return 0; }
+int  __fastcall rg_returnsZeroOneArg(void* BF2_EDX_PARAM, int) { return 0; }             // 0x10088060 `retn 4`
+bool __fastcall rg_returnsFalse(void* BF2_EDX_PARAM) { return false; }
+bool __fastcall rg_returnsFalseOneArg(void* BF2_EDX_PARAM, int) { return false; }        // 0x1005DA00 `retn 4`
+int  __fastcall rg_returnsOne(void* BF2_EDX_PARAM) { return 1; }
+int  __fastcall rg_returnsMinusOne(void* BF2_EDX_PARAM) { return -1; }
+int  __fastcall rg_returnsSeven(void* BF2_EDX_PARAM) { return 7; }
+float __fastcall rg_returnsMinusOneF(void* BF2_EDX_PARAM) { return -1.0f; }              // 0x10082D10 `fld -1.0`
 
 // +0x18, (`retn 0Ch`) - the ObjectDrawer's deferred pass passes (renderView, occluder, 1);
 // the body reads none of the three.
-void __fastcall rg_addToRenderQueue(void* self, void*, void*, void*, int)
+void __fastcall rg_addToRenderQueue(void* self BF2_EDX_PARAM, void*, void*, int)
 {
     fromGeometry(self)->addToRenderQueue();
 }
 
 // +0x34, 0x1015BB00 - `sub ecx, 4; jmp 0x1015BB60`, the scalar deleting destructor.
-void* __fastcall rg_destroy(void* self, void*, unsigned int flags)
+void* __fastcall rg_destroy(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return fromGeometry(self)->destroy(flags);
 }
 
 // +0x38, the same body as IRoad +0x04 (`mov eax, [ecx+34h]`), which on the subobject
 // reads object +0x38: the template. ICF folded "getRef" and "getTemplate" into one function.
-void* __fastcall rg_getTemplate(void* self, void*)
+void* __fastcall rg_getTemplate(void* self BF2_EDX_PARAM)
 {
     return fromGeometry(self)->m_template;
 }
 
 // +0x40, 0x1015AD50 - `lea eax, [ecx+94h]`: the local bounds (object +0x98).
-const void* __fastcall rg_getLocalBounds(void* self, void*)
+const void* __fastcall rg_getLocalBounds(void* self BF2_EDX_PARAM)
 {
     return &fromGeometry(self)->m_localBounds;
 }
 
 // +0x44, 0x1015AD60 - `fld dword ptr [ecx+54h]`: the file's radius (object +0x58).
-float __fastcall rg_getRadius(void* self, void*)
+float __fastcall rg_getRadius(void* self BF2_EDX_PARAM)
 {
     return fromGeometry(self)->m_radius;
 }
 
 // +0x48, 0x1015AD70 - `lea eax, [ecx+0D0h]`: the transform (object +0xD4).
-const Mat4* __fastcall rg_getTransform(void* self, void*)
+const Mat4* __fastcall rg_getTransform(void* self BF2_EDX_PARAM)
 {
     return &fromGeometry(self)->m_transform;
 }
 
 // +0x50, (`retn 4`).
-void __fastcall rg_setTransform(void* self, void*, const Mat4* transform)
+void __fastcall rg_setTransform(void* self BF2_EDX_PARAM, const Mat4* transform)
 {
     fromGeometry(self)->setTransform(transform);
 }
 
 // +0x68, 0x10082D30 - `add ecx, 4; jmp std::string::operator=`: the subobject's own name string
 // (object +0x08). The shared body StaticMesh's +0x68 is; it answers the string.
-vc71::string* __fastcall rg_setName(void* self, void*, const vc71::string& value)
+vc71::string* __fastcall rg_setName(void* self BF2_EDX_PARAM, const vc71::string& value)
 {
     static_cast<GeometryInstanceData*>(self)->m_name = value.c_str();
     return const_cast<vc71::string*>(&value);
@@ -398,8 +398,8 @@ int RoadCompiled::release()
     const int remaining = --m_refCount;
     if (!remaining)
     {
-        typedef void* (__fastcall* DestroyFn)(void*, void*, unsigned int);
-        reinterpret_cast<DestroyFn>(m_geometry.m_vptr[0x34 / sizeof(void*)])(&m_geometry, 0, 1);
+        typedef void* (__fastcall* DestroyFn)(void* BF2_EDX_PARAM, unsigned int);
+        reinterpret_cast<DestroyFn>(m_geometry.m_vptr[0x34  / 4])(&m_geometry, 1);
     }
     return remaining;
 }
@@ -484,8 +484,8 @@ void RoadCompiled::addToRenderQueue()
         return;
 
     const Frustum* const frustum = dx9rend::rendererGetRenderView()->getFrustumPtr();
-    typedef void (__fastcall* VisibilityFn)(void*, void*, const Frustum*);
-    reinterpret_cast<VisibilityFn>(m_roadVptr[0x14 / sizeof(void*)])(this, 0, frustum);
+    typedef void (__fastcall* VisibilityFn)(void* BF2_EDX_PARAM, const Frustum*);
+    reinterpret_cast<VisibilityFn>(m_roadVptr[0x14  / 4])(this, frustum);
 
     if (m_anyChunkVisible)
         roadCompiledRendererAdd(this);

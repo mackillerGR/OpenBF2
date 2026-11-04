@@ -33,13 +33,13 @@ namespace {
 // Four-slot atlas interface: addRef, getRef, release, and queryInterface.
 
 
-void __fastcall atlas_addRef(void* self, void*) { ++static_cast<TextureAtlas*>(self)->refCount; }
-int  __fastcall atlas_getRef(void* self, void*) { return static_cast<TextureAtlas*>(self)->refCount; }
+void __fastcall atlas_addRef(void* self BF2_EDX_PARAM) { ++static_cast<TextureAtlas*>(self)->refCount; }
+int  __fastcall atlas_getRef(void* self BF2_EDX_PARAM) { return static_cast<TextureAtlas*>(self)->refCount; }
 
 // (34 B), the release: `r = --refCount; if (!r) { sub_10015930(this);
 // sub_1005F360(this); } return r;`. The StaticMeshRenderer's destructor calls it on its ten lightmap
 // atlases (0x10121C10..0x10121C1D).
-int __fastcall atlas_slot08(void* self, void*)
+int __fastcall atlas_slot08(void* self BF2_EDX_PARAM)
 {
     TextureAtlas* const atlas = static_cast<TextureAtlas*>(self);
     const int remaining = --atlas->refCount;
@@ -51,7 +51,7 @@ int __fastcall atlas_slot08(void* self, void*)
     return remaining;
 }
 
-void* __fastcall atlas_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall atlas_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return iid == RD9_IID_IBASE ? self : 0;                // 0x10025930, comdat-shared
 }

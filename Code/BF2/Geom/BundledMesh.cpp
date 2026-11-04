@@ -38,8 +38,8 @@ extern LightManager* g_LightManager;
 namespace {
 template<class R,class... A> R dispatch(void* self,unsigned int offset,A... args)
 {
-    typedef R(__fastcall* Fn)(void*,void*,A...);
-    return reinterpret_cast<Fn>((*static_cast<void***>(self))[offset/4])(self,0,args...);
+    typedef R(__fastcall* Fn)(void* BF2_EDX_PARAM,A...);
+    return reinterpret_cast<Fn>((*static_cast<void***>(self))[offset/4])(self,args...);
 }
 template<class T> T& field(void* p,unsigned int offset)
 { return *reinterpret_cast<T*>(static_cast<unsigned char*>(p)+offset); }
@@ -418,8 +418,8 @@ void BundledMesh::drawShadowMap(void* light,void*,void*,void*,void*,void*)
 }
 
 namespace {
-#define BM0(R,name) R __fastcall bm_##name(BundledMesh* s,void*) { return s->name(); }
-#define BM1(R,name,T) R __fastcall bm_##name(BundledMesh* s,void*,T v) { return s->name(v); }
+#define BM0(R,name) R __fastcall bm_##name(BundledMesh* s BF2_EDX_PARAM) { return s->name(); }
+#define BM1(R,name,T) R __fastcall bm_##name(BundledMesh* s BF2_EDX_PARAM,T v) { return s->name(v); }
 BM0(int,addRef) BM0(int,getRef) BM0(int,release) BM1(void*,queryInterface,unsigned int)
 BM1(void,setFov,float) BM0(float,getFov)
 BM1(void*,setShadowProjection,void*) BM0(void*,getShadowProjection) BM0(int,getGeometryType)
@@ -435,24 +435,24 @@ BM1(int,setDword29C,int) BM1(void*,setNextGeometry,void*) BM0(void*,getNextGeome
 BM1(void,setTransparency,float)
 #undef BM0
 #undef BM1
-void __fastcall bm_draw(BundledMesh* s,void*,void* a,void* b,void* c) { s->draw(a,b,c); }
-void __fastcall bm_shadow(BundledMesh* s,void*,void* a,void* b,void* c,void* d,void* e,void* f) { s->drawShadowMap(a,b,c,d,e,f); }
-void* __fastcall bm_destroy(void* s,void*,unsigned char flags) { return bundledMeshDestroyFlags(s,flags); }
-void __fastcall bm_setPart(BundledMesh* s,void*,const Mat4* value,int part) { s->setPartTransformation(value,part); }
-void __fastcall bm_setBones(BundledMesh* s,void*,const Mat4* value,int count) { s->setBoneTransforms(value,count); }
-void __fastcall bm_setName(BundledMesh* s,void*,const vc71::string& value) { s->m_name=value.c_str(); }
-void __fastcall bm_uvTranslate(BundledMesh* s,void*,int i,float x,float y) { s->setUvTranslation(i,x,y); }
-void __fastcall bm_uvRotate(BundledMesh* s,void*,int i,float angle) { s->setUvRotation(i,angle); }
-void __fastcall bm_uvTransform(BundledMesh* s,void*,int i,const Mat4* value) { s->setUvTransformation(i,value); }
+void __fastcall bm_draw(BundledMesh* s BF2_EDX_PARAM,void* a,void* b,void* c) { s->draw(a,b,c); }
+void __fastcall bm_shadow(BundledMesh* s BF2_EDX_PARAM,void* a,void* b,void* c,void* d,void* e,void* f) { s->drawShadowMap(a,b,c,d,e,f); }
+void* __fastcall bm_destroy(void* s BF2_EDX_PARAM,unsigned char flags) { return bundledMeshDestroyFlags(s,flags); }
+void __fastcall bm_setPart(BundledMesh* s BF2_EDX_PARAM,const Mat4* value,int part) { s->setPartTransformation(value,part); }
+void __fastcall bm_setBones(BundledMesh* s BF2_EDX_PARAM,const Mat4* value,int count) { s->setBoneTransforms(value,count); }
+void __fastcall bm_setName(BundledMesh* s BF2_EDX_PARAM,const vc71::string& value) { s->m_name=value.c_str(); }
+void __fastcall bm_uvTranslate(BundledMesh* s BF2_EDX_PARAM,int i,float x,float y) { s->setUvTranslation(i,x,y); }
+void __fastcall bm_uvRotate(BundledMesh* s BF2_EDX_PARAM,int i,float angle) { s->setUvRotation(i,angle); }
+void __fastcall bm_uvTransform(BundledMesh* s BF2_EDX_PARAM,int i,const Mat4* value) { s->setUvTransformation(i,value); }
 // Shared retail bodies: exact callee cleanup confirmed in the instruction census.
-void __fastcall bm_empty1(void*,void*,unsigned int) {}
-void __fastcall bm_empty2(void*,void*,unsigned int,unsigned int) {}
-bool __fastcall bm_false1(void*,void*,unsigned int) { return false; }
-bool __fastcall bm_false0(void*,void*) { return false; }
-int __fastcall bm_zero0(void*,void*) { return 0; }
-int __fastcall bm_zero1(void*,void*,unsigned int) { return 0; }
-int __fastcall bm_seven(void*,void*) { return 7; }
-void __fastcall bm_stamp(BundledMesh* s,void*) { s->m_visibleFrame=dx9rend::rendererFrameOrdinal(); }
+void __fastcall bm_empty1(void* BF2_EDX_PARAM,unsigned int) {}
+void __fastcall bm_empty2(void* BF2_EDX_PARAM,unsigned int,unsigned int) {}
+bool __fastcall bm_false1(void* BF2_EDX_PARAM,unsigned int) { return false; }
+bool __fastcall bm_false0(void* BF2_EDX_PARAM) { return false; }
+int __fastcall bm_zero0(void* BF2_EDX_PARAM) { return 0; }
+int __fastcall bm_zero1(void* BF2_EDX_PARAM,unsigned int) { return 0; }
+int __fastcall bm_seven(void* BF2_EDX_PARAM) { return 7; }
+void __fastcall bm_stamp(BundledMesh* s BF2_EDX_PARAM) { s->m_visibleFrame=dx9rend::rendererFrameOrdinal(); }
 }
 #define BM_ENTRY(x) reinterpret_cast<void*>(&bm_##x)
 void* const g_bundledMeshVtable[62]={

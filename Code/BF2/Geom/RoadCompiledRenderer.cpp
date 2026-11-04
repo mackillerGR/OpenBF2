@@ -216,57 +216,57 @@ RoadCompiledRenderer* fromListener(void* listener)
 
 // Primary-table thunks use __fastcall with unused EDX to match the __thiscall slots.
 
-int __fastcall rcr_addRef(void* self, void*)
+int __fastcall rcr_addRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->addRef();
 }
 
-int __fastcall rcr_getRef(void* self, void*)
+int __fastcall rcr_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->getRef();
 }
 
-int __fastcall rcr_release(void* self, void*)
+int __fastcall rcr_release(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->release();
 }
 
-void* __fastcall rcr_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall rcr_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<RoadCompiledRenderer*>(self)->queryInterface(iid);
 }
 
 // +0x10 / +0x14 - the int at +0x84. [UNRESOLVED] role: StaticMeshRenderer's +0x10 is an empty body and
 // its +0x14 answers 0; nothing recovered calls either on this singleton.
-void __fastcall rcr_setSlot84(void* self, void*, int value)
+void __fastcall rcr_setSlot84(void* self BF2_EDX_PARAM, int value)
 {
     static_cast<RoadCompiledRenderer*>(self)->setSlot84(value);
 }
 
-int __fastcall rcr_getSlot84(void* self, void*)
+int __fastcall rcr_getSlot84(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->getSlot84();
 }
 
 // +0x18, the one VideoOptions::apply calls. A single byte store.
-void __fastcall rcr_setEnabled(void* self, void*, int value)
+void __fastcall rcr_setEnabled(void* self BF2_EDX_PARAM, int value)
 {
     static_cast<RoadCompiledRenderer*>(self)->setEnabled(static_cast<unsigned char>(value));
 }
 
-unsigned char __fastcall rcr_getEnabled(void* self, void*)
+unsigned char __fastcall rcr_getEnabled(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->getEnabled();
 }
 
 // +0x20, 0x10121A10 - `add ecx, 8; jmp std::string::operator=(const std::string&)`: the import's
 // mangled name pins the argument, and the assignment's result (the name) is what it answers.
-vc71::string* __fastcall rcr_setName(void* self, void*, const vc71::string& value)
+vc71::string* __fastcall rcr_setName(void* self BF2_EDX_PARAM, const vc71::string& value)
 {
     return &static_cast<RoadCompiledRenderer*>(self)->setName(value);
 }
 
-vc71::string* __fastcall rcr_getName(void* self, void*)
+vc71::string* __fastcall rcr_getName(void* self BF2_EDX_PARAM)
 {
     return static_cast<RoadCompiledRenderer*>(self)->getName();
 }
@@ -291,28 +291,28 @@ void* const kPrimaryVtable[10] =
 
 
 // +0x00, 0x101C43C0 - `mov [ecx+4], arg`: the activated path into +0x28.
-void __fastcall rcr_onRenderPathActivated(void* self, void*, int path)
+void __fastcall rcr_onRenderPathActivated(void* self BF2_EDX_PARAM, int path)
 {
     fromListener(self)->m_renderPath = path;
 }
 
-void __fastcall rcr_onRenderPathDeactivated(void*, void*) { }            // +0x04  0x10037D40 `ret`
-void __fastcall rcr_onRenderPathChanged(void*, void*, int) { }           // +0x08  0x100E13B0 `retn 4`
+void __fastcall rcr_onRenderPathDeactivated(void* BF2_EDX_PARAM) { }            // +0x04  0x10037D40 `ret`
+void __fastcall rcr_onRenderPathChanged(void* BF2_EDX_PARAM, int) { }           // +0x08  0x100E13B0 `retn 4`
 
 // +0x0C, (`retn 4`) - the per-frame call. The argument (renderFrame passes 0) is not read.
-void __fastcall rcr_onRenderPathNotification(void* self, void*, int)
+void __fastcall rcr_onRenderPathNotification(void* self BF2_EDX_PARAM, int)
 {
     fromListener(self)->onRenderPathNotification();
 }
 
 // +0x10, 0x101A9A10 - `mov eax, [ecx+4]`.
-int __fastcall rcr_getCurrentRenderPath(void* self, void*)
+int __fastcall rcr_getCurrentRenderPath(void* self BF2_EDX_PARAM)
 {
     return fromListener(self)->m_renderPath;
 }
 
 // +0x14, (`retn 4`) - the name, constructed into the caller's hidden return slot.
-vc71::string* __fastcall rcr_getRenderPathListenerName(void*, void*, vc71::string* out)
+vc71::string* __fastcall rcr_getRenderPathListenerName(void* BF2_EDX_PARAM, vc71::string* out)
 {
     new (out) vc71::string("RoadCompiledRenderer");
     return out;

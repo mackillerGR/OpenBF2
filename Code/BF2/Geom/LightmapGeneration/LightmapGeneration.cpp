@@ -255,7 +255,7 @@ inline IDirect3DDevice9* renderDevice()
 // tree; each slot is reached through the instance's table (OverGrowthLoad.cpp's precedent).
 inline void* geometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 inline void geometryDrawSilhouette(void* geometry, void* renderView, int legacyArm)   // +0x1C
 {

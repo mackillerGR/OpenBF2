@@ -76,8 +76,8 @@ dx9rend::IRenderer* renderer()
 // `textureAtlasRelease` in TextureAtlas.h.
 int releaseAtlas(dx9rend::TextureAtlas* atlas)
 {
-    typedef int (__fastcall* ReleaseFn)(void*, void*);
-    return reinterpret_cast<ReleaseFn>(static_cast<void**>(atlas->vptr)[0x08 / 4])(atlas, 0);
+    typedef int (__fastcall* ReleaseFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<ReleaseFn>(static_cast<void**>(atlas->vptr)[0x08 / 4])(atlas);
 }
 
 } // anonymous namespace

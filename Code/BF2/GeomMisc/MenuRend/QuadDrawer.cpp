@@ -160,19 +160,19 @@ static_assert(sizeof(QuadDrawer) == 0x108098,
 
 namespace {
 
-void __fastcall qd_addRef(void* s, void*) { static_cast<QuadDrawer*>(s)->addRef(); }
-int  __fastcall qd_getRef(void* s, void*) { return static_cast<QuadDrawer*>(s)->getRef(); }
-int  __fastcall qd_release(void* s, void*) { return static_cast<QuadDrawer*>(s)->release(); }
+void __fastcall qd_addRef(void* s BF2_EDX_PARAM) { static_cast<QuadDrawer*>(s)->addRef(); }
+int  __fastcall qd_getRef(void* s BF2_EDX_PARAM) { return static_cast<QuadDrawer*>(s)->getRef(); }
+int  __fastcall qd_release(void* s BF2_EDX_PARAM) { return static_cast<QuadDrawer*>(s)->release(); }
 
-void* __fastcall qd_queryInterface(void* s, void*, unsigned int iid)
+void* __fastcall qd_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<QuadDrawer*>(s)->queryInterface(iid);
 }
 
-void __fastcall qd_flush(void* s, void*)      { static_cast<QuadDrawer*>(s)->flush(); }
-void __fastcall qd_beginFrame(void* s, void*) { static_cast<QuadDrawer*>(s)->beginFrame(); }
-void __fastcall qd_resetState(void* s, void*) { static_cast<QuadDrawer*>(s)->resetState(); }
-void __fastcall qd_endFrame(void* s, void*)   { static_cast<QuadDrawer*>(s)->endFrame(); }
+void __fastcall qd_flush(void* s BF2_EDX_PARAM)      { static_cast<QuadDrawer*>(s)->flush(); }
+void __fastcall qd_beginFrame(void* s BF2_EDX_PARAM) { static_cast<QuadDrawer*>(s)->beginFrame(); }
+void __fastcall qd_resetState(void* s BF2_EDX_PARAM) { static_cast<QuadDrawer*>(s)->resetState(); }
+void __fastcall qd_endFrame(void* s BF2_EDX_PARAM)   { static_cast<QuadDrawer*>(s)->endFrame(); }
 
 void* const kQuadDrawerVtable[8] =
 {
@@ -188,15 +188,15 @@ void* const kQuadDrawerVtable[8] =
 
 // Suspends drawing on device loss and resets the vertex cursor before resuming.
 // BufferManager recreates GPU resources at priority 3, before this listener at priority 4.
-void __fastcall qd_onDeviceLost(void* s, void*)
+void __fastcall qd_onDeviceLost(void* s BF2_EDX_PARAM)
 {
     reinterpret_cast<QuadDrawer*>(static_cast<char*>(s) - 4)->onDeviceLost();
 }
-void __fastcall qd_onDeviceReset(void* s, void*)
+void __fastcall qd_onDeviceReset(void* s BF2_EDX_PARAM)
 {
     reinterpret_cast<QuadDrawer*>(static_cast<char*>(s) - 4)->onDeviceReset();
 }
-void __fastcall qd_listenerNullsub(void*, void*) { /* 0x1008AF70: ret */ }
+void __fastcall qd_listenerNullsub(void* BF2_EDX_PARAM) { /* 0x1008AF70: ret */ }
 
 void* const kQuadDrawerListenerVtable[3] =
 {
@@ -206,7 +206,7 @@ void* const kQuadDrawerListenerVtable[3] =
 };
 
 // Forwards the event from its listener subobject; userData is the fourth event argument.
-void __fastcall qd_handleECCoreEvent(void* s, void*, int category, unsigned int id,
+void __fastcall qd_handleECCoreEvent(void* s BF2_EDX_PARAM, int category, unsigned int id,
                                      void* /*node*/, unsigned char* payload)
 {
     reinterpret_cast<QuadDrawer*>(static_cast<char*>(s) - 8)
@@ -429,19 +429,19 @@ namespace {
 void cacheHalfTexels(QuadDrawer* self, MemeTexture* tex, MemeTexture* tex2,
                      float* u1, float* v1, float* u2, float* v2)
 {
-    typedef int (__fastcall* GetDimFn)(void*, void*);
+    typedef int (__fastcall* GetDimFn)(void* BF2_EDX_PARAM);
     if (tex)
     {
         void** vtbl = *reinterpret_cast<void***>(tex);
-        const int w = reinterpret_cast<GetDimFn>(vtbl[0x3C / 4])(tex, 0);
-        const int h = reinterpret_cast<GetDimFn>(vtbl[0x40 / 4])(tex, 0);
+        const int w = reinterpret_cast<GetDimFn>(vtbl[0x3C / 4])(tex);
+        const int h = reinterpret_cast<GetDimFn>(vtbl[0x40 / 4])(tex);
         *u1 = 0.5f / static_cast<float>(w);
         *v1 = 0.5f / static_cast<float>(h);
         if (tex2)
         {
             void** vtbl2 = *reinterpret_cast<void***>(tex2);
-            const int w2 = reinterpret_cast<GetDimFn>(vtbl2[0x3C / 4])(tex2, 0);
-            const int h2 = reinterpret_cast<GetDimFn>(vtbl2[0x40 / 4])(tex2, 0);
+            const int w2 = reinterpret_cast<GetDimFn>(vtbl2[0x3C / 4])(tex2);
+            const int h2 = reinterpret_cast<GetDimFn>(vtbl2[0x40 / 4])(tex2);
             *u2 = 0.5f / static_cast<float>(w2);
             *v2 = 0.5f / static_cast<float>(h2);
         }
@@ -660,11 +660,11 @@ void QuadDrawer::submit(MemeTexture* tex, QuadDrawRequest* req,
     {
         MemeTexture* t2 = static_cast<MemeTexture*>(req->texture2);
         void** vtbl = *reinterpret_cast<void***>(t2);
-        typedef float (__fastcall* GetF)(void*, void*);
-        const float uOff = reinterpret_cast<GetF>(vtbl[0x4C / 4])(t2, 0);
-        const float vOff = reinterpret_cast<GetF>(vtbl[0x50 / 4])(t2, 0);
-        const float uW   = reinterpret_cast<GetF>(vtbl[0x54 / 4])(t2, 0);
-        const float uH   = reinterpret_cast<GetF>(vtbl[0x58 / 4])(t2, 0);
+        typedef float (__fastcall* GetF)(void* BF2_EDX_PARAM);
+        const float uOff = reinterpret_cast<GetF>(vtbl[0x4C / 4])(t2);
+        const float vOff = reinterpret_cast<GetF>(vtbl[0x50 / 4])(t2);
+        const float uW   = reinterpret_cast<GetF>(vtbl[0x54 / 4])(t2);
+        const float uH   = reinterpret_cast<GetF>(vtbl[0x58 / 4])(t2);
         for (int i = 0; i < count; ++i)
         {
             fan[i][9]  = uOff + uW * ((fan[i][0] - req->clipRect[0]) / req->clipRect[2]);

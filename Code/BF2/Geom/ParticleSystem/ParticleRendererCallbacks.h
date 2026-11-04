@@ -7,8 +7,8 @@ namespace dx9rend { class IRenderView; }
 namespace geom {
 class IParticleSystemInstance;
 class IParticleSystemTemplate;
-void __fastcall particleRendererCollectSorted(void*, void*, dx9rend::IRenderView*,
+void __fastcall particleRendererCollectSorted(void* BF2_EDX_PARAM, dx9rend::IRenderView*,
     IParticleSystemInstance*, IParticleSystemTemplate*);
-void __fastcall particleRendererCollectAdditive(void*, void*, dx9rend::IRenderView*,
+void __fastcall particleRendererCollectAdditive(void* BF2_EDX_PARAM, dx9rend::IRenderView*,
     IParticleSystemInstance*, IParticleSystemTemplate*);
 } } }

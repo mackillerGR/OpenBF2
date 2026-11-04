@@ -21,23 +21,23 @@ static Fn psmMeshGeometrySlot(void* mesh, unsigned int offset)
 // the same slot StaticMesh names). Only 10175230 calls it, and discards the result.
 static void* psmMeshGeometryGetTemplate(void* mesh)
 {
-    typedef void* (__fastcall *Fn)(void*, void*);
-    return psmMeshGeometrySlot<Fn>(mesh, 0x38)(mesh, 0);
+    typedef void* (__fastcall *Fn)(void* BF2_EDX_PARAM);
+    return psmMeshGeometrySlot<Fn>(mesh, 0x38)(mesh);
 }
 
 // +0x4C, PE 101AFD80 `this[+38h][part] = transform`, `retn 8` - BundledMesh's
 // setPartTransformation(const Mat4*, int) shape. The pointer is stored, not copied.
 static void psmMeshGeometrySetPartTransformation(void* mesh, const Mat4* transform, int part)
 {
-    typedef void (__fastcall *Fn)(void*, void*, const Mat4*, int);
-    psmMeshGeometrySlot<Fn>(mesh, 0x4C)(mesh, 0, transform, part);
+    typedef void (__fastcall *Fn)(void* BF2_EDX_PARAM, const Mat4*, int);
+    psmMeshGeometrySlot<Fn>(mesh, 0x4C)(mesh, transform, part);
 }
 
 // +0x50, PE 101AFC20 `this->vslot4C(transform, 0)`, `retn 4` - setGeometryTransformation.
 static void psmMeshGeometrySetTransformation(void* mesh, const Mat4* transform)
 {
-    typedef void (__fastcall *Fn)(void*, void*, const Mat4*);
-    psmMeshGeometrySlot<Fn>(mesh, 0x50)(mesh, 0, transform);
+    typedef void (__fastcall *Fn)(void* BF2_EDX_PARAM, const Mat4*);
+    psmMeshGeometrySlot<Fn>(mesh, 0x50)(mesh, transform);
 }
 
 // The renderer calls ShaderParameter through its vtable (`call [reg+18h]`, +24h, +28h). Upcast so

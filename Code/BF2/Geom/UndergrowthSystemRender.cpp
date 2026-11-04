@@ -419,9 +419,9 @@ const world::LightSourceTemplate* lightSourceTemplate(world::LightSource* light)
 // Requires a live drawer and a compatibility-layout MeshBounds.
 inline bool objectDrawerOccludesBounds(IBase* drawer, MeshBounds* bounds)
 {
-    typedef bool (__fastcall* OccludedFn)(void*, void*, MeshBounds*);
+    typedef bool (__fastcall* OccludedFn)(void* BF2_EDX_PARAM, MeshBounds*);
     void** const table = *reinterpret_cast<void***>(drawer);
-    return reinterpret_cast<OccludedFn>(table[0x3C / sizeof(void*)])(drawer, 0, bounds);
+    return reinterpret_cast<OccludedFn>(table[0x3C  / 4])(drawer, bounds);
 }
 
 

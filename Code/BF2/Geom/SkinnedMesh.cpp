@@ -136,9 +136,9 @@ const Mat4& skinnedMeshZeroMatrix()
 template <class R>
 R viewSlot(void* view, unsigned int slot)
 {
-    typedef R(__fastcall * Fn)(void*, void*);
+    typedef R(__fastcall * Fn)(void* BF2_EDX_PARAM);
     return reinterpret_cast<Fn>(
-        (*reinterpret_cast<void***>(view))[slot / sizeof(void*)])(view, 0);
+        (*reinterpret_cast<void***>(view))[slot  / 4])(view);
 }
 
 // The Renderer's two gate bytes, read at +0x6A3 and +0x6AB off the console object.
@@ -686,14 +686,14 @@ void skinnedMeshInitShadowState()
 
     if (state.effect)
     {
-        typedef void(__fastcall * RefFn)(void*, void*);
+        typedef void(__fastcall * RefFn)(void* BF2_EDX_PARAM);
         reinterpret_cast<RefFn>(
-            (*reinterpret_cast<void***>(state.effect))[0x00 / sizeof(void*)])(state.effect, 0);
+            (*reinterpret_cast<void***>(state.effect))[0x00  / 4])(state.effect);
         void* const params[4] =
             { state.lightMat, state.lightTrapezMat, state.texLayer0, state.geomBones };
         for (int i = 0; i < 4; ++i)
             reinterpret_cast<RefFn>(
-                (*reinterpret_cast<void***>(params[i]))[0x04 / sizeof(void*)])(params[i], 0);
+                (*reinterpret_cast<void***>(params[i]))[0x04  / 4])(params[i]);
         return;
     }
 
@@ -707,14 +707,14 @@ void skinnedMeshInitShadowState()
 
     {
         void* const lm = g_LightManager;
-        typedef void(__fastcall * RegisterFn)(void*, void*, unsigned int, void*);
+        typedef void(__fastcall * RegisterFn)(void* BF2_EDX_PARAM, unsigned int, void*);
         reinterpret_cast<RegisterFn>(
-            (*reinterpret_cast<void***>(lm))[0x2F0 / sizeof(void*)])(
-                lm, 0, kSkinnedMeshTemplateClassId, state.effect);
+            (*reinterpret_cast<void***>(lm))[0x2F0  / 4])(
+                lm, kSkinnedMeshTemplateClassId, state.effect);
 
-        typedef unsigned char(__fastcall * PredFn)(void*, void*);
+        typedef unsigned char(__fastcall * PredFn)(void* BF2_EDX_PARAM);
         if (reinterpret_cast<PredFn>(
-                (*reinterpret_cast<void***>(lm))[0xF0 / sizeof(void*)])(lm, 0))
+                (*reinterpret_cast<void***>(lm))[0xF0  / 4])(lm))
         {
             const vc71::string technique(
                 ::dice::hfe::dx9rend::deviceCapsIsNvidia() ? "DrawShadowMapNV" : "DrawShadowMap");
@@ -760,18 +760,18 @@ SkinnedMeshShadowState* skinnedMeshShadowState()
 // reaches through its typed dx9rend::ShaderParameter::setValue.
 void shaderParameterSetValue(void* parameter, const void* value, int index)
 {
-    typedef void(__fastcall * Fn)(void*, void*, const void*, int);
+    typedef void(__fastcall * Fn)(void* BF2_EDX_PARAM, const void*, int);
     reinterpret_cast<Fn>(
-        (*reinterpret_cast<void***>(parameter))[0x18 / sizeof(void*)])(parameter, 0, value, index);
+        (*reinterpret_cast<void***>(parameter))[0x18  / 4])(parameter, value, index);
 }
 
 // ShaderParameter vslot +0x28 - the matrix-array upload, `(Mat4 palette, unsigned count)`. This
 // is the GeomBones set: the skinning palette reaching the shader.
 void shaderParameterSetMatrixArray(void* parameter, Mat4* const* palette, unsigned int count)
 {
-    typedef void(__fastcall * Fn)(void*, void*, Mat4* const*, unsigned int);
+    typedef void(__fastcall * Fn)(void* BF2_EDX_PARAM, Mat4* const*, unsigned int);
     reinterpret_cast<Fn>(
-        (*reinterpret_cast<void***>(parameter))[0x28 / sizeof(void*)])(parameter, 0, palette, count);
+        (*reinterpret_cast<void***>(parameter))[0x28  / 4])(parameter, palette, count);
 }
 
 // `mov eax, [effect+8]; call [[eax]+104h]` - ID3DXEffect::CommitChanges on the wrapper's D3DX
@@ -780,7 +780,7 @@ void skinnedMeshEffectCommitChanges(void* effect)
 {
     void* const d3dx = *reinterpret_cast<void**>(static_cast<unsigned char*>(effect) + 8);
     typedef void(__stdcall * Fn)(void*);
-    reinterpret_cast<Fn>((*reinterpret_cast<void***>(d3dx))[0x104 / sizeof(void*)])(d3dx);
+    reinterpret_cast<Fn>((*reinterpret_cast<void***>(d3dx))[0x104  / 4])(d3dx);
 }
 
 // The renderer's statistics block, its +0x23C word. Every shadow draw adds the material's primitive
@@ -789,9 +789,9 @@ void skinnedMeshEffectCommitChanges(void* effect)
 void skinnedMeshCountShadowPrimitives(unsigned int primitives)
 {
     void* const base = dx9rend::g_rendererBase;
-    typedef void*(__fastcall * Fn)(void*, void*);
+    typedef void*(__fastcall * Fn)(void* BF2_EDX_PARAM);
     void* const stats = reinterpret_cast<Fn>(
-        (*reinterpret_cast<void***>(base))[0x6C / sizeof(void*)])(base, 0);
+        (*reinterpret_cast<void***>(base))[0x6C  / 4])(base);
     *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(stats) + 0x23C) += primitives;
 }
 
@@ -934,8 +934,8 @@ int SkinnedMesh::release()
         // Dispatched through the vtable (`mov eax,[ecx]; push 1; call [eax+34h]`), not called
         // directly. Slot +0x34 is the scalar deleting destructor, and flag bit 0 tells it to free
         // the block after running ~SkinnedMesh.
-        typedef void*(__fastcall * DeleteFn)(void*, void*, unsigned int);
-        reinterpret_cast<DeleteFn>(m_vptr[0x34 / sizeof(void*)])(this, 0, 1u);
+        typedef void*(__fastcall * DeleteFn)(void* BF2_EDX_PARAM, unsigned int);
+        reinterpret_cast<DeleteFn>(m_vptr[0x34  / 4])(this, 1u);
     }
     return remaining;
 }
@@ -1179,8 +1179,8 @@ void* SkinnedMesh::setLodIndex(int lod)
     {
         // The shipped retry really is a virtual self-dispatch, and now that the table exists it
         // is written as one. A subclass overriding +0x78 sees the retry, exactly as in retail.
-        typedef void*(__fastcall * SetLodFn)(void*, void*, int);
-        return reinterpret_cast<SetLodFn>(m_vptr[0x78 / sizeof(void*)])(this, 0, -1);
+        typedef void*(__fastcall * SetLodFn)(void* BF2_EDX_PARAM, int);
+        return reinterpret_cast<SetLodFn>(m_vptr[0x78  / 4])(this, -1);
     }
 
     m_lodIndex    = lod;
@@ -1314,9 +1314,9 @@ void SkinnedMesh::updateLodSelection()
     else
     {
         void* const base = dx9rend::g_rendererBase;
-        typedef void*(__fastcall * ViewFn)(void*, void*);
+        typedef void*(__fastcall * ViewFn)(void* BF2_EDX_PARAM);
         view = reinterpret_cast<ViewFn>(
-            (*reinterpret_cast<void***>(base))[0xD4 / sizeof(void*)])(base, 0);
+            (*reinterpret_cast<void***>(base))[0xD4  / 4])(base);
     }
 
     // The current geom's first lod record supplies the radius the distance is biased by.
@@ -1326,9 +1326,9 @@ void SkinnedMesh::updateLodSelection()
         meshBoundsFinalize(*reinterpret_cast<MeshBounds*>(firstLod));
     const float radius = *reinterpret_cast<const float*>(firstLod + kLodBoundsOffset);
 
-    typedef float(__fastcall * LodScaleFn)(void*, void*);
+    typedef float(__fastcall * LodScaleFn)(void* BF2_EDX_PARAM);
     const float viewLodScale = reinterpret_cast<LodScaleFn>(
-        (*reinterpret_cast<void***>(view))[0x2C / sizeof(void*)])(view, 0);
+        (*reinterpret_cast<void***>(view))[0x2C  / 4])(view);
 
     const float threshold = viewLodScale * m_distanceToCamera - radius;
     const float rendererScale = rendererLodScaleAt(0x84C) * rendererLodScaleAt(0x8B8);
@@ -1577,11 +1577,11 @@ unsigned int SkinnedMesh::buildShaderDefineMask(const unsigned char* material, b
 
     // The quality refinement is gated on the 0x40 bit just set, so it can only ever apply to a
     // caster; and on the Renderer's +0xAC predicate being false.
-    typedef unsigned char(__fastcall * PredFn)(void*, void*);
+    typedef unsigned char(__fastcall * PredFn)(void* BF2_EDX_PARAM);
     void* const renderer = dx9rend::g_Renderer;
     if (quality >= 3
         && !reinterpret_cast<PredFn>(
-               (*reinterpret_cast<void***>(renderer))[0xAC / sizeof(void*)])(renderer, 0)
+               (*reinterpret_cast<void***>(renderer))[0xAC  / 4])(renderer)
         && (mask & 0x40u) != 0)
         mask |= 0x100u;
 
@@ -1895,9 +1895,9 @@ void SkinnedMesh::draw(void*, void*, void*)
 
     // The shader quality, from IRenderer::getVideoOptions()'s +0x04 with 4.
     void* const videoOptions = viewSlot<void*>(base, 0x74);
-    typedef unsigned int(__fastcall * OptionFn)(void*, void*, int);
+    typedef unsigned int(__fastcall * OptionFn)(void* BF2_EDX_PARAM, int);
     const unsigned int quality = reinterpret_cast<OptionFn>(
-        (*reinterpret_cast<void***>(videoOptions))[0x04 / sizeof(void*)])(videoOptions, 0, 4);
+        (*reinterpret_cast<void***>(videoOptions))[0x04  / 4])(videoOptions, 4);
 
     // The sky light's direction, carried into object space.
     float skyDirection[3] = { 0.0f, 0.0f, 0.0f };
@@ -2085,30 +2085,30 @@ SkinnedMesh::~SkinnedMesh()
 
 namespace {
 
-int   __fastcall skm_addRef(void* self, void*)  { return static_cast<SkinnedMesh*>(self)->addRef(); }
-int   __fastcall skm_getRef(void* self, void*)  { return static_cast<SkinnedMesh*>(self)->getRef(); }
-int   __fastcall skm_release(void* self, void*) { return static_cast<SkinnedMesh*>(self)->release(); }
-void* __fastcall skm_queryInterface(void* self, void*, unsigned int iid)
+int   __fastcall skm_addRef(void* self BF2_EDX_PARAM)  { return static_cast<SkinnedMesh*>(self)->addRef(); }
+int   __fastcall skm_getRef(void* self BF2_EDX_PARAM)  { return static_cast<SkinnedMesh*>(self)->getRef(); }
+int   __fastcall skm_release(void* self BF2_EDX_PARAM) { return static_cast<SkinnedMesh*>(self)->release(); }
+void* __fastcall skm_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 { return static_cast<SkinnedMesh*>(self)->queryInterface(iid); }
 
-void __fastcall skm_setFov(void* self, void*, float fov)
+void __fastcall skm_setFov(void* self BF2_EDX_PARAM, float fov)
 { return static_cast<SkinnedMesh*>(self)->setFov(fov); }
-float __fastcall skm_getFov(void* self, void*)
+float __fastcall skm_getFov(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getFov(); }
 
-void __fastcall skm_draw(void* self, void*, void* a, void* b, void* c)
+void __fastcall skm_draw(void* self BF2_EDX_PARAM, void* a, void* b, void* c)
 { static_cast<SkinnedMesh*>(self)->draw(a, b, c); }
-void __fastcall skm_drawShadowMap(void* self, void*, void* caster, unsigned int a,
+void __fastcall skm_drawShadowMap(void* self BF2_EDX_PARAM, void* caster, unsigned int a,
                                   unsigned int b, unsigned int c, bool alphaPass, unsigned int d)
 { static_cast<SkinnedMesh*>(self)->drawShadowMap(caster, a, b, c, alphaPass, d); }
 
-void* __fastcall skm_setDword33C(void* self, void*, void* v)
+void* __fastcall skm_setDword33C(void* self BF2_EDX_PARAM, void* v)
 { return static_cast<SkinnedMesh*>(self)->setDword33C(v); }
-void* __fastcall skm_getDword33C(void* self, void*)
+void* __fastcall skm_getDword33C(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getDword33C(); }
 
 // +0x34 - the MSVC scalar deleting destructor: run the real one, then free when bit 0 is set.
-void* __fastcall skm_scalarDeletingDtor(void* self, void*, unsigned int flags)
+void* __fastcall skm_scalarDeletingDtor(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     SkinnedMesh* const mesh = static_cast<SkinnedMesh*>(self);
     mesh->~SkinnedMesh();
@@ -2117,71 +2117,71 @@ void* __fastcall skm_scalarDeletingDtor(void* self, void*, unsigned int flags)
     return self;
 }
 
-void* __fastcall skm_getTemplate(void* self, void*)
+void* __fastcall skm_getTemplate(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getTemplate(); }
-const void* __fastcall skm_getLocalBounds(void* self, void*)
+const void* __fastcall skm_getLocalBounds(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getLocalBounds(); }
-float __fastcall skm_getBoundingRadius(void* self, void*)
+float __fastcall skm_getBoundingRadius(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getBoundingRadius(); }
-const Mat4* __fastcall skm_getGeometryTransformation(void* self, void*)
+const Mat4* __fastcall skm_getGeometryTransformation(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getGeometryTransformation(); }
-void __fastcall skm_setGeometryTransformation(void* self, void*, const Mat4* m)
+void __fastcall skm_setGeometryTransformation(void* self BF2_EDX_PARAM, const Mat4* m)
 { static_cast<SkinnedMesh*>(self)->setGeometryTransformation(m); }
 
-void __fastcall skm_setBoneTransforms(void* self, void*, const Mat4* bones, unsigned int count)
+void __fastcall skm_setBoneTransforms(void* self BF2_EDX_PARAM, const Mat4* bones, unsigned int count)
 { static_cast<SkinnedMesh*>(self)->setBoneTransforms(bones, count); }
-void __fastcall skm_gatherVisibleParts(void* self, void*, HostIntVector* out)
+void __fastcall skm_gatherVisibleParts(void* self BF2_EDX_PARAM, HostIntVector* out)
 { static_cast<SkinnedMesh*>(self)->gatherVisibleParts(out); }
-void __fastcall skm_setExcludedPart(void* self, void*, int part, bool enable)
+void __fastcall skm_setExcludedPart(void* self BF2_EDX_PARAM, int part, bool enable)
 { static_cast<SkinnedMesh*>(self)->setExcludedPart(part, enable); }
 
-void  __fastcall skm_setGeomIndex(void* self, void*, int g)
+void  __fastcall skm_setGeomIndex(void* self BF2_EDX_PARAM, int g)
 { static_cast<SkinnedMesh*>(self)->setGeomIndex(g); }
-int   __fastcall skm_getGeomIndex(void* self, void*)
+int   __fastcall skm_getGeomIndex(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getGeomIndex(); }
-int   __fastcall skm_getGeomCount(void* self, void*)
+int   __fastcall skm_getGeomCount(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getGeomCount(); }
-void* __fastcall skm_setLodIndex(void* self, void*, int lod)
+void* __fastcall skm_setLodIndex(void* self BF2_EDX_PARAM, int lod)
 { return static_cast<SkinnedMesh*>(self)->setLodIndex(lod); }
-int   __fastcall skm_getLodIndex(void* self, void*)
+int   __fastcall skm_getLodIndex(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getLodIndex(); }
-int   __fastcall skm_getLodCount(void* self, void*)
+int   __fastcall skm_getLodCount(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getLodCount(); }
 
-void  __fastcall skm_setOwnerObject(void* self, void*, void* o)
+void  __fastcall skm_setOwnerObject(void* self BF2_EDX_PARAM, void* o)
 { static_cast<SkinnedMesh*>(self)->setOwnerObject(o); }
-void* __fastcall skm_getOwnerObject(void* self, void*)
+void* __fastcall skm_getOwnerObject(void* self BF2_EDX_PARAM)
 { return static_cast<const SkinnedMesh*>(self)->getOwnerObject(); }
-void* __fastcall skm_refreshRootObject(void* self, void*)
+void* __fastcall skm_refreshRootObject(void* self BF2_EDX_PARAM)
 { return static_cast<SkinnedMesh*>(self)->refreshRootObject(); }
-unsigned char __fastcall skm_refreshAndGetByte334(void* self, void*)
+unsigned char __fastcall skm_refreshAndGetByte334(void* self BF2_EDX_PARAM)
 { return static_cast<SkinnedMesh*>(self)->refreshAndGetByte334(); }
-void  __fastcall skm_setShadowCasterFrame(void* self, void*, void* f)
+void  __fastcall skm_setShadowCasterFrame(void* self BF2_EDX_PARAM, void* f)
 { static_cast<SkinnedMesh*>(self)->setShadowCasterFrame(f); }
-void* __fastcall skm_getShadowCasterFrame(void* self, void*)
+void* __fastcall skm_getShadowCasterFrame(void* self BF2_EDX_PARAM)
 { return static_cast<SkinnedMesh*>(self)->getShadowCasterFrame(); }
-void  __fastcall skm_setTransparency(void* self, void*, float a)
+void  __fastcall skm_setTransparency(void* self BF2_EDX_PARAM, float a)
 { static_cast<SkinnedMesh*>(self)->setTransparency(a); }
 
 // the shared bodies, each read
-void __fastcall skm_empty1(void*, void*, unsigned int) {}
-void __fastcall skm_empty2(void*, void*, unsigned int, unsigned int) {}
-void __fastcall skm_empty3(void*, void*, unsigned int, unsigned int,
+void __fastcall skm_empty1(void* BF2_EDX_PARAM, unsigned int) {}
+void __fastcall skm_empty2(void* BF2_EDX_PARAM, unsigned int, unsigned int) {}
+void __fastcall skm_empty3(void* BF2_EDX_PARAM, unsigned int, unsigned int,
                            unsigned int) {}
-unsigned int __fastcall skm_zero0(void*, void*) { return 0; }
-unsigned int __fastcall skm_zero1(void*, void*, unsigned int) { return 0; }
-bool __fastcall skm_false0(void*, void*) { return false; }
-bool __fastcall skm_false1(void*, void*, unsigned int) { return false; }
-int  __fastcall skm_minusOne(void*, void*) { return -1; }
-int  __fastcall skm_seven(void*, void*) { return 7; }
-int  __fastcall skm_three(void*, void*) { return 3; }
+unsigned int __fastcall skm_zero0(void* BF2_EDX_PARAM) { return 0; }
+unsigned int __fastcall skm_zero1(void* BF2_EDX_PARAM, unsigned int) { return 0; }
+bool __fastcall skm_false0(void* BF2_EDX_PARAM) { return false; }
+bool __fastcall skm_false1(void* BF2_EDX_PARAM, unsigned int) { return false; }
+int  __fastcall skm_minusOne(void* BF2_EDX_PARAM) { return -1; }
+int  __fastcall skm_seven(void* BF2_EDX_PARAM) { return 7; }
+int  __fastcall skm_three(void* BF2_EDX_PARAM) { return 3; }
 
 // 0x10082D30 - `m_name = value` through MSVCP71's string operator=. Writes +0x04.
-void __fastcall skm_setName(void* self, void*, const vc71::string& name)
+void __fastcall skm_setName(void* self BF2_EDX_PARAM, const vc71::string& name)
 { static_cast<SkinnedMesh*>(self)->m_name = name.c_str(); }
 
 // 0x10103AD0 - `[ecx+24h] = rendererFrameOrdinal()`. Writes +0x24, valid in both classes.
-void __fastcall skm_stampFrameOrdinal(void* self, void*)
+void __fastcall skm_stampFrameOrdinal(void* self BF2_EDX_PARAM)
 { static_cast<SkinnedMesh*>(self)->m_dword24 = dx9rend::rendererFrameOrdinal(); }
 
 } // anonymous namespace

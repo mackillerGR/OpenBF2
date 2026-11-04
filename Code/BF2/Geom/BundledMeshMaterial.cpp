@@ -30,7 +30,7 @@ void pushDescriptor(vc71::vector_layout& v, const Ra::RaVertexElementDesc* value
 // off_101E2428 is the real abstract material base: one deleting destructor and
 // eight _purecall slots, read fresh alongside100ED400. These are retail pure slots.
 extern "C" int __cdecl _purecall(void);
-void* __fastcall destroyedMaterialDestroy(void* self, void*, unsigned char flags);
+void* __fastcall destroyedMaterialDestroy(void* self BF2_EDX_PARAM, unsigned char flags);
 void* const kDestroyedMaterialTable[] = {
     reinterpret_cast<void*>(&destroyedMaterialDestroy),
     reinterpret_cast<void*>(&_purecall), reinterpret_cast<void*>(&_purecall),
@@ -38,7 +38,7 @@ void* const kDestroyedMaterialTable[] = {
     reinterpret_cast<void*>(&_purecall), reinterpret_cast<void*>(&_purecall),
     reinterpret_cast<void*>(&_purecall), reinterpret_cast<void*>(&_purecall)
 };
-void* __fastcall destroyedMaterialDestroy(void* self, void*, unsigned char flags)
+void* __fastcall destroyedMaterialDestroy(void* self BF2_EDX_PARAM, unsigned char flags)
 {
     *static_cast<void* const**>(self) = kDestroyedMaterialTable;
     if (flags & 1) ::renddx9abi::engineFree(self);

@@ -88,9 +88,9 @@ static void psmPrepareParticleRenderer(unsigned char* renderer, dx9rend::IRender
         if (psmDrawField<unsigned int>(instance, 0x28))
         {
             unsigned char* descriptor = psmDrawField<unsigned char*>(instance, 0x2C);
-            typedef void (__fastcall *Collector)(void*, void*, dx9rend::IRenderView*,
+            typedef void (__fastcall *Collector)(void* BF2_EDX_PARAM, dx9rend::IRenderView*,
                 IParticleSystemInstance*, IParticleSystemTemplate*);
-            psmDrawField<Collector>(descriptor, 0x2A0)(renderer, 0, view,
+            psmDrawField<Collector>(descriptor, 0x2A0)(renderer, view,
                 reinterpret_cast<IParticleSystemInstance*>(instance),
                 reinterpret_cast<IParticleSystemTemplate*>(descriptor));
         }

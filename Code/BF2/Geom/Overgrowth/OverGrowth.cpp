@@ -110,7 +110,7 @@ vc71::string overGrowthFormatString(const char* format, ...)
 // Geometry instances retain the same virtual order across host ABI flavors.
 inline void* geometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 void geometryAddRef(void* geometry)                                           // +0x00
 {

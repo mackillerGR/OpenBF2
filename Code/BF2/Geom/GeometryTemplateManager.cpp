@@ -52,14 +52,14 @@ IBase* templateBase(IGeometryTemplate* value)
 void setTemplateName(IGeometryTemplate* value, const vc71::string& name)
 {
     typedef void (__thiscall *Fn)(void*, const vc71::string&);
-    void* target = (*reinterpret_cast<void***>(value))[0x14 / sizeof(void*)];
+    void* target = (*reinterpret_cast<void***>(value))[0x14  / 4];
     reinterpret_cast<Fn>(target)(value, name);
 }
 
 void setTemplatePath(IGeometryTemplate* value, const vc71::string& path)
 {
     typedef void (__thiscall *Fn)(void*, const vc71::string&);
-    void* target = (*reinterpret_cast<void***>(value))[0x1C / sizeof(void*)];
+    void* target = (*reinterpret_cast<void***>(value))[0x1C  / 4];
     reinterpret_cast<Fn>(target)(value, path);
 }
 
@@ -135,7 +135,7 @@ const renddx9abi::HostString& getConsoleWorkingPath()
 #else
     typedef const renddx9abi::HostString& (__thiscall *Fn)(void*);
     void* console = static_cast<void*>(mainConsole);
-    void* target = (*reinterpret_cast<void***>(console))[0x84 / sizeof(void*)];
+    void* target = (*reinterpret_cast<void***>(console))[0x84  / 4];
     return reinterpret_cast<Fn>(target)(console);
 #endif
 }
@@ -601,7 +601,7 @@ IGeometryTemplate* activeGeometryTemplate()
 
 void* templateVirtual(IGeometryTemplate* value, unsigned int byteOffset)
 {
-    return (*reinterpret_cast<void***>(value))[byteOffset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(value))[byteOffset  / 4];
 }
 
 bool getTemplateBool(unsigned int byteOffset)

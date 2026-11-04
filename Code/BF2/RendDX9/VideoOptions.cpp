@@ -133,7 +133,7 @@ namespace {
 
 // +0x04, sub_100112B0, read in full: `return this[index + 10]`. Dword index 10 is byte offset
 // 0x28, which is row B - the only row anything recovered reads.
-int __fastcall videoOptions_getQuality(void* self, void*, int index)
+int __fastcall videoOptions_getQuality(void* self BF2_EDX_PARAM, int index)
 {
     const VideoOptions* vo = static_cast<const VideoOptions*>(self);
     if (index < 0 || index > 7)
@@ -365,7 +365,7 @@ void videoOptionsChangeResolution(VideoOptions* vo, const Mode40* mode)
 
 } // anonymous namespace
 
-void __fastcall videoOptions_apply(void* self, void*)
+void __fastcall videoOptions_apply(void* self BF2_EDX_PARAM)
 {
     RD9_TRACE_AT("dice::hfe::dx9rend::VideoOptions::apply", self, 0x2C);
 
@@ -782,7 +782,7 @@ void buildResolutionList(VideoOptions* vo)
 } // anonymous namespace
 
 #define RD9_VO_SLOT(name, slotOffset, addr)                                                 \
-    void __fastcall name(void* self, void*)                                                 \
+    void __fastcall name(void* self BF2_EDX_PARAM)                                                 \
     {                                                                                       \
         RD9_FRONTIER_AT("dice::hfe::dx9rend::VideoOptions::slot_" #slotOffset                \
                         " (" #addr ")", self, 0x00);                                        \
@@ -793,7 +793,7 @@ void buildResolutionList(VideoOptions* vo)
 // and return whether it differs from the committed row at this[index+54] (byte 0xD8). On a first
 // apply that committed row still holds the -1/0 initial values, so every setting reports "changed",
 // which is correct. Out-of-range index is the shipped "Unknown quality setting" guard (returns 0).
-char __fastcall videoOptions_setQuality(void* self, void*, int index, int value)
+char __fastcall videoOptions_setQuality(void* self BF2_EDX_PARAM, int index, int value)
 {
     VideoOptions* vo = static_cast<VideoOptions*>(self);
     if (index < 0 || index >= 8)
@@ -816,7 +816,7 @@ char __fastcall videoOptions_setQuality(void* self, void*, int index, int value)
 
 // Returns the setting's minimum quality from its initialized eight-entry row.
 // These wrappers guard indices; the original slots assume indices 0..7.
-int __fastcall videoOptions_slot08(void* self, void*, int index)
+int __fastcall videoOptions_slot08(void* self BF2_EDX_PARAM, int index)
 {
     const VideoOptions* vo = static_cast<const VideoOptions*>(self);
     if (index < 0 || index > 7)
@@ -825,7 +825,7 @@ int __fastcall videoOptions_slot08(void* self, void*, int index)
 }
 
 // +0x0C, sub_100112D0: `return this[index + 26]` - dword row D at byte 0x68.
-int __fastcall videoOptions_slot0C(void* self, void*, int index)
+int __fastcall videoOptions_slot0C(void* self BF2_EDX_PARAM, int index)
 {
     const VideoOptions* vo = static_cast<const VideoOptions*>(self);
     if (index < 0 || index > 7)
@@ -835,7 +835,7 @@ int __fastcall videoOptions_slot0C(void* self, void*, int index)
 
 // +0x10, sub_100112E0: `return this[index + 34]` - dword maxQuality at byte 0x88. setQuality clamps
 // the requested value up to it, so this is the per-setting maximum.
-int __fastcall videoOptions_slot10(void* self, void*, int index)
+int __fastcall videoOptions_slot10(void* self BF2_EDX_PARAM, int index)
 {
     const VideoOptions* vo = static_cast<const VideoOptions*>(self);
     if (index < 0 || index > 7)
@@ -845,7 +845,7 @@ int __fastcall videoOptions_slot10(void* self, void*, int index)
 
 // +0x14, sub_10011300: `return *(BYTE*)(this + index + 168)` - the byte row `flags` at byte 0xA8.
 // Returned as char (AL), matching the shipped signature.
-char __fastcall videoOptions_slot14(void* self, void*, int index)
+char __fastcall videoOptions_slot14(void* self BF2_EDX_PARAM, int index)
 {
     const VideoOptions* vo = static_cast<const VideoOptions*>(self);
     if (index < 0 || index > 7)
@@ -857,7 +857,7 @@ char __fastcall videoOptions_slot14(void* self, void*, int index)
 // string list (index 0 = aaList @0xB0, index 1 = resList @0xC0), so the menu can enumerate every
 // option for a dropdown. The list is a vc71::vector_layout (begin @+4), which is what the menu walks.
 const HostDynamicOptionList& __fastcall
-videoOptions_getDynamicOptionList(void* self, void*, int index)
+videoOptions_getDynamicOptionList(void* self BF2_EDX_PARAM, int index)
 {
 #if BF2_PLUGIN_ABI_NATIVE
     // The shipped body is unguarded pointer arithmetic into the object; that has no meaning once
@@ -884,7 +884,7 @@ videoOptions_getDynamicOptionList(void* self, void*, int index)
 // at this[index+54] (0xD8 for AA, 0xDC for resolution) and, when the resolution changed, rebuilds the
 // AA list for the newly-selected mode. Returns whether the selection changed.
 bool __fastcall videoOptions_setDynamicOption(
-    void* self, void*, int index, const ::renddx9abi::HostString* value)
+    void* self BF2_EDX_PARAM, int index, const ::renddx9abi::HostString* value)
 {
     VideoOptions* vo = static_cast<VideoOptions*>(self);
     if (index < 0 || index > 1 || !value)
@@ -929,7 +929,7 @@ bool __fastcall videoOptions_setDynamicOption(
 // PE 0x10011350 intentionally has no index, empty-list or negative-selection guard: preserve that
 // behavior here.
 const ::renddx9abi::HostString& __fastcall
-videoOptions_getDynamicOption(void* self, void*, int index)
+videoOptions_getDynamicOption(void* self BF2_EDX_PARAM, int index)
 {
     VideoOptions* vo = static_cast<VideoOptions*>(self);
     vc71::vector_layout* list = (index == 0) ? &vo->aaList : &vo->resList;
@@ -947,7 +947,7 @@ videoOptions_getDynamicOption(void* self, void*, int index)
 // [UNRESOLVED] (aspect/gamma-ish); applyQualityPreset feeds it 0.75 / 0.9 / 1.0. The shipped body
 // passes the value as the dword bit pattern (1061158912 == 0x3F400000 == 0.75f, etc.), which is the
 // same four stack bytes as passing the float, so this takes a plain float.
-void __fastcall videoOptions_setViewDistanceScale(void* self, void*, float value)
+void __fastcall videoOptions_setViewDistanceScale(void* self BF2_EDX_PARAM, float value)
 {
     float v = value;
     if (v < 0.5f)      v = 0.5f;
@@ -957,7 +957,7 @@ void __fastcall videoOptions_setViewDistanceScale(void* self, void*, float value
 // +0x28, sub_10011340 - return the +0x100 float (the value slot +0x24 clamps and stores).
 // The PE is one `fld dword ptr [ecx+100h]`; BF2.exe consumes it with an `fstp dword`, matching
 // IVideoOptions::getViewDistanceScale's float contract rather than Hex-Rays' ambiguous x87 double.
-float __fastcall videoOptions_getViewDistanceScale(void* self, void*)
+float __fastcall videoOptions_getViewDistanceScale(void* self BF2_EDX_PARAM)
 {
     return static_cast<VideoOptions*>(self)->dynFloat;
 }
@@ -982,7 +982,7 @@ int textureQualityForPreset(int preset)
 
 // Applies low/medium/high presets (0/1/2) through virtual quality and dynamic-option setters.
 // HostString must match the receiving ABI; dynamic option 1 is applied before option 0.
-int __fastcall videoOptions_applyQualityPreset(void* self, void*, int preset)
+int __fastcall videoOptions_applyQualityPreset(void* self BF2_EDX_PARAM, int preset)
 {
     PluginVideoOptions* const options = reinterpret_cast<PluginVideoOptions*>(self);
 
@@ -1155,7 +1155,7 @@ bool gpuWhitelistLevel(int* /*outLevel*/)
 
 // The heuristic. `self` is ignored, matching the shipped no-`this` body. The redundant RAM re-reads
 // the decompiler shows before each return are side-effect-free and omitted.
-int __fastcall videoOptions_slot34(void* /*self*/, void*)
+int __fastcall videoOptions_slot34(void* /*self*/ BF2_EDX_PARAM)
 {
     const int          benchmark = cpuBenchmarkScore();
     const int          cpuScore  = (int)(cpuFamilyMultiplier() * (double)benchmark);
@@ -1200,7 +1200,7 @@ int __fastcall videoOptions_slot34(void* /*self*/, void*)
 // gpuWhitelistLevel documents; a modern card misses it, so this returns the shipped default 1.
 // applyQualityPreset's medium preset uses it to decide whether setting 4 is 2 (true) or 0.
 // [RETIRE-WHEN: the VideoOptions GPU whitelist tables are extracted]
-char __fastcall videoOptions_slot38(void* self, void*)
+char __fastcall videoOptions_slot38(void* self BF2_EDX_PARAM)
 {
     (void)self;
     return 1;
@@ -1233,7 +1233,7 @@ void* const kVideoOptionsVtable[15] =
 // The complete callback is read, but its geometry/shader cleanup dependencies
 // remain unimplemented. Keep the existing registration boundary unchanged;
 // if this correctly shaped subobject is called, stop before reading arguments.
-void __fastcall videoOptions_handleECCoreEvent(void*, void*, int, unsigned int,
+void __fastcall videoOptions_handleECCoreEvent(void* BF2_EDX_PARAM, int, unsigned int,
                                                void*, void*)
 {
     std::fprintf(stderr, "[FRONTIER] dice::hfe::dx9rend::VideoOptions::handleECCoreEvent reached (PE 0x100103F0)\n");

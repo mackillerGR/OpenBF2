@@ -105,16 +105,16 @@ static_assert(sizeof(DebugLineGraphD3D) == 0xF0,
 
 namespace {
 
-void  __fastcall dlg_addRef(void* s, void*) { static_cast<DebugLineGraphD3D*>(s)->addRef(); }
-int   __fastcall dlg_release(void* s, void*) { return static_cast<DebugLineGraphD3D*>(s)->release(); }
-void* __fastcall dlg_queryInterface(void* s, void*, unsigned int iid)
+void  __fastcall dlg_addRef(void* s BF2_EDX_PARAM) { static_cast<DebugLineGraphD3D*>(s)->addRef(); }
+int   __fastcall dlg_release(void* s BF2_EDX_PARAM) { return static_cast<DebugLineGraphD3D*>(s)->release(); }
+void* __fastcall dlg_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<DebugLineGraphD3D*>(s)->queryInterface(iid);
 }
 
 // +0x10, sub_100A26B0. Four floats to +0x08..+0x14, then return 1. The original writes index 3
 // before index 2 - compiler scheduling, same net effect.
-char __fastcall dlg_setRect(void* s, void*, const float* rect)
+char __fastcall dlg_setRect(void* s BF2_EDX_PARAM, const float* rect)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setRect", s, 0x10);
     static_cast<DebugLineGraphD3D*>(s)->setRect(rect);
@@ -122,21 +122,21 @@ char __fastcall dlg_setRect(void* s, void*, const float* rect)
 }
 
 // +0x18, sub_10096470. One statement: `this->name(+0x50) = a2`.
-void __fastcall dlg_setName(void* s, void*, const vc71::string& n)
+void __fastcall dlg_setName(void* s BF2_EDX_PARAM, const vc71::string& n)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setName", s, 0x18);
     static_cast<DebugLineGraphD3D*>(s)->setName(n);
 }
 
 // +0x28, sub_10096480. One byte store at +0x05 - see the field's note for why it is not "built".
-char __fastcall dlg_setFlag05(void* s, void*, char v)
+char __fastcall dlg_setFlag05(void* s BF2_EDX_PARAM, char v)
 {
     static_cast<DebugLineGraphD3D*>(s)->setFlag05(static_cast<unsigned char>(v));
     return v;
 }
 
 // Adds a sample through the void plugin slot. Returning a floating-point value would leave an unused x87 result.
-void __fastcall dlg_addSample(void* s, void*, float v)
+void __fastcall dlg_addSample(void* s BF2_EDX_PARAM, float v)
 {
     static_cast<DebugLineGraphD3D*>(s)->addSample(v);
 }
@@ -144,7 +144,7 @@ void __fastcall dlg_addSample(void* s, void*, float v)
 // +0x1C, sub_10095C40 -> sub_100A2610. A thunk onto a two-field setter: `this[14] = a; this[15] = b`
 // at +0x38 and +0x3C. Renderer::initialize passes (0, <float>) - 100.0f, 60.0f and 584.0f for the
 // three graphs.
-void __fastcall dlg_setBounds(void* s, void*, unsigned a, unsigned b)
+void __fastcall dlg_setBounds(void* s BF2_EDX_PARAM, unsigned a, unsigned b)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setBounds", s, 0x1C);
     static_cast<DebugLineGraphD3D*>(s)->setBounds(a, b);
@@ -152,7 +152,7 @@ void __fastcall dlg_setBounds(void* s, void*, unsigned a, unsigned b)
 
 // +0x44, sub_100A25E0. Three dwords to +0x18/+0x1C/+0x20. Neither constructor writes them, so this
 // is their only initialiser.
-void __fastcall dlg_setColors(void* s, void*, unsigned a, unsigned b, unsigned c)
+void __fastcall dlg_setColors(void* s BF2_EDX_PARAM, unsigned a, unsigned b, unsigned c)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setColors", s, 0x44);
     static_cast<DebugLineGraphD3D*>(s)->setColors(a, b, c);
@@ -160,14 +160,14 @@ void __fastcall dlg_setColors(void* s, void*, unsigned a, unsigned b, unsigned c
 
 // +0x4C, sub_100A2630. guarded, and the guard is the whole of it: `if (lo >= hi) return 0;`. An
 // inverted range is rejected outright rather than clamped.
-char __fastcall dlg_setRange(void* s, void*, float lo, float hi)
+char __fastcall dlg_setRange(void* s BF2_EDX_PARAM, float lo, float hi)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setRange", s, 0x4C);
     return static_cast<DebugLineGraphD3D*>(s)->setRange(lo, hi) ? 1 : 0;
 }
 
 // +0x50, sub_100A2660. One byte store at +0x40.
-char __fastcall dlg_setEnabled(void* s, void*, char v)
+char __fastcall dlg_setEnabled(void* s BF2_EDX_PARAM, char v)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setEnabled", s, 0x50);
     static_cast<DebugLineGraphD3D*>(s)->setEnabled(static_cast<unsigned char>(v));
@@ -178,7 +178,7 @@ char __fastcall dlg_setEnabled(void* s, void*, char v)
 // Initializes sample history, vertex storage and graph shader parameters.
 // Must complete before addSample, which requires an allocated ring buffer.
 
-void __fastcall dlg_setHistorySize(void* s, void*, int n)
+void __fastcall dlg_setHistorySize(void* s BF2_EDX_PARAM, int n)
 {
     RD9_TRACE_AT("dice::hfe::geom::DebugLineGraphD3D::setHistorySize", s, 0x3C);
 
@@ -187,7 +187,7 @@ void __fastcall dlg_setHistorySize(void* s, void*, int n)
 }
 
 #define RD9_DLG_SLOT(name, slotOffset, addr)                                        \
-    void __fastcall name(void* s, void*)                                            \
+    void __fastcall name(void* s BF2_EDX_PARAM)                                            \
     {                                                                               \
         RD9_FRONTIER_AT("dice::hfe::geom::DebugLineGraphD3D::slot_" #slotOffset      \
                         " (" #addr ")", s, 0x00);                                   \

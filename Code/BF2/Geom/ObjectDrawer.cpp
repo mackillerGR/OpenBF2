@@ -45,7 +45,7 @@ namespace {
 
 
 #define OD_FRONTIER(fn, slotOffset, addr, what)                                       \
-    void __fastcall fn(void* self, void*)                                             \
+    void __fastcall fn(void* self BF2_EDX_PARAM)                                             \
     {                                                                                 \
         RD9_FRONTIER_AT("dice::hfe::geom::ObjectDrawer::slot_" #slotOffset             \
                         " (" #addr " - " what ")", self, slotOffset);                  \
@@ -54,18 +54,18 @@ namespace {
 OD_FRONTIER(od_slot1C, 0x1C, 0x100F8DE0, "324 B, unread")
 // +0x3C, the box occlusion query; the body is ObjectDrawer::isBoundsOccluded below.
 // `retn 4`, the answer in AL, like +0x38.
-bool __fastcall od_slot3C(void* self, void*, void* bounds);
+bool __fastcall od_slot3C(void* self BF2_EDX_PARAM, void* bounds);
 #undef OD_FRONTIER
 
 // +0x38, the occlusion query; the body is ObjectDrawer::isGeometryOccluded below.
 // `retn 4`, the answer in AL: __fastcall with the dummy edx gives the same shape.
-bool __fastcall od_slot38(void* self, void*, void* geometry);
+bool __fastcall od_slot38(void* self BF2_EDX_PARAM, void* geometry);
 
 
 // Handles the drawer's event subobject at +0x04 and updates the outer frame gate.
 // [UNRESOLVED] Event data at +0x2C must point to a word compared with 4; neither pointer is guarded.
 
-char __fastcall od_event00(void* self, void*, int category, int id, void* data, void* arg4)
+char __fastcall od_event00(void* self BF2_EDX_PARAM, int category, int id, void* data, void* arg4)
 {
     (void)category;
     (void)arg4;
@@ -86,22 +86,22 @@ char __fastcall od_event00(void* self, void*, int category, int id, void* data, 
 }
 
 // The two that take an argument, so they cannot use the macro above.
-void __fastcall od_draw(void* self, void*, float time)
+void __fastcall od_draw(void* self BF2_EDX_PARAM, float time)
 {
     static_cast<ObjectDrawer*>(self)->draw(time);
 }
 
-void __fastcall od_updateVisible(void* self, void*, float time)
+void __fastcall od_updateVisible(void* self BF2_EDX_PARAM, float time)
 {
     static_cast<ObjectDrawer*>(self)->updateVisible(time);
 }
 
-void __fastcall od_slot18(void* self, void*)
+void __fastcall od_slot18(void* self BF2_EDX_PARAM)
 {
     static_cast<ObjectDrawer*>(self)->slot_0x18();
 }
 
-void __fastcall od_slot20(void* self, void*, void* object)
+void __fastcall od_slot20(void* self BF2_EDX_PARAM, void* object)
 {
     (void)object;
     RD9_FRONTIER_AT("dice::hfe::geom::ObjectDrawer::slot_0x20 (0x100F8F30, 51 B - takes an object, "
@@ -110,47 +110,47 @@ void __fastcall od_slot20(void* self, void*, void* object)
 
 // the written leaf slots, as the thin __fastcall adapters the tables need
 
-void __fastcall od_addRef(void* self, void*)
+void __fastcall od_addRef(void* self BF2_EDX_PARAM)
 {
     static_cast<ObjectDrawer*>(self)->addRef();
 }
 
-int __fastcall od_getRef(void* self, void*)
+int __fastcall od_getRef(void* self BF2_EDX_PARAM)
 {
     return static_cast<ObjectDrawer*>(self)->getRef();
 }
 
-int __fastcall od_release(void* self, void*)
+int __fastcall od_release(void* self BF2_EDX_PARAM)
 {
     return static_cast<ObjectDrawer*>(self)->release();
 }
 
-void* __fastcall od_queryInterface(void* self, void*, unsigned int iid)
+void* __fastcall od_queryInterface(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<const ObjectDrawer*>(self)->queryInterface(iid);
 }
 
-void* __fastcall od_getObjectVector(void* self, void*, int which)
+void* __fastcall od_getObjectVector(void* self BF2_EDX_PARAM, int which)
 {
     return static_cast<ObjectDrawer*>(self)->getObjectVector(which);
 }
 
-void __fastcall od_setRenderView(void* self, void*, void* view)
+void __fastcall od_setRenderView(void* self BF2_EDX_PARAM, void* view)
 {
     static_cast<ObjectDrawer*>(self)->setRenderView(view);
 }
 
-void* __fastcall od_getRenderView(void* self, void*)
+void* __fastcall od_getRenderView(void* self BF2_EDX_PARAM)
 {
     return static_cast<const ObjectDrawer*>(self)->getRenderView();
 }
 
-void __fastcall od_setOccluder(void* self, void*, IBase* occluder)
+void __fastcall od_setOccluder(void* self BF2_EDX_PARAM, IBase* occluder)
 {
     static_cast<ObjectDrawer*>(self)->setOccluder(occluder);
 }
 
-IBase* __fastcall od_getOccluder(void* self, void*)
+IBase* __fastcall od_getOccluder(void* self BF2_EDX_PARAM)
 {
     return static_cast<const ObjectDrawer*>(self)->getOccluder();
 }
@@ -227,9 +227,9 @@ void objectDrawerDrawObject(world::IObject* object)
 
     if (void* const decal = object->getDecalObject())            // PE +0xD8
     {
-        typedef void (__fastcall* DecalFn)(void*, void*, int);
+        typedef void (__fastcall* DecalFn)(void* BF2_EDX_PARAM, int);
         void** const vtbl = *reinterpret_cast<void***>(decal);
-        reinterpret_cast<DecalFn>(vtbl[0x0C / sizeof(void*)])(decal, 0, 1);
+        reinterpret_cast<DecalFn>(vtbl[0x0C  / 4])(decal, 1);
     }
 
     if (world::object_detail::LayoutAccess::geometry(object))
@@ -307,11 +307,11 @@ struct ObjectDrawerGeometrySortKey
         if (!lg || !rg)
             return false;
 
-        typedef unsigned int (__fastcall* KeyFn)(void*, void*);
+        typedef unsigned int (__fastcall* KeyFn)(void* BF2_EDX_PARAM);
         void** const lv = *reinterpret_cast<void***>(lg);
         void** const rv = *reinterpret_cast<void***>(rg);
-        return reinterpret_cast<KeyFn>(lv[0x38 / sizeof(void*)])(lg, 0)
-             < reinterpret_cast<KeyFn>(rv[0x38 / sizeof(void*)])(rg, 0);
+        return reinterpret_cast<KeyFn>(lv[0x38  / 4])(lg)
+             < reinterpret_cast<KeyFn>(rv[0x38  / 4])(rg);
     }
 };
 
@@ -376,12 +376,12 @@ void objectDrawerQueryGrid(unsigned int slot, const void* frustum, ObjectDrawerS
         return;
 
     // In the native build, out is the host's std::vector; the plugin ABI uses its own layout.
-    typedef void (__fastcall* QueryFn)(void*, void*, const void*, void*,
+    typedef void (__fastcall* QueryFn)(void* BF2_EDX_PARAM, const void*, void*,
                                        void*, int, float, float);
     void* const manager = ::dice::hfe::objectManager;
     void** const vtbl = *reinterpret_cast<void***>(manager);
-    reinterpret_cast<QueryFn>(vtbl[slot / sizeof(void*)])(
-        manager, 0, frustum, &out, predicator, 1, 0.0f, time);
+    reinterpret_cast<QueryFn>(vtbl[slot  / 4])(
+        manager, frustum, &out, predicator, 1, 0.0f, time);
 }
 
 
@@ -404,12 +404,12 @@ void objectDrawerDeferredGeometryPass(ObjectDrawer* self, world::IObject* object
     void* geometry = world::object_detail::LayoutAccess::geometry(object);
     while (geometry)
     {
-        typedef void  (__fastcall* PassFn)(void*, void*, void*, void*, int);
-        typedef void* (__fastcall* NextFn)(void*, void*);
+        typedef void  (__fastcall* PassFn)(void* BF2_EDX_PARAM, void*, void*, int);
+        typedef void* (__fastcall* NextFn)(void* BF2_EDX_PARAM);
         void** const vtbl = *reinterpret_cast<void***>(geometry);
-        reinterpret_cast<PassFn>(vtbl[0x18 / sizeof(void*)])(
-            geometry, 0, self->m_renderView, self->m_occluder, 1);
-        geometry = reinterpret_cast<NextFn>(vtbl[0xCC / sizeof(void*)])(geometry, 0);
+        reinterpret_cast<PassFn>(vtbl[0x18  / 4])(
+            geometry, self->m_renderView, self->m_occluder, 1);
+        geometry = reinterpret_cast<NextFn>(vtbl[0xCC  / 4])(geometry);
     }
 }
 
@@ -710,8 +710,8 @@ void ObjectDrawer::slot_0x18()
         objectDrawerDeferredGeometryPass(this, *cursor);
     }
 }
-void ObjectDrawer::slot_0x1C()           { od_slot1C(this, 0); }
-void ObjectDrawer::slot_0x20(void* o)    { od_slot20(this, 0, o); }
+void ObjectDrawer::slot_0x1C()           { od_slot1C(this); }
+void ObjectDrawer::slot_0x20(void* o)    { od_slot20(this, o); }
 
 
 // Tests geometry against the occluder set and counts hidden objects.
@@ -724,26 +724,26 @@ namespace {
 // deferred pass above does (StaticMesh / BundledMesh / SkinnedMesh install the same arity at each).
 inline void* occlusionGeometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 
 inline const LocalBoundingBox& occlusionGeometryLocalBounds(void* geometry)          // +0x40
 {
-    typedef const void* (__fastcall* BoundsFn)(void*, void*);
+    typedef const void* (__fastcall* BoundsFn)(void* BF2_EDX_PARAM);
     return *static_cast<const LocalBoundingBox*>(
-        reinterpret_cast<BoundsFn>(occlusionGeometrySlot(geometry, 0x40))(geometry, 0));
+        reinterpret_cast<BoundsFn>(occlusionGeometrySlot(geometry, 0x40))(geometry));
 }
 
 inline float occlusionGeometryBoundingRadius(void* geometry)                         // +0x44
 {
-    typedef float (__fastcall* RadiusFn)(void*, void*);
-    return reinterpret_cast<RadiusFn>(occlusionGeometrySlot(geometry, 0x44))(geometry, 0);
+    typedef float (__fastcall* RadiusFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<RadiusFn>(occlusionGeometrySlot(geometry, 0x44))(geometry);
 }
 
 inline const Mat4* occlusionGeometryTransformation(void* geometry)                  // +0x48
 {
-    typedef const Mat4* (__fastcall* TransformFn)(void*, void*);
-    return reinterpret_cast<TransformFn>(occlusionGeometrySlot(geometry, 0x48))(geometry, 0);
+    typedef const Mat4* (__fastcall* TransformFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<TransformFn>(occlusionGeometrySlot(geometry, 0x48))(geometry);
 }
 
 // VC7.1 size(): a signed byte span divided by the element size, compared unsigned (`jnb`).
@@ -915,9 +915,9 @@ void objectDrawerBuildOccluders(ObjectDrawer* self, ObjectDrawerSet& objects)
         if (!geometry)
             continue;
 
-        typedef int (__fastcall* RecordCountFn)(void*, void*);
+        typedef int (__fastcall* RecordCountFn)(void* BF2_EDX_PARAM);
         const int recordCount = reinterpret_cast<RecordCountFn>(
-            occlusionGeometrySlot(geometry, 0xE8))(geometry, 0);
+            occlusionGeometrySlot(geometry, 0xE8))(geometry);
         if (!recordCount)
             continue;
 
@@ -928,11 +928,11 @@ void objectDrawerBuildOccluders(ObjectDrawer* self, ObjectDrawerSet& objects)
         if (static_cast<double>(self->m_float64) * self->m_float64 < dx * dx + dz * dz + dy * dy)
             continue;
 
-        typedef const ObjectDrawerOccluderRecord* (__fastcall* RecordFn)(void*, void*, int);
+        typedef const ObjectDrawerOccluderRecord* (__fastcall* RecordFn)(void* BF2_EDX_PARAM, int);
         for (int recordIndex = 0; recordIndex < recordCount; ++recordIndex)
         {
             const ObjectDrawerOccluderRecord* const record = reinterpret_cast<RecordFn>(
-                occlusionGeometrySlot(geometry, 0xEC))(geometry, 0, recordIndex);
+                occlusionGeometrySlot(geometry, 0xEC))(geometry, recordIndex);
             vc71::vector_layout& edges = *record->edges;
             const unsigned int edgeCount = vc71::vectorSizeIn(edges, 4u);
             const unsigned int faceCount = vc71::vectorSizeIn(record->faces, sizeof(ObjectDrawerOccluderFace));
@@ -1148,12 +1148,12 @@ namespace {
 
 // Table thunks use __fastcall with an unused EDX to match the __thiscall slots.
 // Keep definitions in the anonymous namespace containing their declarations.
-bool __fastcall od_slot38(void* self, void*, void* geometry)
+bool __fastcall od_slot38(void* self BF2_EDX_PARAM, void* geometry)
 {
     return static_cast<ObjectDrawer*>(self)->isGeometryOccluded(geometry);
 }
 
-bool __fastcall od_slot3C(void* self, void*, void* bounds)
+bool __fastcall od_slot3C(void* self BF2_EDX_PARAM, void* bounds)
 {
     return static_cast<ObjectDrawer*>(self)->isBoundsOccluded(static_cast<LocalBoundingBox*>(bounds));
 }

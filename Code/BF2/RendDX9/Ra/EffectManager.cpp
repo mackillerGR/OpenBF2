@@ -641,12 +641,12 @@ namespace {
 // Device loss rebuilds defines and drops compiled effects/watches; reset does nothing.
 // Subsequent draws compile effects again, using valid disk caches when available.
 
-void __fastcall em_onDeviceLost(void* listener, void*)
+void __fastcall em_onDeviceLost(void* listener BF2_EDX_PARAM)
 {
     reinterpret_cast<EffectManager*>(static_cast<unsigned char*>(listener) - 4)->resetEffects();
 }
 
-void __fastcall em_listenerNullsub(void*, void*)
+void __fastcall em_listenerNullsub(void* BF2_EDX_PARAM)
 {
     // 0x10037D40 - `ret`, empty in the original too.
 }

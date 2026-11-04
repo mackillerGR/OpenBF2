@@ -907,10 +907,10 @@ namespace {
 
 // Effect's reference slots are addRef then getRef, opposite to ParameterOwner/ShaderParameter.
 
-void __fastcall effect_addRef(void* s, void*) { static_cast<Effect*>(s)->addRef(); }
-int  __fastcall effect_getRef(void* s, void*) { return static_cast<Effect*>(s)->getRef(); }
-int  __fastcall effect_release(void* s, void*) { return static_cast<Effect*>(s)->release(); }
-void* __fastcall effect_queryInterface(void* s, void*, unsigned int iid)
+void __fastcall effect_addRef(void* s BF2_EDX_PARAM) { static_cast<Effect*>(s)->addRef(); }
+int  __fastcall effect_getRef(void* s BF2_EDX_PARAM) { return static_cast<Effect*>(s)->getRef(); }
+int  __fastcall effect_release(void* s BF2_EDX_PARAM) { return static_cast<Effect*>(s)->release(); }
+void* __fastcall effect_queryInterface(void* s BF2_EDX_PARAM, unsigned int iid)
 {
     return static_cast<Effect*>(s)->queryInterface(iid);
 }

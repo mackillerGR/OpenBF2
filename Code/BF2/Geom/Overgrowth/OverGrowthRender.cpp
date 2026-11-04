@@ -94,59 +94,59 @@ inline const Vec3& translationOf(const Mat4& transform)
 
 inline void* geometrySlot(void* geometry, unsigned int offset)
 {
-    return (*reinterpret_cast<void***>(geometry))[offset / sizeof(void*)];
+    return (*reinterpret_cast<void***>(geometry))[offset  / 4];
 }
 
 // +0x18 draw(renderView, occluder, flag), `retn 0Ch` (StaticMesh 0x100FF510). The OverGrowth draw
 // always passes (view, 0, 1): 100CA974..100CA981 and 100CA9EC..100CA9F9.
 inline void geometryDraw(void* geometry, IRenderView* view)
 {
-    typedef void (__fastcall* DrawFn)(void*, void*, void*, void*, int);
-    reinterpret_cast<DrawFn>(geometrySlot(geometry, 0x18))(geometry, 0, view, 0, 1);
+    typedef void (__fastcall* DrawFn)(void* BF2_EDX_PARAM, void*, void*, int);
+    reinterpret_cast<DrawFn>(geometrySlot(geometry, 0x18))(geometry, view, 0, 1);
 }
 
 // +0x24 - the shadow record this geometry receives from (StaticMesh +0x34C), one argument.
 inline void geometryAttachShadowRecord(void* geometry, void* record)
 {
-    typedef void (__fastcall* AttachFn)(void*, void*, void*);
-    reinterpret_cast<AttachFn>(geometrySlot(geometry, 0x24))(geometry, 0, record);
+    typedef void (__fastcall* AttachFn)(void* BF2_EDX_PARAM, void*);
+    reinterpret_cast<AttachFn>(geometrySlot(geometry, 0x24))(geometry, record);
 }
 
 // +0x40 getLocalBounds - the selected lod's box (StaticMesh lod record + 4).
 inline const LocalBoundingBox& geometryLocalBounds(void* geometry)
 {
-    typedef const void* (__fastcall* BoundsFn)(void*, void*);
+    typedef const void* (__fastcall* BoundsFn)(void* BF2_EDX_PARAM);
     return *static_cast<const LocalBoundingBox*>(
-        reinterpret_cast<BoundsFn>(geometrySlot(geometry, 0x40))(geometry, 0));
+        reinterpret_cast<BoundsFn>(geometrySlot(geometry, 0x40))(geometry));
 }
 
 // +0x44 getBoundingRadius, float in ST0 (StaticMesh it finalises the lod bounds first,
 // so the call is NOT side-effect free and every shipped repetition is kept).
 inline float geometryBoundingRadius(void* geometry)
 {
-    typedef float (__fastcall* RadiusFn)(void*, void*);
-    return reinterpret_cast<RadiusFn>(geometrySlot(geometry, 0x44))(geometry, 0);
+    typedef float (__fastcall* RadiusFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<RadiusFn>(geometrySlot(geometry, 0x44))(geometry);
 }
 
 // +0x48 getGeometryTransformation (StaticMesh the stored pointer or the shared identity).
 inline const Mat4* geometryTransformation(void* geometry)
 {
-    typedef const Mat4* (__fastcall* TransformFn)(void*, void*);
-    return reinterpret_cast<TransformFn>(geometrySlot(geometry, 0x48))(geometry, 0);
+    typedef const Mat4* (__fastcall* TransformFn)(void* BF2_EDX_PARAM);
+    return reinterpret_cast<TransformFn>(geometrySlot(geometry, 0x48))(geometry);
 }
 
 // +0x50 setGeometryTransformation - stores the pointer (StaticMesh 0x100FF2B0), one argument.
 inline void geometrySetTransformation(void* geometry, const Mat4* transform)
 {
-    typedef void (__fastcall* SetTransformFn)(void*, void*, const Mat4*);
-    reinterpret_cast<SetTransformFn>(geometrySlot(geometry, 0x50))(geometry, 0, transform);
+    typedef void (__fastcall* SetTransformFn)(void* BF2_EDX_PARAM, const Mat4*);
+    reinterpret_cast<SetTransformFn>(geometrySlot(geometry, 0x50))(geometry, transform);
 }
 
 // +0xAC - the shadow-caster frame stamp (StaticMesh +0x350), one argument: renderer +0x54.
 inline void geometryStampShadowFrame(void* geometry, unsigned int frameOrdinal)
 {
-    typedef void (__fastcall* StampFn)(void*, void*, unsigned int);
-    reinterpret_cast<StampFn>(geometrySlot(geometry, 0xAC))(geometry, 0, frameOrdinal);
+    typedef void (__fastcall* StampFn)(void* BF2_EDX_PARAM, unsigned int);
+    reinterpret_cast<StampFn>(geometrySlot(geometry, 0xAC))(geometry, frameOrdinal);
 }
 
 
@@ -584,9 +584,9 @@ void* acquireGeometry(unsigned char* pool, unsigned char* instance)
 
 inline bool objectDrawerOccludes(IBase* drawer, void* geometry)
 {
-    typedef bool (__fastcall* OccludedFn)(void*, void*, void*);
+    typedef bool (__fastcall* OccludedFn)(void* BF2_EDX_PARAM, void*);
     void** const table = *reinterpret_cast<void***>(drawer);
-    return reinterpret_cast<OccludedFn>(table[0x38 / sizeof(void*)])(drawer, 0, geometry);
+    return reinterpret_cast<OccludedFn>(table[0x38  / 4])(drawer, geometry);
 }
 
 // The host call. IObjectTemplate::getCullRadiusScale - MSVC slot 28 = +0x70 in this tree's table

@@ -659,7 +659,7 @@ bf2_set_platform_compat(bf2_client_objects)
 # container layout and cannot cross the image boundary.  PluginAbi.h enforces the matching contract.
 if(BF2_BUILD_LINUX)
     # [CHOSEN, not recovered] Portable client: retail-layout asserts off, GameSpy POSIX path on.
-    target_compile_definitions(bf2_client_objects PRIVATE _LINUX)
+    target_compile_definitions(bf2_client_objects PRIVATE _LINUX "BF2_EDX_PARAM=")
     target_compile_options(bf2_client_objects PRIVATE
         -include "${BF2_ROOT}/Core/PortableClient.h")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim")
@@ -2015,7 +2015,7 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     )
     set_target_properties(bf2_renddx9_portable PROPERTIES OUTPUT_NAME RendDX9
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin_portable" POSITION_INDEPENDENT_CODE ON)
-    target_compile_definitions(bf2_renddx9_portable PRIVATE BF2_IMAGE_RENDDX9=1 BF2_PLUGIN_ABI_NATIVE=1
+    target_compile_definitions(bf2_renddx9_portable PRIVATE BF2_IMAGE_RENDDX9=1 BF2_PLUGIN_ABI_NATIVE=1 "BF2_EDX_PARAM="
         DEDICATED=0 _ITERATOR_DEBUG_LEVEL=0 _LINUX DXVK_NATIVE)
     target_include_directories(bf2_renddx9_portable PRIVATE
         "${BF2_DXVK_ROOT}/include/native/directx" "${BF2_DXVK_ROOT}/include/native/windows"

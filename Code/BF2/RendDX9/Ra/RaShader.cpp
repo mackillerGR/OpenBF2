@@ -48,7 +48,7 @@ namespace {
 // [RETIRE-WHEN: the Ra parameter/holder translation unit is recovered.]
 // Replace diagnostic tables after holder signatures and behavior are implemented and validated.
 
-void __fastcall raHolderFrontier(void* self, void*)
+void __fastcall raHolderFrontier(void* self BF2_EDX_PARAM)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::Ra parameter holder "
                     "(off_101DD3FC / 1E1480 / 1E1488 / 1E148C / 1E1494 / 1E14A8 / 1E1E80 / "
@@ -73,7 +73,7 @@ void* raHolder() { return const_cast<void*>(static_cast<const void*>(kRaHolderVt
 // Releases lighting texture references on device loss so default-pool resources can reset.
 // The next draw binds new textures; reset itself does not recreate them.
 
-void __fastcall raLightingOnDeviceLost(void* self, void*)
+void __fastcall raLightingOnDeviceLost(void* self BF2_EDX_PARAM)
 {
     RaLightingParameters* const p = static_cast<RaLightingParameters*>(self);
     if (p->terrainLightMap.value)
@@ -88,13 +88,13 @@ void __fastcall raLightingOnDeviceLost(void* self, void*)
     }
 }
 
-void __fastcall raLightingListenerNullsub(void*, void*)
+void __fastcall raLightingListenerNullsub(void* BF2_EDX_PARAM)
 {
     // 0x10037D40 - `ret`, empty in the original too.
 }
 
 // Destroys lighting parameters and frees storage when flags bit zero is set.
-void* __fastcall raLightingScalarDeletingDtor(void* self, void*, unsigned int flags)
+void* __fastcall raLightingScalarDeletingDtor(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     raLightingParametersDestroy(self);
     if (flags & 1u)
@@ -276,7 +276,7 @@ inline void* const* d3dxTable(void* effect)
 
 template <typename Fn> inline Fn d3dxFn(void* effect, unsigned int byteOffset)
 {
-    return reinterpret_cast<Fn>(d3dxTable(effect)[byteOffset / sizeof(void*)]);
+    return reinterpret_cast<Fn>(d3dxTable(effect)[byteOffset  / 4]);
 }
 
 inline unsigned char* holderPayload(void* self)
@@ -285,28 +285,28 @@ inline unsigned char* holderPayload(void* self)
 }
 
 // off_101E1480 slot 0 - sub_10037E20: SetVector(handle, &value).
-int __fastcall raApplyVec4(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyVec4(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetVectorFn>(effect, 0x88)(
         effect, handle, holderPayload(self)));
 }
 
 // off_101E1488 slot 0 - sub_10037E40: SetTexture(handle, value) - the value IS the D3D base texture.
-int __fastcall raApplyTexture(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyTexture(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetTextureFn>(effect, 0xD0)(
         effect, handle, *reinterpret_cast<void**>(holderPayload(self))));
 }
 
 // off_101E148C slot 0 - sub_1003A170: SetFloat(handle, value).
-int __fastcall raApplyFloat(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyFloat(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetFloatFn>(effect, 0x78)(
         effect, handle, *reinterpret_cast<const float*>(holderPayload(self))));
 }
 
 // off_101E1494 slot 0 - sub_1003A1A0: SetFloatArray(handle, value, 3).
-int __fastcall raApplyVec3(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyVec3(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetFloatArrayFn>(effect, 0x80)(
         effect, handle, reinterpret_cast<const float*>(holderPayload(self)), 3u));
@@ -314,14 +314,14 @@ int __fastcall raApplyVec3(void* self, void*, void* effect, void* handle)
 
 // off_101E149C slot 0 - sub_1003A1C0: SetFloatArray(handle, value, 2).  This is the table the
 // material block installs at its +0x140 ("NormalUnpack"), so that holder is a TWO-float one.
-int __fastcall raApplyVec2(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyVec2(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetFloatArrayFn>(effect, 0x80)(
         effect, handle, reinterpret_cast<const float*>(holderPayload(self)), 2u));
 }
 
 // off_101E14A8 slot 0 - sub_1003A1E0: SetInt(handle, value).
-int __fastcall raApplyInt(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyInt(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetIntFn>(effect, 0x68)(
         effect, handle, *reinterpret_cast<const int*>(holderPayload(self))));
@@ -329,7 +329,7 @@ int __fastcall raApplyInt(void* self, void*, void* effect, void* handle)
 
 // off_101E14BC slot 0 - sub_1003A140: nothing (and 0) for a null texture, else SetTexture(handle,
 // sub_10014930(texture)) - the engine texture's D3D base object.
-int __fastcall raApplyEngineTexture(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyEngineTexture(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     EngineTexture* const texture = *reinterpret_cast<EngineTexture**>(holderPayload(self));
     if (!texture)
@@ -339,14 +339,14 @@ int __fastcall raApplyEngineTexture(void* self, void*, void* effect, void* handl
 }
 
 // off_101E1E78 slot 0 - sub_10046580: SetBool(handle, byte).
-int __fastcall raApplyBool(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyBool(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetBoolFn>(effect, 0x58)(
         effect, handle, static_cast<int>(*holderPayload(self))));
 }
 
 // off_101E1E80 slot 0 - sub_100465A0 -> sub_100465C0: SetVector(handle, {f, f, f, f}).
-int __fastcall raApplyFloatSplat(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyFloatSplat(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const float f = *reinterpret_cast<const float*>(holderPayload(self));
     const float splat[4] = { f, f, f, f };
@@ -357,18 +357,18 @@ int __fastcall raApplyFloatSplat(void* self, void*, void* effect, void* handle)
 // off_101E1E88 slot 0 - sub_10046450.  The holder is {vptr, lightsHolder, resolver}: the resolver
 // (raLightArrayUpdate) runs with ecx = &lightsHolder->value and answers the record handed to
 // SetValue(handle, record, 68).
-int __fastcall raApplyLightRecordResolved(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyLightRecordResolved(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
-    typedef void* (__fastcall* ResolveFn)(void*, void*);
+    typedef void* (__fastcall* ResolveFn)(void* BF2_EDX_PARAM);
     void** const words = static_cast<void**>(self);
     void* const record = reinterpret_cast<ResolveFn>(words[2])(
-        static_cast<unsigned char*>(words[1]) + 4, 0);
+        static_cast<unsigned char*>(words[1]) + 4);
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetValueFn>(effect, 0x50)(
         effect, handle, record, 68u));
 }
 
 // off_101E1E8C slot 0 - sub_100465F0: SetMatrixPointerArray(handle, pointers, count).
-int __fastcall raApplyMatrixPointerArray(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyMatrixPointerArray(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     void** const words = static_cast<void**>(self);
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetMatrixPointerArrayFn>(effect, 0xA8)(
@@ -377,7 +377,7 @@ int __fastcall raApplyMatrixPointerArray(void* self, void*, void* effect, void* 
 }
 
 // off_101E1E94 slot 0 - sub_10046620: SetMatrix(handle, &value).
-int __fastcall raApplyMat4(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyMat4(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetMatrixFn>(effect, 0x98)(
         effect, handle, holderPayload(self)));
@@ -385,7 +385,7 @@ int __fastcall raApplyMat4(void* self, void*, void* effect, void* handle)
 
 // off_101E1E9C slot 0 - sub_100469F0 -> sub_10046A10: SetValue(handle, bytes, count), and
 // SetValue(handle, 0, 0) for an empty vector - the call is made either way.
-int __fastcall raApplyBytes(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyBytes(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const vc71::vector_layout& v =
         *reinterpret_cast<const vc71::vector_layout*>(holderPayload(self));
@@ -397,7 +397,7 @@ int __fastcall raApplyBytes(void* self, void*, void* effect, void* handle)
 }
 
 // off_101E1EA4 slot 0 - sub_10046BC0: SetMatrixArray(handle, first, bytes / 64) (sub_10046410).
-int __fastcall raApplyMat4Array(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyMat4Array(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const vc71::vector_layout& v =
         *reinterpret_cast<const vc71::vector_layout*>(holderPayload(self));
@@ -407,7 +407,7 @@ int __fastcall raApplyMat4Array(void* self, void*, void* effect, void* handle)
 }
 
 // off_101E1EAC slot 0 - sub_10046BF0: SetVectorArray(handle, first, bytes / 16) (sub_10046430).
-int __fastcall raApplyVec4Array(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyVec4Array(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     const vc71::vector_layout& v =
         *reinterpret_cast<const vc71::vector_layout*>(holderPayload(self));
@@ -417,7 +417,7 @@ int __fastcall raApplyVec4Array(void* self, void*, void* effect, void* handle)
 }
 
 // off_101DD3FC slot 0 - sub_1000BE00: SetValue(handle, pointer, 68) - the pointed-at RaLightRecord.
-int __fastcall raApplyLightRecordPointer(void* self, void*, void* effect, void* handle)
+int __fastcall raApplyLightRecordPointer(void* self BF2_EDX_PARAM, void* effect, void* handle)
 {
     return static_cast<int>(d3dxFn< ::renddx9abi::D3dxSetValueFn>(effect, 0x50)(
         effect, handle, *reinterpret_cast<void**>(holderPayload(self)), 68u));
@@ -478,7 +478,7 @@ void* raHolderLightRecordPointer()  { return holderTable(kRaHolderLightRecordPoi
 
 // Copies the selected light into shared scratch storage and halves its color/intensity words.
 // Returns borrowed static storage, overwritten by the next call.
-void* __fastcall raLightArrayUpdate(void* lightsValue, void*)
+void* __fastcall raLightArrayUpdate(void* lightsValue BF2_EDX_PARAM)
 {
     static float s_lights1x[17] =
     {
@@ -583,7 +583,7 @@ void raPushDescriptor(vc71::vector_layout& v, const RaVertexElementDesc* desc)
 // Preserve the seven-slot table and its trailing null entry.
 
 #define RD9_RASHADER_FRONTIER(fn, slotOffset, addr)                                   \
-    void __fastcall fn(void* self, void*)                                             \
+    void __fastcall fn(void* self BF2_EDX_PARAM)                                             \
     {                                                                                 \
         RD9_FRONTIER_AT("dice::hfe::dx9rend::Ra::RaShader::slot_" #slotOffset          \
                         " (" #addr ")", self, slotOffset);                            \
@@ -594,23 +594,23 @@ RD9_RASHADER_FRONTIER(ras_slot00, 0x00, 0x1004DB40)
 // +0x08 .. +0x18 - ; thin __fastcall adapters over the typed members below, as
 // slot +0x04's is.  +0x08 and +0x10 .. +0x18 take the entry on the stack (`retn 4`); +0x0C takes
 // nothing.
-unsigned int __fastcall ras_slot08(void* self, void*, RenderQueueEntry* entry)
+unsigned int __fastcall ras_slot08(void* self BF2_EDX_PARAM, RenderQueueEntry* entry)
 {
     return static_cast<RaShader*>(self)->begin(entry);
 }
-void __fastcall ras_slot0C(void* self, void*)
+void __fastcall ras_slot0C(void* self BF2_EDX_PARAM)
 {
     static_cast<RaShader*>(self)->end();
 }
-void __fastcall ras_slot10(void* self, void*, RenderQueueEntry* entry)
+void __fastcall ras_slot10(void* self BF2_EDX_PARAM, RenderQueueEntry* entry)
 {
     static_cast<RaShader*>(self)->applyInstanceParameters(entry);
 }
-void __fastcall ras_slot14(void* self, void*, RenderQueueEntry* entry)
+void __fastcall ras_slot14(void* self BF2_EDX_PARAM, RenderQueueEntry* entry)
 {
     static_cast<RaShader*>(self)->applyTemplateParameters(entry);
 }
-void __fastcall ras_slot18(void* self, void*, RenderQueueEntry* entry)
+void __fastcall ras_slot18(void* self BF2_EDX_PARAM, RenderQueueEntry* entry)
 {
     static_cast<RaShader*>(self)->draw(entry);
 }
@@ -620,7 +620,7 @@ void __fastcall ras_slot18(void* self, void*, RenderQueueEntry* entry)
 // +0x04, sub_1004B4E0.  `__thiscall`, no stack arguments (the body's terminator is a bare `retn`),
 // the result in al.  Written as the table's other entries are: a thin __fastcall adapter over the
 // typed member, so nothing in the table is a raw seam with an invented signature.
-unsigned char __fastcall ras_slot04(void* self, void*)
+unsigned char __fastcall ras_slot04(void* self BF2_EDX_PARAM)
 {
     return static_cast<RaShader*>(self)->build() ? 1u : 0u;
 }
@@ -1456,7 +1456,7 @@ void RaShader::applyParameterVector(void* block, const vc71::vector_layout& para
     if (!count)
         return;
 
-    typedef int (__fastcall* ApplyFn)(void*, void*, void*, void*);
+    typedef int (__fastcall* ApplyFn)(void* BF2_EDX_PARAM, void*, void*);
     unsigned char* const bytes = static_cast<unsigned char*>(block);
     const vc71::vector_layout* const registry =
         *reinterpret_cast<const vc71::vector_layout* const*>(bytes + 4);
@@ -1467,7 +1467,7 @@ void RaShader::applyParameterVector(void* block, const vc71::vector_layout& para
             reinterpret_cast<const RaBoundParameter*>(parameters.first)[i];
         unsigned char* const holder = bytes + offsets[bound.offset];
         reinterpret_cast<ApplyFn>((*reinterpret_cast<void***>(holder))[0])(
-            holder, 0, m_effect, bound.handle);
+            holder, m_effect, bound.handle);
     }
 }
 
@@ -1479,23 +1479,23 @@ void RaShader::applyParameterVector(void* block, const vc71::vector_layout& para
 // index start, +0x1C the zero slot, +0x18 vertex start, +0x14 the primitive type word.
 void RaShader::draw(RenderQueueEntry* entry)
 {
-    typedef int (__fastcall* IntSlotFn)(void*, void*);
+    typedef int (__fastcall* IntSlotFn)(void* BF2_EDX_PARAM);
     void* const material = entry->material;
     void** const slots = *static_cast<void***>(material);
 
-    const int primitiveCount = reinterpret_cast<IntSlotFn>(slots[0x10 / 4])(material, 0);
-    (void)reinterpret_cast<IntSlotFn>(slots[0x08 / 4])(material, 0);
+    const int primitiveCount = reinterpret_cast<IntSlotFn>(slots[0x10 / 4])(material);
+    (void)reinterpret_cast<IntSlotFn>(slots[0x08 / 4])(material);
     if (!primitiveCount)
         return;
 
     stateManagerPreDrawApply();
 
-    const int startIndex  = reinterpret_cast<IntSlotFn>(slots[0x20 / 4])(material, 0)
+    const int startIndex  = reinterpret_cast<IntSlotFn>(slots[0x20 / 4])(material)
                           + static_cast<int>(entry->lighting.tail10C);
-    const int numVertices = reinterpret_cast<IntSlotFn>(slots[0x08 / 4])(material, 0);
-    const int minIndex    = reinterpret_cast<IntSlotFn>(slots[0x1C / 4])(material, 0);
-    const int baseVertex  = reinterpret_cast<IntSlotFn>(slots[0x18 / 4])(material, 0);
-    const int type        = reinterpret_cast<IntSlotFn>(slots[0x14 / 4])(material, 0);
+    const int numVertices = reinterpret_cast<IntSlotFn>(slots[0x08 / 4])(material);
+    const int minIndex    = reinterpret_cast<IntSlotFn>(slots[0x1C / 4])(material);
+    const int baseVertex  = reinterpret_cast<IntSlotFn>(slots[0x18 / 4])(material);
+    const int type        = reinterpret_cast<IntSlotFn>(slots[0x14 / 4])(material);
     m_device->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(type), baseVertex,
                                    static_cast<UINT>(minIndex), static_cast<UINT>(numVertices),
                                    static_cast<UINT>(startIndex),
@@ -1542,7 +1542,7 @@ int* RaShader::shaderVersion()
 bool RaShader::slot04()
 {
     void** const vtbl = *reinterpret_cast<void***>(this);
-    return reinterpret_cast<unsigned char (__fastcall*)(void*, void*)>(vtbl[1])(this, 0) != 0;
+    return reinterpret_cast<unsigned char (__fastcall*)(void* BF2_EDX_PARAM)>(vtbl[1])(this) != 0;
 }
 
 

@@ -35,15 +35,15 @@ inline float&         F (void* p, unsigned off) { return *reinterpret_cast<float
 inline unsigned char& Bt(void* p, unsigned off) { return *reinterpret_cast<unsigned char*>(static_cast<char*>(p) + off); }
 inline unsigned       fbits(float f) { unsigned u; ::memcpy(&u, &f, 4); return u; }
 
-#define PT_SET(name, off)  void     __fastcall name(void* s, void*, unsigned v){ U(s,(off)) = v; }
-#define PT_GETF(name, off) float    __fastcall name(void* s, void*){ return F(s,(off)); }
-#define PT_GETD(name, off) unsigned __fastcall name(void* s, void*){ return U(s,(off)); }
-#define PT_SETB(name, off) void     __fastcall name(void* s, void*, unsigned v){ Bt(s,(off)) = static_cast<unsigned char>(v); }
-#define PT_GETB(name, off) unsigned __fastcall name(void* s, void*){ return Bt(s,(off)); }
-#define PT_LEA(name, off)  void*    __fastcall name(void* s, void*){ return static_cast<char*>(s) + (off); }
-#define PT_SETVEC(name, off, n) void __fastcall name(void* s, void*, const float* v){ for (int i=0;i<(n);++i) F(s,(off)+4u*i)=v[i]; }
-#define PT_GETVEC(name, off, n) void* __fastcall name(void* s, void*, float* o){ for (int i=0;i<(n);++i) o[i]=F(s,(off)+4u*i); return o; }
-#define PT_VEC3A(name, off) void __fastcall name(void* s, void*, unsigned a, unsigned b, unsigned c){ U(s,(off))=a; U(s,(off)+4)=b; U(s,(off)+8)=c; }
+#define PT_SET(name, off)  void     __fastcall name(void* s BF2_EDX_PARAM, unsigned v){ U(s,(off)) = v; }
+#define PT_GETF(name, off) float    __fastcall name(void* s BF2_EDX_PARAM){ return F(s,(off)); }
+#define PT_GETD(name, off) unsigned __fastcall name(void* s BF2_EDX_PARAM){ return U(s,(off)); }
+#define PT_SETB(name, off) void     __fastcall name(void* s BF2_EDX_PARAM, unsigned v){ Bt(s,(off)) = static_cast<unsigned char>(v); }
+#define PT_GETB(name, off) unsigned __fastcall name(void* s BF2_EDX_PARAM){ return Bt(s,(off)); }
+#define PT_LEA(name, off)  void*    __fastcall name(void* s BF2_EDX_PARAM){ return static_cast<char*>(s) + (off); }
+#define PT_SETVEC(name, off, n) void __fastcall name(void* s BF2_EDX_PARAM, const float* v){ for (int i=0;i<(n);++i) F(s,(off)+4u*i)=v[i]; }
+#define PT_GETVEC(name, off, n) void* __fastcall name(void* s BF2_EDX_PARAM, float* o){ for (int i=0;i<(n);++i) o[i]=F(s,(off)+4u*i); return o; }
+#define PT_VEC3A(name, off) void __fastcall name(void* s BF2_EDX_PARAM, unsigned a, unsigned b, unsigned c){ U(s,(off))=a; U(s,(off)+4)=b; U(s,(off)+8)=c; }
 
 // simple slots
 PT_LEA (n3_s1,  0x16C)
@@ -141,11 +141,11 @@ PT_GETF(n3_s98, 0x168)
 
 // complex slots
 
-unsigned __fastcall n3_s3(void*, void*) { return 3; }   // emitter type id
+unsigned __fastcall n3_s3(void* BF2_EDX_PARAM) { return 3; }   // emitter type id
 
 // slot 2 (0x101865F0): mode@+0x60 -> scale @+0x150 {0.5,0.7,1.0}; inverse lifetime @+0x14C. No
 // external calls (type 3 has no LightManager dependency).
-void __fastcall n3_s2(void* self, void*)
+void __fastcall n3_s2(void* self BF2_EDX_PARAM)
 {
     unsigned mode = U(self, 0x60);
     F(self, 0x150) = (mode == 0) ? 0.5f : (mode == 1) ? 0.7f : 1.0f;
@@ -154,14 +154,14 @@ void __fastcall n3_s2(void* self, void*)
 }
 
 // slot 23 (0x10186DB0): setLifetime - store +0x0C, cache 1/lifetime at +0x14C (unconditional divide).
-void __fastcall n3_s23(void* self, void*, unsigned a)
+void __fastcall n3_s23(void* self BF2_EDX_PARAM, unsigned a)
 {
     U(self, 0x0C) = a;
     F(self, 0x14C) = 1.0f / F(self, 0x0C);
 }
 
 // slot 37 (0x10186A10): store Vec3 at +0x158, normalize in place.
-void __fastcall n3_s37(void* self, void*, const float* v)
+void __fastcall n3_s37(void* self BF2_EDX_PARAM, const float* v)
 {
     F(self, 0x158) = v[0]; F(self, 0x15C) = v[1]; F(self, 0x160) = v[2];
     float* p = reinterpret_cast<float*>(static_cast<char*>(self) + 0x158);
@@ -174,7 +174,7 @@ void __fastcall n3_s37(void* self, void*, const float* v)
 }
 
 // slot 45 (0x10186650): store +0x90; cache 1/x at +0x94 when positive.
-void __fastcall n3_s45(void* self, void*, unsigned a)
+void __fastcall n3_s45(void* self BF2_EDX_PARAM, unsigned a)
 {
     U(self, 0x90) = a;
     if (F(self, 0x90) > 0.0f) F(self, 0x94) = 1.0f / F(self, 0x90);
@@ -185,7 +185,7 @@ void __fastcall n3_s45(void* self, void*, unsigned a)
 // non-empty name (`cmp [esi+80h], 0`, the VC7.1 size word) - look the child up at once: a BY-value
 // copy of the name to 100D3410 on the manager (ds:1024B900), whose answer lands in +0x88. A child
 // defined later answers null here, and the instance constructor's re-resolve (10186540) picks it up.
-void __fastcall n3_s89(void* self, void*, const ParticleHostString& name)
+void __fastcall n3_s89(void* self BF2_EDX_PARAM, const ParticleHostString& name)
 {
     ParticleHostString& dst = *reinterpret_cast<ParticleHostString*>(static_cast<char*>(self) + 0x6C);
     dst = name;
@@ -196,7 +196,7 @@ void __fastcall n3_s89(void* self, void*, const ParticleHostString& name)
 }
 
 // slot 0 (0x10187080): destroy the two strings, restore base vtable, free-if-flag.
-void* __fastcall n3_dtor(void* self, void*, int flags)
+void* __fastcall n3_dtor(void* self BF2_EDX_PARAM, int flags)
 {
     reinterpret_cast<ParticleHostString*>(static_cast<char*>(self) + 0x16C)->~ParticleHostString();
     reinterpret_cast<ParticleHostString*>(static_cast<char*>(self) + 0x6C)->~ParticleHostString();
@@ -247,8 +247,8 @@ void initType3Defaults(void* self)
     F (self, 0x58) = 360.0f;
     U (self, 0x5C) = 0u;
 
-    n3_s45(self, 0, fbits(4.0f));         // +0x90 = 4.0, +0x94 = 0.25
-    n3_s43(self, 0, 0u);                   // +0x8C = 0
+    n3_s45(self, fbits(4.0f));         // +0x90 = 4.0, +0x94 = 0.25
+    n3_s43(self, 0u);                   // +0x8C = 0
 
     F (self, 0x0C) = 32.0f;
     F (self, 0x14C) = 0.03125f;            // 1/32
@@ -271,11 +271,11 @@ void initType3Defaults(void* self)
     F (self, 0xC8) = 0.7f;
     F (self, 0xCC) = 0.8f;
 
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s39(self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s53(self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s55(self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s57(self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s59(self, 0, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s39(self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s53(self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s55(self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s57(self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n3_s59(self, v); }
 
     U (self, 0x168)=0u; U(self,0x158)=0u; U(self,0x160)=0u;
     F (self, 0x15C) = 1.0f;

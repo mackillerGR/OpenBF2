@@ -48,22 +48,22 @@ inline ParticleHostString& geometryName(void* self)
 inline IBase*& geometryInstance(void* self)
 { return *reinterpret_cast<IBase**>(static_cast<char*>(self) + 0x8C); }
 
-#define PT_SET(name, off)  void     __fastcall name(void* s, void*, unsigned v){ U(s,(off)) = v; }
-#define PT_GETF(name, off) float    __fastcall name(void* s, void*){ return F(s,(off)); }
-#define PT_GETD(name, off) unsigned __fastcall name(void* s, void*){ return U(s,(off)); }
-#define PT_SETB(name, off) void     __fastcall name(void* s, void*, unsigned v){ Bt(s,(off)) = static_cast<unsigned char>(v); }
-#define PT_GETB(name, off) unsigned __fastcall name(void* s, void*){ return Bt(s,(off)); }
-#define PT_LEA(name, off)  void*    __fastcall name(void* s, void*){ return static_cast<char*>(s) + (off); }
-#define PT_SETVEC(name, off, n) void __fastcall name(void* s, void*, const float* v){ for (int i=0;i<(n);++i) F(s,(off)+4u*i)=v[i]; }
-#define PT_GETVEC(name, off, n) void* __fastcall name(void* s, void*, float* o){ for (int i=0;i<(n);++i) o[i]=F(s,(off)+4u*i); return o; }
-#define PT_VEC3A(name, off) void __fastcall name(void* s, void*, unsigned a, unsigned b, unsigned c){ U(s,(off))=a; U(s,(off)+4)=b; U(s,(off)+8)=c; }
+#define PT_SET(name, off)  void     __fastcall name(void* s BF2_EDX_PARAM, unsigned v){ U(s,(off)) = v; }
+#define PT_GETF(name, off) float    __fastcall name(void* s BF2_EDX_PARAM){ return F(s,(off)); }
+#define PT_GETD(name, off) unsigned __fastcall name(void* s BF2_EDX_PARAM){ return U(s,(off)); }
+#define PT_SETB(name, off) void     __fastcall name(void* s BF2_EDX_PARAM, unsigned v){ Bt(s,(off)) = static_cast<unsigned char>(v); }
+#define PT_GETB(name, off) unsigned __fastcall name(void* s BF2_EDX_PARAM){ return Bt(s,(off)); }
+#define PT_LEA(name, off)  void*    __fastcall name(void* s BF2_EDX_PARAM){ return static_cast<char*>(s) + (off); }
+#define PT_SETVEC(name, off, n) void __fastcall name(void* s BF2_EDX_PARAM, const float* v){ for (int i=0;i<(n);++i) F(s,(off)+4u*i)=v[i]; }
+#define PT_GETVEC(name, off, n) void* __fastcall name(void* s BF2_EDX_PARAM, float* o){ for (int i=0;i<(n);++i) o[i]=F(s,(off)+4u*i); return o; }
+#define PT_VEC3A(name, off) void __fastcall name(void* s BF2_EDX_PARAM, unsigned a, unsigned b, unsigned c){ U(s,(off))=a; U(s,(off)+4)=b; U(s,(off)+8)=c; }
 
-void __fastcall n1_s2 (void* s, void*);
-void __fastcall n1_s45(void* s, void*, unsigned a);
+void __fastcall n1_s2 (void* s BF2_EDX_PARAM);
+void __fastcall n1_s45(void* s BF2_EDX_PARAM, unsigned a);
 
 // simple slots
 // G1-e: slot 1 (0x101790D0, `lea eax,[ecx+1F4h]`) - the name, as the host's string type.
-const ParticleHostString& __fastcall n1_s1(void* self, void*)
+const ParticleHostString& __fastcall n1_s1(void* self BF2_EDX_PARAM)
 { return *reinterpret_cast<ParticleHostString*>(static_cast<char*>(self) + 0x1F4); }
 PT_SET (n1_s4,  0x64)
 PT_GETD(n1_s5,  0x64)
@@ -169,7 +169,7 @@ PT_GETF(n1_s111, 0x1EC)
 PT_SETB(n1_s112, 0x218)
 PT_GETB(n1_s113, 0x218)
 // G1-e: slot 115 (0x10179F40, `lea eax,[ecx+70h]`) - the geometry name, as the host's string type.
-const ParticleHostString& __fastcall n1_s115(void* self, void*)
+const ParticleHostString& __fastcall n1_s115(void* self BF2_EDX_PARAM)
 { return geometryName(self); }
 PT_SET (n1_s116, 0x94)
 PT_GETD(n1_s117, 0x94)
@@ -186,12 +186,12 @@ PT_GETVEC(n1_s127, 0xB8, 3)
 
 // complex slots
 
-unsigned __fastcall n1_s3(void*, void*) { return 1; }        // emitter type id
-void     __fastcall n1_s108(void*, void*, unsigned) { }      // nullsub (1-arg dispatch, ignored)
-float    __fastcall n1_s109(void*, void*) { return -1.0f; }  // shipped returns -1.0
+unsigned __fastcall n1_s3(void* BF2_EDX_PARAM) { return 1; }        // emitter type id
+void     __fastcall n1_s108(void* BF2_EDX_PARAM, unsigned) { }      // nullsub (1-arg dispatch, ignored)
+float    __fastcall n1_s109(void* BF2_EDX_PARAM) { return -1.0f; }  // shipped returns -1.0
 
 // slot 2 (0x10179240): LightManager auto-value + mode scale + recomputes.
-void __fastcall n1_s2(void* self, void*)
+void __fastcall n1_s2(void* self BF2_EDX_PARAM)
 {
     if (F(self, 0x1A8) < 0.0f)
     {
@@ -207,7 +207,7 @@ void __fastcall n1_s2(void* self, void*)
     unsigned mode = U(self, 0x64);
     F(self, 0x1A0) = (mode == 0) ? 0.5f : (mode == 1) ? 0.7f : 1.0f;
 
-    n1_s45(self, 0, U(self, 0x9C));
+    n1_s45(self, U(self, 0x9C));
 
     F(self, 0xE0) = (F(self, 0xD8) == F(self, 0xDC)) ? 0.0f : 1.0f / (F(self, 0xD8) - F(self, 0xDC));
     if (F(self, 0x10) >= 1.1920929e-7f) F(self, 0x19C) = 1.0f / F(self, 0x10);
@@ -215,14 +215,14 @@ void __fastcall n1_s2(void* self, void*)
 }
 
 // slot 23 (0x10179E90): store +0x10, cache 1/x at +0x19C (unconditional).
-void __fastcall n1_s23(void* self, void*, unsigned a)
+void __fastcall n1_s23(void* self BF2_EDX_PARAM, unsigned a)
 {
     U(self, 0x10) = a;
     F(self, 0x19C) = 1.0f / F(self, 0x10);
 }
 
 // slot 37 (0x10179960): store Vec3 at +0x1DC, normalize in place.
-void __fastcall n1_s37(void* self, void*, const float* v)
+void __fastcall n1_s37(void* self BF2_EDX_PARAM, const float* v)
 {
     F(self, 0x1DC) = v[0]; F(self, 0x1E0) = v[1]; F(self, 0x1E4) = v[2];
     float* p = reinterpret_cast<float*>(static_cast<char*>(self) + 0x1DC);
@@ -235,18 +235,18 @@ void __fastcall n1_s37(void* self, void*, const float* v)
 }
 
 // slot 45 (0x101790E0): store +0x9C, cache 1/x at +0xA0 when positive.
-void __fastcall n1_s45(void* self, void*, unsigned a)
+void __fastcall n1_s45(void* self BF2_EDX_PARAM, unsigned a)
 {
     U(self, 0x9C) = a;
     if (F(self, 0x9C) > 0.0f) F(self, 0xA0) = 1.0f / F(self, 0x9C);
 }
 
 // slots 103/105 (0x10179760/0x101797D0): Vec3 arg promoted to Vec4 {x,y,z,1} at +0x1BC / +0x1CC.
-void __fastcall n1_s103(void* self, void*, const float* v)
+void __fastcall n1_s103(void* self BF2_EDX_PARAM, const float* v)
 {
     F(self, 0x1BC) = v[0]; F(self, 0x1C0) = v[1]; F(self, 0x1C4) = v[2]; F(self, 0x1C8) = 1.0f;
 }
-void __fastcall n1_s105(void* self, void*, const float* v)
+void __fastcall n1_s105(void* self BF2_EDX_PARAM, const float* v)
 {
     F(self, 0x1CC) = v[0]; F(self, 0x1D0) = v[1]; F(self, 0x1D4) = v[2]; F(self, 0x1D8) = 1.0f;
 }
@@ -273,7 +273,7 @@ void resolveGeometry(void* self)
 }
 
 // slot 114 (0x101796D0, 95 B, retn 4): setGeometryName.
-void __fastcall n1_s114(void* self, void*, const ParticleHostString& name)
+void __fastcall n1_s114(void* self BF2_EDX_PARAM, const ParticleHostString& name)
 {
     geometryName(self) = name;                                        // MSVCP71 operator=
     if (IBase* const old = geometryInstance(self))
@@ -288,7 +288,7 @@ void __fastcall n1_s114(void* self, void*, const ParticleHostString& name)
 // is NOT nulled - the object is going away), release the refcounted texture @+0x210 (G1-d: always
 // null in 1.50), destroy the two strings, restore the base vtable (off_1021F120, not observable),
 // free-if-flag.
-void* __fastcall n1_dtor(void* self, void*, int flags)
+void* __fastcall n1_dtor(void* self BF2_EDX_PARAM, int flags)
 {
     if (IBase* const geometry = geometryInstance(self))
         geometry->release();                                          // [eax+8]
@@ -349,8 +349,8 @@ void initType1Defaults(void* self)
     F (self, 0xE8) = -1.0f;
     U (self, 0x0C) = 0u;
     U (self, 0x214) = 0u;
-    n1_s120(self, 0, 0u);   // +0x90 = 0
-    n1_s116(self, 0, 1u);   // +0x94 = 1
+    n1_s120(self, 0u);   // +0x90 = 0
+    n1_s116(self, 1u);   // +0x94 = 1
     Bt(self, 0x1F2)=0; U(self,0x20)=0u; U(self,0x24)=0u; U(self,0x28)=0u; Bt(self,0x2C)=0;
     U (self, 0x34)=0u; U(self,0x38)=0u; U(self,0x3C)=0u; Bt(self,0x40)=0;
     U (self, 0x48)=0u; U(self,0x4C)=0u; U(self,0x50)=0u; Bt(self,0x54)=0;
@@ -373,23 +373,23 @@ void initType1Defaults(void* self)
     F (self, 0xC8) = 1.0f;
     U (self, 0x16C)=0u; U(self,0x170)=0u; U(self,0x174)=0u; U(self,0x178)=0u; U(self,0x17C)=0u; U(self,0x180)=0u; U(self,0x184)=0u; U(self,0x188)=0u; U(self,0x18C)=0u;
 
-    n1_s99 (self, 0, static_cast<unsigned>(-1082130432));   // +0x1A8 = -1.0
-    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s101(self, 0, v); }
-    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s103(self, 0, v); }
-    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s105(self, 0, v); }
+    n1_s99 (self, static_cast<unsigned>(-1082130432));   // +0x1A8 = -1.0
+    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s101(self, v); }
+    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s103(self, v); }
+    { float v[3] = { 1.0f, 1.0f, 1.0f }; n1_s105(self, v); }
 
     Bt(self, 0xEC)=0; F(self,0xF0)=0.7f; F(self,0xF4)=0.8f; U(self,0xF8)=2u;
-    n1_s89 (self, 0, fbits(1.0f));   // +0x1E8 = 1.0
-    n1_s108(self, 0, 0u);            // nullsub
-    n1_s45 (self, 0, fbits(4.0f));   // +0x9C = 4.0
-    n1_s43 (self, 0, 0u);            // +0x98 = 0
-    { float v[4] = { 0.0f, 0.0f, 1.0f, 0.0f }; n1_s106(self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s59 (self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s95 (self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s39 (self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s53 (self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s55 (self, 0, v); }
-    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s57 (self, 0, v); }
+    n1_s89 (self, fbits(1.0f));   // +0x1E8 = 1.0
+    n1_s108(self, 0u);            // nullsub
+    n1_s45 (self, fbits(4.0f));   // +0x9C = 4.0
+    n1_s43 (self, 0u);            // +0x98 = 0
+    { float v[4] = { 0.0f, 0.0f, 1.0f, 0.0f }; n1_s106(self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s59 (self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s95 (self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s39 (self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s53 (self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s55 (self, v); }
+    { float v[4] = { 0.0f, 0.0f, 0.0f, 1.0f }; n1_s57 (self, v); }
 
     Bt(self, 0xD0)=0; F(self,0xD4)=0.03f;
     U (self, 0x1DC)=0u; U(self,0x1E4)=0u; F(self,0x1E0)=1.0f;   // default dir {0,1,0}

@@ -65,9 +65,9 @@ RoadCompiled* activeRoadCompiled()
     if (!geometry)
         return 0;
 
-    typedef IGeometryTemplate* (__fastcall* GetTemplateFn)(void*, void*);
+    typedef IGeometryTemplate* (__fastcall* GetTemplateFn)(void* BF2_EDX_PARAM);
     IGeometryTemplate* const tmpl = reinterpret_cast<GetTemplateFn>(
-        (*reinterpret_cast<void***>(geometry))[0x38 / sizeof(void*)])(geometry, 0);
+        (*reinterpret_cast<void***>(geometry))[0x38  / 4])(geometry);
     if (!tmpl)
         return 0;
     if (tmpl->getClassId() != CID_RoadCompiledTemplate)
@@ -83,7 +83,7 @@ bool getGenerateLightmapForThisInstance()
     IBase* const geometry = activeObjectGeometry();
     typedef bool (__thiscall* GetFn)(void*);
     return reinterpret_cast<GetFn>(
-        (*reinterpret_cast<void***>(geometry))[0xBC / sizeof(void*)])(geometry);
+        (*reinterpret_cast<void***>(geometry))[0xBC  / 4])(geometry);
 }
 
 void setGenerateLightmapForThisInstance(bool value)
@@ -91,7 +91,7 @@ void setGenerateLightmapForThisInstance(bool value)
     IBase* const geometry = activeObjectGeometry();
     typedef void (__thiscall* SetFn)(void*, bool);
     reinterpret_cast<SetFn>(
-        (*reinterpret_cast<void***>(geometry))[0xB8 / sizeof(void*)])(geometry, value);
+        (*reinterpret_cast<void***>(geometry))[0xB8  / 4])(geometry, value);
 }
 
 } // anonymous namespace

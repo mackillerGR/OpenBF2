@@ -113,24 +113,24 @@ void destroyStaticMeshRenderer(StaticMeshRenderer* self)
     for (int i = 0; i < 10; ++i)
     {
         dx9rend::TextureAtlas* const atlas = self->m_lightmapAtlases[i];
-        typedef int (__fastcall* AtlasReleaseFn)(void*, void*);
+        typedef int (__fastcall* AtlasReleaseFn)(void* BF2_EDX_PARAM);
         reinterpret_cast<AtlasReleaseFn>(
-            static_cast<void**>(atlas->vptr)[0x08 / sizeof(void*)])(atlas, 0);
+            static_cast<void**>(atlas->vptr)[0x08  / 4])(atlas);
     }
     self->m_name.~string();
 }
 
 #define RD9_SMR_FRONTIER(name, qualified, slotOffset)                               \
-    void __fastcall name(void* self, void*)                                         \
+    void __fastcall name(void* self BF2_EDX_PARAM)                                         \
     {                                                                               \
         RD9_FRONTIER_AT("dice::hfe::geom::StaticMeshRenderer::" qualified,           \
                         self, slotOffset);                                          \
     }
 
 // Primary spine - refcount at +0x28.
-int __fastcall smr_addRef(void* self, void*) { return ++static_cast<StaticMeshRenderer*>(self)->m_refCount; }
-int __fastcall smr_getRc (void* self, void*) { return   static_cast<StaticMeshRenderer*>(self)->m_refCount; }
-int __fastcall smr_release(void* self, void*)
+int __fastcall smr_addRef(void* self BF2_EDX_PARAM) { return ++static_cast<StaticMeshRenderer*>(self)->m_refCount; }
+int __fastcall smr_getRc (void* self BF2_EDX_PARAM) { return   static_cast<StaticMeshRenderer*>(self)->m_refCount; }
+int __fastcall smr_release(void* self BF2_EDX_PARAM)
 {
     StaticMeshRenderer* p = static_cast<StaticMeshRenderer*>(self);
     const int remaining = --p->m_refCount;
@@ -142,22 +142,22 @@ int __fastcall smr_release(void* self, void*)
     return remaining;
 }
 // accepts iid 1 and 820013, returns this.
-void* __fastcall smr_qi(void* self, void*, unsigned int iid)
+void* __fastcall smr_qi(void* self BF2_EDX_PARAM, unsigned int iid)
 {
     if (iid == RD9_IID_IBASE || iid == IID_IStaticMeshRenderer)
         return self;
     return 0;
 }
 // +0x10 nullsub_53 (empty), +0x14 `return 0`.
-void __fastcall smr_null10(void*, void*) { }
-int  __fastcall smr_ret0  (void*, void*) { return 0; }
+void __fastcall smr_null10(void* BF2_EDX_PARAM) { }
+int  __fastcall smr_ret0  (void* BF2_EDX_PARAM) { return 0; }
 // +0x18 setEnabled (byte store at +0x04), +0x1C getEnabled.
-void __fastcall smr_setEnabled(void* self, void*, int v)
+void __fastcall smr_setEnabled(void* self BF2_EDX_PARAM, int v)
 { static_cast<StaticMeshRenderer*>(self)->setEnabled(static_cast<unsigned char>(v)); }
-int  __fastcall smr_getEnabled(void* self, void*)
+int  __fastcall smr_getEnabled(void* self BF2_EDX_PARAM)
 { return static_cast<StaticMeshRenderer*>(self)->getEnabled(); }
 // +0x24 getName - return the address of the embedded name string (this+0x08).
-void* __fastcall smr_getName(void* self, void*) { return &static_cast<StaticMeshRenderer*>(self)->m_name; }
+void* __fastcall smr_getName(void* self BF2_EDX_PARAM) { return &static_cast<StaticMeshRenderer*>(self)->m_name; }
 
 // +0x20 setName (string::operator= at this+8). The argument's type (vc71::string* vs char*) is not
 // pinned and nothing recovered calls it on the singleton, so it is a named frontier rather than a
@@ -170,7 +170,7 @@ RD9_SMR_FRONTIER(smr_setName, "setName (0x10121A10)", 0x20)
 // Releases loaded lightmap-atlas pages on CEUnloadLevel so the next level reloads them.
 // Requires all ten atlas objects; ignores other event categories and ids.
 
-void __fastcall smr_handleEvent(void* self, void*, int category, unsigned int id, void*, void*)
+void __fastcall smr_handleEvent(void* self BF2_EDX_PARAM, int category, unsigned int id, void*, void*)
 {
     if (category != 5 || id != 13)                                     // ECCore / CEUnloadLevel
         return;
@@ -585,9 +585,9 @@ IBase* __fastcall createStaticMeshRenderer(unsigned int iid, IBase* outer)
     StaticMeshRenderer* self = static_cast<StaticMeshRenderer*>(storage);
     constructStaticMeshRenderer(self);
 
-    void* itf = smr_qi(self, 0, iid);
+    void* itf = smr_qi(self, iid);
     if (!itf)
-        smr_release(self, 0);
+        smr_release(self);
     return static_cast<IBase*>(itf);
 }
 

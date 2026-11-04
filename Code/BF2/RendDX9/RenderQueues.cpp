@@ -83,7 +83,7 @@ typedef int (__stdcall* EffectSetFloatArrayFn)(void*, int, const float*, unsigne
 typedef int (__stdcall* EffectSetVectorFn)(void*, int, const float*);
 typedef int (__stdcall* EffectSetTextureFn)(void*, int, IDirect3DBaseTexture9*);
 
-int __fastcall raBindVec4(void* self, void*, void* effect, int handle)
+int __fastcall raBindVec4(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetVectorFn>(table[0x88 / 4])(
@@ -91,7 +91,7 @@ int __fastcall raBindVec4(void* self, void*, void* effect, int handle)
             static_cast<unsigned char*>(self) + 4));
 }
 
-int __fastcall raBindTexture(void* self, void*, void* effect, int handle)
+int __fastcall raBindTexture(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     IDirect3DBaseTexture9* const texture = *reinterpret_cast<IDirect3DBaseTexture9**>(
         static_cast<unsigned char*>(self) + 4);
@@ -100,7 +100,7 @@ int __fastcall raBindTexture(void* self, void*, void* effect, int handle)
         effect, handle, texture);
 }
 
-int __fastcall raBindFloat(void* self, void*, void* effect, int handle)
+int __fastcall raBindFloat(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     const unsigned int value = *reinterpret_cast<const unsigned int*>(
         static_cast<unsigned char*>(self) + 4);
@@ -109,7 +109,7 @@ int __fastcall raBindFloat(void* self, void*, void* effect, int handle)
         effect, handle, value);
 }
 
-int __fastcall raBindVec3(void* self, void*, void* effect, int handle)
+int __fastcall raBindVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetFloatArrayFn>(table[0x80 / 4])(
@@ -117,7 +117,7 @@ int __fastcall raBindVec3(void* self, void*, void* effect, int handle)
             static_cast<unsigned char*>(self) + 4), 3);
 }
 
-int __fastcall raBindVec2(void* self, void*, void* effect, int handle)
+int __fastcall raBindVec2(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     void* const* const table = *static_cast<void* const* const*>(effect);
     return reinterpret_cast<EffectSetFloatArrayFn>(table[0x80 / 4])(
@@ -127,7 +127,7 @@ int __fastcall raBindVec2(void* self, void*, void* effect, int handle)
 
 typedef float* (__fastcall* TransformVec3Fn)(float*, const float*);
 
-int __fastcall raBindTransformedVec3(void* self, void*, void* effect, int handle)
+int __fastcall raBindTransformedVec3(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     const unsigned int* const fields = static_cast<const unsigned int*>(self);
     const float* const source = reinterpret_cast<const float*>(fields[1] + 4);
@@ -139,7 +139,7 @@ int __fastcall raBindTransformedVec3(void* self, void*, void* effect, int handle
         effect, handle, transformed, 3);
 }
 
-int __fastcall raBindInt(void* self, void*, void* effect, int handle)
+int __fastcall raBindInt(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     const unsigned int value = *reinterpret_cast<const unsigned int*>(
         static_cast<unsigned char*>(self) + 4);
@@ -148,7 +148,7 @@ int __fastcall raBindInt(void* self, void*, void* effect, int handle)
         effect, handle, value);
 }
 
-int __fastcall raBindEngineTexture(void* self, void*, void* effect, int handle)
+int __fastcall raBindEngineTexture(void* self BF2_EDX_PARAM, void* effect, int handle)
 {
     EngineTexture* const texture = *reinterpret_cast<EngineTexture**>(
         static_cast<unsigned char*>(self) + 4);
@@ -175,11 +175,11 @@ float* __fastcall raScaleQuarter(float* out, const float* value)
     return out;
 }
 
-void* __fastcall raDeleteVec4Record(void* self, void*, unsigned int flags);
-void* __fastcall raDeleteFloatRecord(void* self, void*, unsigned int flags);
-void* __fastcall raDeleteVec3Record(void* self, void*, unsigned int flags);
-void* __fastcall raDeleteVec2Record(void* self, void*, unsigned int flags);
-void* __fastcall raDeleteIntRecord(void* self, void*, unsigned int flags);
+void* __fastcall raDeleteVec4Record(void* self BF2_EDX_PARAM, unsigned int flags);
+void* __fastcall raDeleteFloatRecord(void* self BF2_EDX_PARAM, unsigned int flags);
+void* __fastcall raDeleteVec3Record(void* self BF2_EDX_PARAM, unsigned int flags);
+void* __fastcall raDeleteVec2Record(void* self BF2_EDX_PARAM, unsigned int flags);
+void* __fastcall raDeleteIntRecord(void* self BF2_EDX_PARAM, unsigned int flags);
 
 // off_101E1480..off_101E14BC.  The raw/smart texture binders have no deleting-destructor slot;
 // the owning RaShaderConstants destructor releases their payloads itself.
@@ -216,27 +216,27 @@ void* deleteRaRecord(void* self, unsigned int flags, void* const* vtable)
     return self;
 }
 
-void* __fastcall raDeleteVec4Record(void* self, void*, unsigned int flags)
+void* __fastcall raDeleteVec4Record(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return deleteRaRecord(self, flags, kRaVec4Vtable);
 }
 
-void* __fastcall raDeleteFloatRecord(void* self, void*, unsigned int flags)
+void* __fastcall raDeleteFloatRecord(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return deleteRaRecord(self, flags, kRaFloatVtable);
 }
 
-void* __fastcall raDeleteVec3Record(void* self, void*, unsigned int flags)
+void* __fastcall raDeleteVec3Record(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return deleteRaRecord(self, flags, kRaVec3Vtable);
 }
 
-void* __fastcall raDeleteVec2Record(void* self, void*, unsigned int flags)
+void* __fastcall raDeleteVec2Record(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return deleteRaRecord(self, flags, kRaVec2Vtable);
 }
 
-void* __fastcall raDeleteIntRecord(void* self, void*, unsigned int flags)
+void* __fastcall raDeleteIntRecord(void* self BF2_EDX_PARAM, unsigned int flags)
 {
     return deleteRaRecord(self, flags, kRaIntVtable);
 }
@@ -284,7 +284,7 @@ void setEngineTextureRecord(RaShaderConstants* constants, unsigned int holderOff
         textureAddRef(texture);
 }
 
-void __fastcall raConstantsOnDeviceLost(void* self, void*)
+void __fastcall raConstantsOnDeviceLost(void* self BF2_EDX_PARAM)
 {
     RaShaderConstants* const constants = static_cast<RaShaderConstants*>(self);
     setTextureRecord(constants, 0x268, 0);
@@ -294,7 +294,7 @@ void __fastcall raConstantsOnDeviceLost(void* self, void*)
     setTextureRecord(constants, 0x288, 0);
 }
 
-void __fastcall raConstantsNullListener(void*, void*)
+void __fastcall raConstantsNullListener(void* BF2_EDX_PARAM)
 {
 }
 
@@ -720,16 +720,16 @@ struct RenderEntryFartherFirst
 // both walks dispatch it.
 inline bool materialApplyStreams(void* material, Ra::RaShader* shader)
 {
-    typedef unsigned char (__fastcall* ApplyStreamsFn)(void*, void*, void*);
+    typedef unsigned char (__fastcall* ApplyStreamsFn)(void* BF2_EDX_PARAM, void*);
     return reinterpret_cast<ApplyStreamsFn>((*static_cast<void***>(material))[1])(
-        material, 0, shader) != 0;
+        material, shader) != 0;
 }
 
 // A queue's own +0x04 (add), by slot, as the first-person walk's fallback dispatches it.
 inline void queueAddThroughTable(void* queue, RenderQueueEntry* entry)
 {
-    typedef void (__fastcall* AddFn)(void*, void*, RenderQueueEntry*);
-    reinterpret_cast<AddFn>((*static_cast<void***>(queue))[1])(queue, 0, entry);
+    typedef void (__fastcall* AddFn)(void* BF2_EDX_PARAM, RenderQueueEntry*);
+    reinterpret_cast<AddFn>((*static_cast<void***>(queue))[1])(queue, entry);
 }
 
 // slot +0x08, sub_1003B1F0 (0xEF B) - flush.  The empty path IS the menu path: disabled, a null
@@ -761,11 +761,11 @@ void RenderQueue::flushWithArg(unsigned char runDraws)
     else if (sortMode == 2u)
         std::sort(first, last, RenderEntryFartherFirst());
 
-    typedef void (__fastcall* WalkFn)(void*, void*);
+    typedef void (__fastcall* WalkFn)(void* BF2_EDX_PARAM);
     if (drawMode != 1u || rendererIsExpansionPack())              // renderer +0xAC
-        reinterpret_cast<WalkFn>(vptr[0x18 / sizeof(void*)])(this, 0);
+        reinterpret_cast<WalkFn>(vptr[0x18  / 4])(this);
     else
-        reinterpret_cast<WalkFn>(vptr[0x14 / sizeof(void*)])(this, 0);
+        reinterpret_cast<WalkFn>(vptr[0x14  / 4])(this);
 
     entriesLast = entriesFirst;                                    // sub_1003BF30(0, 0)
     // sub_10046EF0(this + 0x10) - and closes here.
@@ -935,7 +935,7 @@ done:
 }
 
 
-void __fastcall rq_flushWithArg(void* self, void*, unsigned char runDraws)
+void __fastcall rq_flushWithArg(void* self BF2_EDX_PARAM, unsigned char runDraws)
 {
     static_cast<RenderQueue*>(self)->flushWithArg(runDraws);
 }
@@ -948,7 +948,7 @@ void RenderQueue::flush()
     transparentPass = 0;
 }
 
-void __fastcall rq_flushNoArg(void* self, void*)
+void __fastcall rq_flushNoArg(void* self BF2_EDX_PARAM)
 {
     static_cast<RenderQueue*>(self)->flush();
 }
@@ -993,7 +993,7 @@ void RenderQueue::add(RenderQueueEntry* entry)
     vc71::vectorPushBackIn(entries, sizeof(void*), &entry);
 }
 
-void __fastcall rq_add(void* self, void*, RenderQueueEntry* entry)
+void __fastcall rq_add(void* self BF2_EDX_PARAM, RenderQueueEntry* entry)
 {
     static_cast<RenderQueue*>(self)->add(entry);
 }
@@ -1008,13 +1008,13 @@ void RenderQueue::setSharedString(const vc71::string* value)
     sharedKey = raHashString(*value);
 }
 
-void __fastcall rq_setSharedString(void* self, void*, const vc71::string* str)
+void __fastcall rq_setSharedString(void* self BF2_EDX_PARAM, const vc71::string* str)
 {
     static_cast<RenderQueue*>(self)->setSharedString(str);
 }
 
 #define RD9_RQ_FRONTIER(name, slotOffset, addr)                                     \
-    void __fastcall name(void* self, void*)                                         \
+    void __fastcall name(void* self BF2_EDX_PARAM)                                         \
     {                                                                               \
         RD9_FRONTIER_AT("dice::hfe::dx9rend::RenderQueue::slot_" #slotOffset        \
                         " (" #addr ")", self, slotOffset);                          \
@@ -1022,12 +1022,12 @@ void __fastcall rq_setSharedString(void* self, void*, const vc71::string* str)
 
 RD9_RQ_FRONTIER(rq_slot00, 0x00, 0x1003C410)   // destroy - shutdown only
 
-void __fastcall rq_drawWalkNear(void* self, void*)
+void __fastcall rq_drawWalkNear(void* self BF2_EDX_PARAM)
 {
     static_cast<RenderQueue*>(self)->drawWalkNear();
 }
 
-void __fastcall rq_drawWalkDefault(void* self, void*)
+void __fastcall rq_drawWalkDefault(void* self BF2_EDX_PARAM)
 {
     static_cast<RenderQueue*>(self)->drawWalkDefault();
 }
@@ -1087,7 +1087,7 @@ static_assert(offsetof(RenderQueueTable, worldCollections) == 0x94,
               "sub_1003AD80's first queue collection is at +0x94");
 static_assert(offsetof(RenderQueueTable, byteB4) == 0xB4, "the trailing byte at +0xB4");
 
-void __fastcall rqt_destroy(void* self, void*, int alsoFree)
+void __fastcall rqt_destroy(void* self BF2_EDX_PARAM, int alsoFree)
 {
     RD9_FRONTIER_AT("dice::hfe::dx9rend::RenderQueueTable - destroy (sub_10041A50's vtbl slot; "
                     "shutdown only)", self, alsoFree);

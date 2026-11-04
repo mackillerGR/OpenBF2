@@ -1,3 +1,6 @@
+#if !defined(BF2_EDX_PARAM)
+#define BF2_EDX_PARAM , void*
+#endif
 // [CHOSEN, not recovered] Compile-time image contract; force-include this header in engine TUs.
 // Define dedicated explicitly as 1 for the dedicated server or 0 for the client and client DLLs.
 // Client-only names belong under #if !dedicated; runtime isDedicated() branches remain runtime
