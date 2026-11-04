@@ -1206,8 +1206,7 @@ StaticMesh::~StaticMesh()
     //    template.
     if (m_template)
     {
-        vc71::set_layout* const instances = reinterpret_cast<vc71::set_layout*>(
-            static_cast<unsigned char*>(m_template) + 0xEC);
+        vc71::set_layout* const instances = &static_cast<StaticMeshTemplate*>(m_template)->m_instances;
         vc71::setEraseValue(*instances, this);
     }
 
@@ -1343,7 +1342,14 @@ void StaticMesh::setGeometryTransformation(const Mat4* transform)
 
         void* const objectTemplate = m_template;
         void** const tvtbl = *reinterpret_cast<void***>(objectTemplate);
+#if UINTPTR_MAX > 0xFFFFFFFFu
+        // [CHOSEN, not recovered] [TEMP] The world-space occluder records below keep 32-bit
+        // layouts, so 64-bit hosts build none and lose occlusion culling, not any drawing.
+        // [RETIRE-WHEN: occluders-typed-layout] Remove once those records are typed.
+        const int partCount = 0;
+#else
         const int partCount = static_cast<StaticMeshTemplate*>(objectTemplate)->getOccluderGroupCount();
+#endif
 
         // reached AS sixteen RAW floats, exactly as the shipped body reaches it - every
         // access below is one of its documented byte offsets, not a named Mat4 member.

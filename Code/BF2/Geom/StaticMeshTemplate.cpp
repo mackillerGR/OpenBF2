@@ -1259,7 +1259,11 @@ bool StaticMeshTemplate::load()
         static_cast<::renddx9abi::HostFileAccess>(0), 0);
     if (occ)
     {
+        #if UINTPTR_MAX <= 0xFFFFFFFFu   // [TEMP] see StaticMesh::setGeometryTransformation
+
         loadOccluders(occ);
+
+        #endif
         occ->release();                                             // +0x08
     }
 
