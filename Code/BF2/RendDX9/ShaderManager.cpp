@@ -710,7 +710,7 @@ const char* ShaderManagerDefines::at(unsigned int i) const
 // Returns the embedded ID3DXInclude interface that resolves files through mounted archives.
 void* shaderManagerInclude(void* shaderManager)
 {
-    return shaderManager ? static_cast<unsigned char*>(shaderManager) + 4 : 0;
+    return shaderManager ? static_cast<void*>(&static_cast<ShaderManager*>(shaderManager)->vptr2) : 0;
 }
 
 // +132 == +0x84, the D3DXSHADER_* flag word handed to D3DXCreateEffect.

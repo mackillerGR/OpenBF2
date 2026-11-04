@@ -1888,6 +1888,7 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     add_library(bf2_renddx9_portable SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/PortShim/D3dxPortable.cpp"
     "${BF2_ROOT}/PortShim/D3dxTextures.cpp"
+    "${BF2_ROOT}/PortShim/D3dxEffectPortable.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/Packer.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlas.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlasConfiguration.cpp"
@@ -2026,8 +2027,8 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
         DEDICATED=0 _ITERATOR_DEBUG_LEVEL=0 _LINUX DXVK_NATIVE)
     target_include_directories(bf2_renddx9_portable PRIVATE
         "${BF2_DXVK_ROOT}/include/native/directx" "${BF2_DXVK_ROOT}/include/native/windows"
-        "${BF2_ROOT}" "${BF2_ROOT}/PortShim" "${BF2_SDL3_INCLUDE}")
-    target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" dl pthread)
+        "${BF2_ROOT}" "${BF2_ROOT}/PortShim" "${BF2_SDL3_INCLUDE}" "${BF2_VKD3D_INCLUDE}")
+    target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" "${BF2_VKD3D_SHADER}" dl pthread)
     target_compile_options(bf2_renddx9_portable PRIVATE -std=gnu++14 -fms-extensions -fpermissive -w
         -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks
         "-include${BF2_ROOT}/Core/BuildConfig.h" "-include${BF2_ROOT}/Core/PlatformCompat.h"
