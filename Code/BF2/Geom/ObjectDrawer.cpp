@@ -68,7 +68,6 @@ bool __fastcall od_slot38(void* self BF2_EDX_PARAM, void* geometry);
 char __fastcall od_event00(void* self BF2_EDX_PARAM, int category, int id, void* data, void* arg4)
 {
     (void)category;
-    (void)arg4;
 
     if (id != 1)
         return static_cast<char>(id - 1);
@@ -77,8 +76,10 @@ char __fastcall od_event00(void* self BF2_EDX_PARAM, int category, int id, void*
     ObjectDrawer* const drawer =
         reinterpret_cast<ObjectDrawer*>(static_cast<unsigned char*>(self) - sizeof(void*));
 
-    const unsigned int* const probe =
-        *reinterpret_cast<unsigned int* const*>(static_cast<unsigned char*>(data) + 0x2C);
+    // Retail reads the notification node's payload at +0x2C; the dispatcher passes that same
+    // payload as arg4, which holds on every pointer width.
+    (void)data;
+    const unsigned int* const probe = static_cast<const unsigned int*>(arg4);
 
     const char result = (*probe == 4u) ? 1 : 0;
     drawer->m_byte0C = static_cast<unsigned char>(result);

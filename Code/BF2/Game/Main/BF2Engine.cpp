@@ -992,6 +992,7 @@ bool BF2Engine::parseParameters(const std::string& commandLine)
     if (getenv("BF2_PORT_DIRECT_START"))
     {
         settings->boolSet("GSDeveloper", true);
+        settings->boolSet("GSMenu", false);
         s_activateMenuOnFrame1 = false;
     }
 #endif

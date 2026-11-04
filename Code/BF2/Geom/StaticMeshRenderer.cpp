@@ -176,7 +176,7 @@ void __fastcall smr_handleEvent(void* self BF2_EDX_PARAM, int category, unsigned
         return;
 
     StaticMeshRenderer* const renderer = reinterpret_cast<StaticMeshRenderer*>(
-        static_cast<unsigned char*>(self) - 0x24);
+        static_cast<unsigned char*>(self) - offsetof(StaticMeshRenderer, m_ehVptr));
     for (unsigned int i = 0; i < 10u; ++i)
     {
         dx9rend::TextureAtlas* const atlas = renderer->m_lightmapAtlases[i];   // [esi]
