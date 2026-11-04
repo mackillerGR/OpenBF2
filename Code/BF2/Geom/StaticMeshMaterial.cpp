@@ -1771,7 +1771,7 @@ void StaticMeshTemplate::buildVertexBuffers()
     const unsigned int tangentStrideRaw = 12u * tangentCount;
     m_hasTwoTangentSets = static_cast<unsigned char>(tangentCount == 2);
 
-    const unsigned int stream0Stride = compress ? sizeof(vc71::vector_layout) : 32u;
+    const unsigned int stream0Stride = compress ? 16u : 32u;
 
     // create the buffers
     {
@@ -1785,7 +1785,7 @@ void StaticMeshTemplate::buildVertexBuffers()
     // three is always created, the first three only when the template's used-flag set matches its
     // whole-flag set under that bit.
     {
-        static const unsigned int kUvGateMasks[3] = { 4u, 8u, sizeof(vc71::vector_layout) };
+        static const unsigned int kUvGateMasks[3] = { 4u, 8u, 16u };
         for (unsigned int i = 0; i < texcoordCount - 1u; ++i)
         {
             unsigned int gated = texcoordCount - 2u;
