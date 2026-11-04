@@ -985,6 +985,16 @@ bool BF2Engine::parseParameters(const std::string& commandLine)
 
     // The settings writes, in the shipped order. Slots: intSet +0x14, stringSet +0x44,
     // boolGet +0x50, boolSet +0x54 (Core/SettingsRepostitory.h).
+#if !DEDICATED && !defined(_WIN32)
+    // [CHOSEN, not recovered] The Flash menu needs SwiffPlayer.dll, which has no port. The Android
+    // launcher chooses the map itself, so this starts the game without raising that menu.
+    // [RETIRE-WHEN: portable-swiff-player] Remove when a menu player exists on this host.
+    if (getenv("BF2_PORT_DIRECT_START"))
+    {
+        settings->boolSet("GSDeveloper", true);
+        s_activateMenuOnFrame1 = false;
+    }
+#endif
     settings->boolSet("GSIsServer", isServer);
     // Reads back what it just wrote, through THE repository, with `true` as the default (var_236 is
     // set to 1 at 0x8133550 and its address passed as the default). Kept rather than folded away:
