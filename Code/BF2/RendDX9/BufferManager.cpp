@@ -209,7 +209,7 @@ void retainInPointerSet(BufferManager* manager, unsigned int listIndex, void* ob
     // PE sub_10013600 performs std::set::insert and the factory then takes the manager reference.
     // The shared shim preserves the exact node/header ABI and ordering; only red-black balancing
     // remains the repository-wide chosen policy. [CHOSEN, not recovered] [RETIRE-WHEN: RW-74]
-    if (!pointerSet(manager, listIndex).insert(reinterpret_cast<unsigned int>(object)))
+    if (!pointerSet(manager, listIndex).insert(reinterpret_cast<uintptr_t>(object)))
     {
         ::renddx9abi::logf("BufferManager tracking-set insertion failed for 0x%08X",
                            ::renddx9abi::addr(object));
@@ -908,7 +908,7 @@ vc71::set_node* findLinear(vc71::set_layout& set, unsigned int value)
 void bufferManagerRemoveVertexBuffer(void* wrapper)
 {
     BufferManager* const manager = static_cast<BufferManager*>(g_bufferManager);
-    const unsigned int value = reinterpret_cast<unsigned int>(wrapper);
+    const uintptr_t value = reinterpret_cast<uintptr_t>(wrapper);
 
     vc71::set_layout& defaultPool = pointerSet(manager, 1);      // +0x18, D3DPOOL_DEFAULT buffers
     vc71::set_node* node = findLinear(defaultPool, value);
@@ -933,7 +933,7 @@ void bufferManagerRemoveVertexBuffer(void* wrapper)
 void bufferManagerRemoveIndexBuffer(void* wrapper)
 {
     BufferManager* const manager = static_cast<BufferManager*>(g_bufferManager);
-    const unsigned int value = reinterpret_cast<unsigned int>(wrapper);
+    const uintptr_t value = reinterpret_cast<uintptr_t>(wrapper);
 
     vc71::set_layout& defaultPool = pointerSet(manager, 3);      // +0x30, D3DPOOL_DEFAULT index buffers
     vc71::set_node* node = findLinear(defaultPool, value);

@@ -240,7 +240,7 @@ public:
         {
             at<unsigned char>(7)=value;
             psmReclassification(reinterpret_cast<ParticleSystemManager*>(g_ParticleSystemManager))
-                .insert(reinterpret_cast<unsigned int>(this));
+                .insert(reinterpret_cast<uintptr_t>(this));
         }
     }
     // Proven retail shared constant/null bodies: 1017A510 / 100E13B0 / 100ED3B0 / 10082D40.

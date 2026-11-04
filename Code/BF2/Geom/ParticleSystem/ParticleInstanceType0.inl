@@ -196,7 +196,7 @@ public:
     void reserved42(bool value) override
     {
         if (at<unsigned char>(4) && value!=static_cast<bool>(at<unsigned char>(6)))
-        { at<unsigned char>(7)=value; psmReclassification(reinterpret_cast<ParticleSystemManager*>(g_ParticleSystemManager)).insert(reinterpret_cast<unsigned int>(this)); }
+        { at<unsigned char>(7)=value; psmReclassification(reinterpret_cast<ParticleSystemManager*>(g_ParticleSystemManager)).insert(reinterpret_cast<uintptr_t>(this)); }
     }
     float getGasCloudRadius() const override { return at<float>(0x228); }
     void setPlayer(void* value) override { at<void*>(0x230)=value; }

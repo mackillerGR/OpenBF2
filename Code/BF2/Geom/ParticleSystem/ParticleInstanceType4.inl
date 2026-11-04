@@ -202,7 +202,7 @@ public:
     void reserved42(bool value) override
     {
         if (at<unsigned char>(4) && value!=static_cast<bool>(at<unsigned char>(6)))
-        { at<unsigned char>(7)=value; psmReclassification(reinterpret_cast<ParticleSystemManager*>(g_ParticleSystemManager)).insert(reinterpret_cast<unsigned int>(this)); }
+        { at<unsigned char>(7)=value; psmReclassification(reinterpret_cast<ParticleSystemManager*>(g_ParticleSystemManager)).insert(reinterpret_cast<uintptr_t>(this)); }
     }
     // Proven retail shared constant/null bodies: 1017A510/100E13B0/100ED3B0/10082D40.
     float getGasCloudRadius() const override { return 1.0f; }

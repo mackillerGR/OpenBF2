@@ -889,9 +889,9 @@ inline vc71::set_layout& lmActiveLights(void* self)
     return lmField<vc71::set_layout>(self, 0x1C4);
 }
 
-inline unsigned int lmLightKey(world::LightSource* light)
+inline uintptr_t lmLightKey(world::LightSource* light)
 {
-    return reinterpret_cast<unsigned int>(light);
+    return reinterpret_cast<uintptr_t>(light);
 }
 
 // Calls into BF2.exe use the recovered source interfaces themselves.  HostString is VC7.1's
@@ -2877,7 +2877,7 @@ bool fitProjectionToCandidate(ShadowProjectionLayout& projection,
 void attachShadowCandidate(XpTemporaryRecord& record, world::IObject* candidate)
 {
     (void)fitProjectionToCandidate(record.projection, candidate);
-    record.record.embeddedTree.insert(reinterpret_cast<unsigned int>(candidate));
+    record.record.embeddedTree.insert(reinterpret_cast<uintptr_t>(candidate));
 }
 
 struct ShadowBuildContext
@@ -3762,8 +3762,8 @@ void collectDirectionalCasterBounds(void* manager, const Mat4& inverseView,
     std::vector<world::IObject*> ordered(first, first + count);
     std::sort(ordered.begin(), ordered.end(),
         [](world::IObject* lhs, world::IObject* rhs) {
-            return reinterpret_cast<unsigned int>(lhs)
-                 < reinterpret_cast<unsigned int>(rhs);
+            return reinterpret_cast<uintptr_t>(lhs)
+                 < reinterpret_cast<uintptr_t>(rhs);
         });
     ordered.erase(std::unique(ordered.begin(), ordered.end()), ordered.end());
 

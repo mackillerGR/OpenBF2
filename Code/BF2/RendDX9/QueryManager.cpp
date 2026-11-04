@@ -252,7 +252,7 @@ Query* QueryManager::createQuery(int type)
     if (query && m_supportedTypes.find(static_cast<unsigned int>(type)) != m_supportedTypes.end())
         query->create(type, m_occlusionOk != 0);
 
-    m_liveQueries.insert(reinterpret_cast<unsigned int>(query));
+    m_liveQueries.insert(reinterpret_cast<uintptr_t>(query));
     return query;
 }
 

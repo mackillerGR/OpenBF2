@@ -420,7 +420,7 @@ void setClear(vc71::set_layout& s)
 // unchanged.
 bool setInsert(vc71::set_layout& s, void* value)
 {
-    return s.insert(reinterpret_cast<unsigned int>(value));
+    return s.insert(reinterpret_cast<uintptr_t>(value));
 }
 
 

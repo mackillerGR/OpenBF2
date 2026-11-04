@@ -180,7 +180,7 @@ void* BundledMeshTemplate::createInstance()
 {
     void* storage=::renddx9abi::engineAlloc(0x2F8);
     void* instance=storage?bundledMeshConstruct(storage,this):0;
-    if(m_loaded || (m_instances.insert(reinterpret_cast<unsigned int>(instance)),m_loaded)
+    if(m_loaded || (m_instances.insert(reinterpret_cast<uintptr_t>(instance)),m_loaded)
        || dx9rend::resourceManagerIsReady() || load())
     { ++m_liveInstanceCount; m_keepData=1; return instance; }
     vc71::setEraseValue(m_instances,instance);

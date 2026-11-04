@@ -282,7 +282,7 @@ struct set_layout
 
     // [CHOSEN, not recovered] unbalanced set insertion with duplicate rejection.
     // Maintains root/extreme links and nil flags. [RETIRE-WHEN: RW-74] Replace with observed red-black balancing.
-    bool insert(unsigned int key)
+    bool insert(uintptr_t key)
     {
         if (!head)
             return false;
@@ -754,7 +754,7 @@ inline void setEraseValue(set_layout& s, void* value)
     if (!head)
         return;
 
-    const unsigned int key = reinterpret_cast<unsigned int>(value);
+    const uintptr_t key = reinterpret_cast<uintptr_t>(value);
 
     set_node* node = head->parent;
     while (node && !node->isNil && node->key != key)

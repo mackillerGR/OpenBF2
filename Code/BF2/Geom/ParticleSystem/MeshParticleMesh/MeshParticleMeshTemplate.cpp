@@ -402,7 +402,7 @@ void* MeshParticleMeshTemplate::createInstance()
         return instance;
     }
 
-    m_instances.insert(reinterpret_cast<unsigned int>(instance));
+    m_instances.insert(reinterpret_cast<uintptr_t>(instance));
     if (m_loaded
         || dx9rend::resourceManagerIsReady()                         // sub_1000D950(ds:1023B988)
         || load())                                                   // [edx+2Ch]

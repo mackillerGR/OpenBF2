@@ -64,7 +64,7 @@ void instanceSetInsert(vc71::set_layout& set, void* instance)
 {
     // The shipped insert returns pair<iterator,bool> through a hidden slot; every caller in the
     // image discards it, and so does this one.
-    static_cast<void>(set.insert(reinterpret_cast<unsigned int>(instance)));
+    static_cast<void>(set.insert(reinterpret_cast<uintptr_t>(instance)));
 }
 
 } // namespace
