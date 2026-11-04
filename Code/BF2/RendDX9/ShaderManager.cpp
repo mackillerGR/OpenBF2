@@ -873,7 +873,7 @@ void shaderManagerSetCurrentEffect(void* effect)
     if (sm->currentEffect98 && effect)
     {
         const vc71::string* prevName = reinterpret_cast<const vc71::string*>(
-            static_cast<unsigned char*>(sm->currentEffect98) + 0x0C);
+            static_cast<unsigned char*>(sm->currentEffect98) + 3 * sizeof(void*));
         ::renddx9abi::logf("ShaderManager.cpp:110 Previous effect: %s not ended.",
                            prevName->c_str());
     }
@@ -904,7 +904,7 @@ void shaderManagerCommitCurrentEffects()
     if (sm->currentEffect98)
     {
         void* fx = *reinterpret_cast<void**>(
-            static_cast<unsigned char*>(sm->currentEffect98) + 0x08);
+            static_cast<unsigned char*>(sm->currentEffect98) + 2 * sizeof(void*));
         if (fx)
             reinterpret_cast<CommitFn>((*static_cast<void***>(fx))[0x104 / 4])(fx);
     }

@@ -362,13 +362,13 @@ void mat4ScaleColumns3x3(Mat4& m, const Vec3& s)
 // file-local probe TerrainDraw.cpp and FSQuadDrawer.cpp carry.
 bool isMultisampleActive()
 {
-    unsigned char* const base = static_cast<unsigned char*>(dx9rend::g_rendererBase);
-    if (base[0x514])
+    dx9rend::RendDX9Base* const base = static_cast<dx9rend::RendDX9Base*>(dx9rend::g_rendererBase);
+    if (base->forceMultisample)
         return true;
-    if (base[0x515])
+    if (base->disableMultisample)
         return false;
-    unsigned int* const first = *reinterpret_cast<unsigned int**>(base + 0xC0);
-    unsigned int* const last  = *reinterpret_cast<unsigned int**>(base + 0xC4);
+    unsigned int* const first = base->multiSampleFirst;
+    unsigned int* const last  = base->multiSampleLast;
     return first && ((last - first) >> 1) && *reinterpret_cast<int*>(first) > 0;
 }
 

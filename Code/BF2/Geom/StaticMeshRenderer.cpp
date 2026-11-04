@@ -353,9 +353,7 @@ bool staticMeshRendererTryLoadLightmapTexture(StaticMeshRenderer* self,
         if (!dx9rend::textureAtlasLoadTAI(atlas, taiPath))              // TextureAtlas_loadTAI
         {
             self->m_flags60[4] = 0;
-            const unsigned char* const base =
-                static_cast<const unsigned char*>(dx9rend::g_rendererBase);
-            if (!base[0x102])
+            if (!*dx9rend::rendererRetailBytes(0x102))
             {
                 ::renddx9abi::logf("StaticMeshRenderer.cpp:355 No lightmapatlas found, no "
                                    "lightmaps will be used.");

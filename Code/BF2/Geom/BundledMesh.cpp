@@ -395,7 +395,7 @@ void BundledMesh::drawShadowMap(void* light,void*,void*,void*,void*,void*)
         combined.fullMult(field<Mat4>(light,0x238),field<Mat4>(light,0x278));
         dx9rend::effectGetShaderParameterBorrowedTyped(g_bundledShadowEffect,vc71::string("vpLightMat"))->setValue(&combined,0);
         dx9rend::effectGetShaderParameterBorrowedTyped(g_bundledShadowEffect,vc71::string("vpLightTrapezMat"))->setValue(&combined,0);
-        void* d3dx=field<void*>(g_bundledShadowEffect,8);
+        void* d3dx=field<void*>(g_bundledShadowEffect,2*sizeof(void*));
         typedef void(__stdcall* Commit)(void*);
         reinterpret_cast<Commit>((*static_cast<void***>(d3dx))[0x104/4])(d3dx);
     }

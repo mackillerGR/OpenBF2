@@ -6,6 +6,9 @@
 // See Code/BF2/RendDX9/BF2Render.cpp for the BF2_IMAGE_RENDDX9 guard and why it is here.
 #ifdef BF2_IMAGE_RENDDX9
 
+#include <unordered_map>
+#include <vector>
+#include <cstdint>
 #include "../../RendDX9Abi/HfeAbi.h"
 #include "../../RendDX9Abi/ModuleCommon.h"
 #include "../../RendDX9Abi/BfMemory.h"
@@ -182,6 +185,32 @@ inline StateManager* sm() { return static_cast<StateManager*>(g_stateManager); }
 // The block vtable slot bodies.
 
 
+// The texture cells are retail dwords. [CHOSEN, not recovered] Wider hosts keep a stable 32-bit
+// handle per texture address in them; the retail build stores the pointer itself.
+#if UINTPTR_MAX > 0xFFFFFFFFu
+std::vector<void*>& textureHandleTable()
+{
+    static std::vector<void*> table(1, nullptr);
+    return table;
+}
+unsigned int textureWord(void* texture)
+{
+    if (!texture) return 0;
+    static std::unordered_map<void*, unsigned int> handles;
+    const auto found = handles.find(texture);
+    if (found != handles.end()) return found->second;
+    std::vector<void*>& table = textureHandleTable();
+    const unsigned int handle = static_cast<unsigned int>(table.size());
+    table.push_back(texture);
+    handles[texture] = handle;
+    return handle;
+}
+inline void* wordTexture(unsigned int word) { return textureHandleTable()[word]; }
+#else
+inline unsigned int textureWord(void* texture) { return reinterpret_cast<unsigned int>(texture); }
+inline void* wordTexture(unsigned int word) { return reinterpret_cast<void*>(word); }
+#endif
+
 // Shared copy, 0x10027350 (comdat-folded into every non-texture vtable): *dst = *src.
 void __fastcall blockCopyPlain(void* BF2_EDX_PARAM, unsigned int* dst, unsigned int* src)
 {
@@ -195,10 +224,10 @@ void __fastcall blockCopyPlain(void* BF2_EDX_PARAM, unsigned int* dst, unsigned 
 void __fastcall blockCopyTextureRef(void* BF2_EDX_PARAM, unsigned int* dst, unsigned int* src)
 {
     if (*dst)
-        reinterpret_cast<IUnknown*>(*dst)->Release();
+        static_cast<IUnknown*>(wordTexture(*dst))->Release();
     *dst = *src;
     if (*src)
-        reinterpret_cast<IUnknown*>(*src)->AddRef();
+        static_cast<IUnknown*>(wordTexture(*src))->AddRef();
 }
 
 // Applies render state with vendor-specific transparency AA codes.
@@ -239,7 +268,7 @@ void __fastcall rsIssue(void* self BF2_EDX_PARAM, unsigned int state, unsigned i
 // See smSetTexture below - D3DX calls it with the raw pointer it got from FXParameter's unwrap.
 void __fastcall texIssue(void* BF2_EDX_PARAM, unsigned int stage, unsigned int value)
 {
-    rendererDevice()->SetTexture(stage, reinterpret_cast<IDirect3DBaseTexture9*>(value));
+    rendererDevice()->SetTexture(stage, static_cast<IDirect3DBaseTexture9*>(wordTexture(value)));
 }
 
 // Sampler issue, the stage rides in the block's own tail dword.
@@ -660,7 +689,7 @@ int __stdcall smSetRenderState(StateManager* self, unsigned int state, unsigned 
 // AddRef/Releases D3D objects here - their IUnknown slots 1/2 line up with the wrapper convention.
 int __stdcall smSetTexture(StateManager* self, unsigned int stage, void* texture)
 {
-    blockSet(&self->textures, stage, reinterpret_cast<unsigned int>(texture));
+    blockSet(&self->textures, stage, textureWord(texture));
     return 0;
 }
 
@@ -796,10 +825,9 @@ int __stdcall smSetVertexDeclaration(StateManager* self, void* decl)
 // higher indices overlap the dirty bytes.
 int __stdcall smSetRenderTarget(StateManager* self, unsigned int index, IDirect3DSurface9* surface)
 {
-    IDirect3DSurface9** value =
-        reinterpret_cast<IDirect3DSurface9**>(reinterpret_cast<unsigned char*>(self)
-                                              + 0x1E90 + 4u * index);
-    unsigned char* dirtyByte = reinterpret_cast<unsigned char*>(self) + 0x1E94 + index;
+    (void)index;                     // the shipped body's nonzero indices overlap the dirty bytes
+    IDirect3DSurface9** value = &self->renderTarget;
+    unsigned char* dirtyByte = &self->renderTargetDirty;
     if (*value != surface)
     {
         if (*value)
@@ -868,16 +896,16 @@ void flushRenderTargets(StateManager* self)
                     continue;
                 if ((cell.flags & 2u) != 0 && cell.f2Wanted)
                 {
-                    if (topSurfaceOf(reinterpret_cast<void*>(cell.f2Wanted))
+                    if (topSurfaceOf(wordTexture(cell.f2Wanted))
                         == self->renderTarget)
                         cell.f2Wanted = 0;
                 }
                 if (cell.f0Device)
                 {
-                    if (topSurfaceOf(reinterpret_cast<void*>(cell.f0Device))
+                    if (topSurfaceOf(wordTexture(cell.f0Device))
                         == self->renderTarget)
                     {
-                        reinterpret_cast<IUnknown*>(cell.f0Device)->Release();
+                        static_cast<IUnknown*>(wordTexture(cell.f0Device))->Release();
                         cell.f0Device = 0;
                         self->device->SetTexture(stage, 0);
                     }
@@ -990,11 +1018,11 @@ void dropTextureBlockRefs(TextureBlock* block)
     for (unsigned int stage = 0; stage < 16; ++stage)
     {
         StateCell& cell = block->cells[stage];
-        if (cell.f0Device) reinterpret_cast<IUnknown*>(cell.f0Device)->Release();
+        if (cell.f0Device) static_cast<IUnknown*>(wordTexture(cell.f0Device))->Release();
         cell.f0Device = 0;
-        if (cell.f1Base) reinterpret_cast<IUnknown*>(cell.f1Base)->Release();
+        if (cell.f1Base) static_cast<IUnknown*>(wordTexture(cell.f1Base))->Release();
         cell.f1Base = 0;
-        if (cell.f2Wanted) reinterpret_cast<IUnknown*>(cell.f2Wanted)->Release();
+        if (cell.f2Wanted) static_cast<IUnknown*>(wordTexture(cell.f2Wanted))->Release();
         cell.f2Wanted = 0;
     }
 }

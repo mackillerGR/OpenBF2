@@ -614,7 +614,7 @@ void raPushName(vc71::vector_layout& v, const vc71::string& name)
 void raPushDescriptor(vc71::vector_layout& v, const RaVertexElementDesc* desc)
 {
     const void* value = desc;
-    raRegistryPush(v, &value, 4, &raCopyPointer);
+    raRegistryPush(v, &value, sizeof(void*), &raCopyPointer);
 }
 
 
@@ -1851,7 +1851,7 @@ RaShader* findOrCreateShader(RaShaderTable* table, const vc71::string& name, boo
 
     // Queue creation is not null-checked before setting its flag.
     void* const queue = renderQueueCreateNamed(lowered);
-    *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(queue) + 0x08) = 1u;
+    *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(queue) + sizeof(void*) + 4) = 1u;
 
     // sub_10075110 against "pointlight", then push_back into ONE of the two collections.
     {
@@ -1860,7 +1860,7 @@ RaShader* findOrCreateShader(RaShaderTable* table, const vc71::string& name, boo
             ? table->pointLightQueues      // +0xA4
             : table->worldQueues;          // +0x94
         const void* value = queue;
-        raRegistryPush(collection, &value, 4, &raCopyPointer);
+        raRegistryPush(collection, &value, sizeof(void*), &raCopyPointer);
     }
 
     void* const storage = ::renddx9abi::engineAlloc(sizeof(RaShader));   // sub_1005F320(0x178)
@@ -1881,8 +1881,7 @@ RaShader* findOrCreateShader(RaShaderTable* table, const vc71::string& name, boo
     // lookup of an existing shader instead tests that shader's built flag.
     if (!readBoolSetting("GSDeferredShaderPermutation", false))
     {
-        const unsigned char* const base = static_cast<const unsigned char*>(g_rendererBase);
-        if (base && base[0x102] == 0)
+        if (g_rendererBase && *rendererRetailBytes(0x102) == 0)
         {
             if (shader)
                 shader->slot04();

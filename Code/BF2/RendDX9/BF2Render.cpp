@@ -1320,8 +1320,7 @@ bool Renderer::initialize()
     // [UNRESOLVED] Base flag +0x102 enables the following branch.
     // [FRONTIER] Its handler sub_10042150 remains unavailable.
     {
-        const unsigned char* base = reinterpret_cast<const unsigned char*>(g_rendererBase);
-        if (base && base[0x102])
+        if (g_rendererBase && *rendererRetailBytes(0x102))
         {
             RD9_FRONTIER("dice::hfe::dx9rend::Renderer::initialize step14 "
                          "(the flag at base+0x102 is set; sub_10042150 is unwritten)", 0x1C);
@@ -2611,10 +2610,9 @@ IRenderView* rendererGetHemiSecondaryView()
 void rendererInstallHemiView(IRenderView* view)
 {
     // The object pass forwards the new view to ObjectDrawer first.
-    unsigned char* const raw = static_cast<unsigned char*>(g_rendererBase);
-    if (raw[1693])
-        objectDrawerSetRenderView(*reinterpret_cast<void**>(raw + 1472), view);
     Renderer* const renderer = static_cast<Renderer*>(g_rendererBase);
+    if (*rendererRetailBytes(1693))
+        objectDrawerSetRenderView(renderer->m_objectDrawer, view);
     renderer->setRenderView(view);
     renderer->setRenderViewDup(view);
 }
@@ -2630,15 +2628,14 @@ void rendererRestoreHemiViews(IRenderView* primary, IRenderView* secondary)
 
 void rendererSetHemiTarget(EngineTexture* texture)
 {
-    unsigned char* const raw = static_cast<unsigned char*>(g_rendererBase);
-    IDirect3DSurface9*& fallback = *reinterpret_cast<IDirect3DSurface9**>(raw + 0x0F4);
+    IDirect3DSurface9*& fallback = *reinterpret_cast<IDirect3DSurface9**>(rendererRetailBytes(0x0F4));
     fallback = texture ? textureGetLevelSurface(texture, 0, 0x7FFFFFFFu) : 0;
 
     // sub_10005920(0, 0, 0, 0x7fffffff): with a null texture argument the renderer takes +0xF4,
     // AddRefs it around StateManager +0x60, then releases that temporary reference.
     IDirect3DSurface9* selected = fallback;
     if (!selected)
-        selected = *reinterpret_cast<IDirect3DSurface9**>(raw + 0x76C);
+        selected = *reinterpret_cast<IDirect3DSurface9**>(rendererRetailBytes(0x76C));
     if (selected)
         selected->AddRef();
     stateManagerSetRenderTarget(0, selected);
@@ -2885,13 +2882,13 @@ void rendererSetDrawHud(bool on)
 
 void rendererCaptureHemiState(HemiRenderState& state)
 {
-    unsigned char* const renderer = static_cast<unsigned char*>(g_rendererBase);
+    RetailView<unsigned char> renderer;
     state.bytes[40] = renderer[1695];
     postProductionGetHemiState(reinterpret_cast<float*>(state.bytes + 24));
     *reinterpret_cast<unsigned int*>(state.bytes + 20) =
-        *reinterpret_cast<unsigned int*>(renderer + 1728);
+        *reinterpret_cast<unsigned int*>(rendererRetailBytes(1728));
     *reinterpret_cast<unsigned int*>(state.bytes + 16) =
-        *reinterpret_cast<unsigned int*>(renderer + 2008);
+        *reinterpret_cast<unsigned int*>(rendererRetailBytes(2008));
     state.bytes[0] = renderer[1717];
     state.bytes[1] = renderer[1693];
     state.bytes[2] = renderer[1697];
@@ -2903,18 +2900,18 @@ void rendererCaptureHemiState(HemiRenderState& state)
     state.bytes[8] = renderer[1704];
     state.bytes[9] = renderer[1702];
     state.bytes[10] = renderer[1713];
-    state.bytes[11] = *reinterpret_cast<unsigned int*>(renderer + 1708) != 0 ? 1u : 0u;
+    state.bytes[11] = *reinterpret_cast<unsigned int*>(rendererRetailBytes(1708)) != 0 ? 1u : 0u;
     state.bytes[15] = renderer[1716];
     // bytes 12..14 and 41..43 are intentionally left untouched by the retail helper.
 }
 
 void rendererApplyHemiState()
 {
-    unsigned char* const renderer = static_cast<unsigned char*>(g_rendererBase);
+    RetailView<unsigned char> renderer;
     renderer[1695] = 0;
     const float postState[4] = { 2000.0f, 2000.0f, 0.0f, 0.0f };
     postProductionSetHemiState(postState);
-    *reinterpret_cast<unsigned int*>(renderer + 1728) = 1000u;
+    *reinterpret_cast<unsigned int*>(rendererRetailBytes(1728)) = 1000u;
     rendererSetStaticMeshLod(0);
     renderer[1717] = 0;
     renderer[1693] = 1;
@@ -2932,16 +2929,16 @@ void rendererApplyHemiState()
     renderer[1704] = 0;
     renderer[1705] = 1;
     renderer[1713] = 0;
-    *reinterpret_cast<unsigned int*>(renderer + 1708) = 0;
+    *reinterpret_cast<unsigned int*>(rendererRetailBytes(1708)) = 0;
     renderer[1716] = 0;
 }
 
 void rendererRestoreHemiState(const HemiRenderState& state)
 {
-    unsigned char* const renderer = static_cast<unsigned char*>(g_rendererBase);
+    RetailView<unsigned char> renderer;
     renderer[1695] = state.bytes[40];
     postProductionSetHemiState(reinterpret_cast<const float*>(state.bytes + 24));
-    *reinterpret_cast<unsigned int*>(renderer + 1728) =
+    *reinterpret_cast<unsigned int*>(rendererRetailBytes(1728)) =
         *reinterpret_cast<const unsigned int*>(state.bytes + 20);
     rendererSetStaticMeshLod(*reinterpret_cast<const int*>(state.bytes + 16));
     renderer[1717] = state.bytes[0];
@@ -2960,7 +2957,7 @@ void rendererRestoreHemiState(const HemiRenderState& state)
     renderer[1702] = state.bytes[9];
     renderer[1703] = state.bytes[9];
     renderer[1713] = state.bytes[10];
-    *reinterpret_cast<unsigned int*>(renderer + 1708) = state.bytes[11];
+    *reinterpret_cast<unsigned int*>(rendererRetailBytes(1708)) = state.bytes[11];
     renderer[1716] = state.bytes[15];
 }
 
@@ -2993,10 +2990,9 @@ namespace {
 // dropped. The same tail rendererSetHemiTarget ends with.
 void rendererSelectTempBackBuffer()
 {
-    unsigned char* const raw = static_cast<unsigned char*>(g_rendererBase);
-    IDirect3DSurface9* selected = *reinterpret_cast<IDirect3DSurface9**>(raw + 0x0F4);
+    IDirect3DSurface9* selected = *reinterpret_cast<IDirect3DSurface9**>(rendererRetailBytes(0x0F4));
     if (!selected)
-        selected = *reinterpret_cast<IDirect3DSurface9**>(raw + 0x76C);
+        selected = *reinterpret_cast<IDirect3DSurface9**>(rendererRetailBytes(0x76C));
     if (selected)
         selected->AddRef();
     stateManagerSetRenderTarget(0, selected);

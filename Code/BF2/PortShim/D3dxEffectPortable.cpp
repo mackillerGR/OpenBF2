@@ -5,6 +5,7 @@
 // Assembly shader blocks are not supported: a pass using one fails validation, visibly.
 // [RETIRE-WHEN: portable-d3dx] Remove with a native renderer path that no longer uses effects.
 
+#include "D3dShaderAssembler.h"
 #include <d3d9.h>
 
 #include <vkd3d_shader.h>
@@ -1120,8 +1121,23 @@ bool Effect::build(Shader* shader)
     shader->state = -1;
     if (!shader->assembly.empty())
     {
-        warnOnce("a pass uses an assembly shader block, which is not supported");
-        return false;
+        std::vector<unsigned> tokens;
+        string error;
+        if (!portshim::assembleD3dShader(shader->assembly, &tokens, &error))
+        {
+            warnOnce("assembly shader refused: " + error);
+            return false;
+        }
+        const long created = shader->pixel
+            ? device->CreatePixelShader(tokens.data(), reinterpret_cast<IDirect3DPixelShader9**>(&shader->object))
+            : device->CreateVertexShader(tokens.data(), reinterpret_cast<IDirect3DVertexShader9**>(&shader->object));
+        if (created < 0)
+        {
+            warnOnce("the device refused an assembly shader: " + shader->assembly.substr(0, 200));
+            return false;
+        }
+        shader->state = 1;
+        return true;
     }
 
     string code = body;

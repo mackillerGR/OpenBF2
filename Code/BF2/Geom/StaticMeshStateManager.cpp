@@ -24,6 +24,7 @@ namespace dx9rend {
 // BF2Render.cpp, PE 0x1023B96C. The shader-quality index lives at +0x6CC; VideoOptions.cpp
 // reaches the very same field by documented raw offset, and so does this file.
 extern IBase* g_Renderer;
+unsigned char* rendererRetailBytes(unsigned int offset);
 // TextureManager.cpp - declared here rather than pulled in through RendDX9Base.h, the same way
 // MeshTemplate.cpp declares the BufferManager entry points it needs.
 void* textureManagerGetTexture(const vc71::string& name);
@@ -60,9 +61,7 @@ namespace {
 // rendererSetShaderPathAndUpdate gives the identical dword (PE 0x100286C0).
 inline int rendererShaderQualityIndex()
 {
-    const unsigned char* const base =
-        reinterpret_cast<const unsigned char*>(::dice::hfe::dx9rend::g_Renderer);
-    return *reinterpret_cast<const int*>(base + 0x6CC);
+    return *reinterpret_cast<const int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x6CC));
 }
 
 // vc71::string carries no find/compare of its own (it is an ABI carrier, not a container), so the

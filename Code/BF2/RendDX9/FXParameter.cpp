@@ -264,7 +264,7 @@ void FXParameterImpl::setValue(const void* data, unsigned int count)
         void* d3dTexture = 0;
         if (data)
             d3dTexture = *reinterpret_cast<void* const*>(
-                static_cast<const unsigned char*>(data) + 0x08);
+                static_cast<const unsigned char*>(data) + 2 * sizeof(void*));
         ::renddx9abi::d3dxSlot< ::renddx9abi::D3dxSetTextureFn>(fx, 0xD0)(
             fx, m_handle, d3dTexture);
         return;

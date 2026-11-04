@@ -723,7 +723,7 @@ RenderQueue* renderQueueConstruct(void* storage, const char* queueName)
 
 inline unsigned int& queueSortMode(RenderQueue* q)
 {
-    return *reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(q) + 0x0C);
+    return *reinterpret_cast<unsigned int*>(q->profiler);
 }
 
 
@@ -849,7 +849,7 @@ void RenderQueue::drawWalkDefault()
             }
             shader  = e->shader;
             lastKey = e->techniqueKey;
-            shader->m_queueProfiler = reinterpret_cast<unsigned char*>(this) + 0x10;
+            shader->m_queueProfiler = profiler + 4;
             shaderChanged = true;
             passCount = shader->begin(e);                          // +0x08
             if (passCount)
@@ -924,7 +924,7 @@ void RenderQueue::drawWalkNear()
         return;
 
     Ra::RaShader* const shader = entries[0]->shader;
-    shader->m_queueProfiler = reinterpret_cast<unsigned char*>(this) + 0x10;
+    shader->m_queueProfiler = profiler + 4;
     if (!shader->begin(entries[0]))                                // +0x08
         return;
     shader->beginPass(0);
@@ -1025,7 +1025,7 @@ void RenderQueue::add(RenderQueueEntry* entry)
     renderStatsCountDraw();
 
     vc71::vector_layout& entries = *reinterpret_cast<vc71::vector_layout*>(
-        reinterpret_cast<unsigned char*>(this) + 0x278);
+        reinterpret_cast<unsigned char*>(&entriesFirst) - sizeof(void*));
     vc71::vectorPushBackIn(entries, sizeof(void*), &entry);
 }
 
@@ -1573,8 +1573,7 @@ void renderQueueFlush(unsigned int slotByteOffset, int flushArg)
     RenderQueueTable* t = static_cast<RenderQueueTable*>(g_renderQueues);
     if (!t)
         return;
-    RenderQueue* q = *reinterpret_cast<RenderQueue**>(
-        reinterpret_cast<unsigned char*>(t) + slotByteOffset);
+    RenderQueue* q = reinterpret_cast<RenderQueue**>(t)[slotByteOffset / 4];
     if (!q)
         return;
     if (flushArg < 0)
@@ -1607,7 +1606,7 @@ void RenderQueueTable::flushWorldPass()
     if (worldQueueOwner)
     {
         RenderQueue* const ownerQueue =
-            *reinterpret_cast<RenderQueue**>(static_cast<unsigned char*>(worldQueueOwner) + 4);
+            *reinterpret_cast<RenderQueue**>(static_cast<unsigned char*>(worldQueueOwner) + sizeof(void*));
 
         ownerQueue->flushWithArg(1);
     }

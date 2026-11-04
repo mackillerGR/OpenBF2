@@ -1565,10 +1565,10 @@ bool textureManagerCopyRenderTarget(EngineTexture* source, EngineTexture* destin
     IDirect3DSurface9* sourceSurface = 0;
     if (!source)
     {
-        unsigned char* const base = static_cast<unsigned char*>(g_rendererBase);
+        RendDX9Base* const base = static_cast<RendDX9Base*>(g_rendererBase);
         IDirect3DSwapChain9* const* const chains =
-            *reinterpret_cast<IDirect3DSwapChain9* const* const*>(base + 0xE4);
-        const unsigned int current = *reinterpret_cast<const unsigned int*>(base + 0xF0);
+            reinterpret_cast<IDirect3DSwapChain9* const*>(base->swapChainFirst);
+        const unsigned int current = base->swapChainIndex;
         chains[current]->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &sourceSurface);
     }
     else

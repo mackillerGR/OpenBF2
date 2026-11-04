@@ -711,11 +711,9 @@ void setRenderTargetTexture(unsigned int index, dx9rend::EngineTexture* texture)
         surface = dx9rend::textureGetLevelSurface(texture, 0, 0x7FFFFFFFu);
     else if (index == 0)
     {
-        unsigned char* const renderer =
-            static_cast<unsigned char*>(dx9rend::g_rendererBase);
-        surface = *reinterpret_cast<IDirect3DSurface9**>(renderer + 0x0F4);
+        surface = *reinterpret_cast<IDirect3DSurface9**>(dx9rend::rendererRetailBytes(0x0F4));
         if (!surface)
-            surface = *reinterpret_cast<IDirect3DSurface9**>(renderer + 0x76C);
+            surface = *reinterpret_cast<IDirect3DSurface9**>(dx9rend::rendererRetailBytes(0x76C));
         if (surface)
             surface->AddRef();
     }
