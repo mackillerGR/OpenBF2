@@ -383,6 +383,11 @@ IParticleSystemInstance* __fastcall psm_createInstance(
     void* self BF2_EDX_PARAM, IParticleSystemTemplate* systemTemplate)
 {
     ParticleSystemManager* const manager = static_cast<ParticleSystemManager*>(self);
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    (void)manager;
+    (void)systemTemplate;
+    return 0;   // [CHOSEN, not recovered] See ParticleNullTemplates.inl.
+#endif
     if (!manager->m_poolsInitialized)
         particleSystemManagerPreLoadLevel(reinterpret_cast<IParticleSystemManager*>(manager));
 
@@ -977,6 +982,10 @@ void psmPreLoadLevel(ParticleSystemManager* self)
 // 16-bit id, and register it in both maps. Type 0 is dice::hfe::geom::ParticleSystemTemplate
 // (0x2A4 bytes); the other four emitter types are reconstructed as they are first reached.
 // Returns the template pointer.
+#if UINTPTR_MAX > 0xFFFFFFFFu
+#include "ParticleNullTemplates.inl"
+#endif
+
 IParticleSystemTemplate* __fastcall psm_createParticleSystem(
     void* self BF2_EDX_PARAM, int type, const ParticleSystemName* name)
 {
@@ -987,6 +996,23 @@ IParticleSystemTemplate* __fastcall psm_createParticleSystem(
     ParticleSystemNameMap::iterator it = g_templatesByName.find(key);
     if (it != g_templatesByName.end())
         return it->second;              // the shipped "already present" early return
+
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    {
+        IParticleSystemTemplate* inert = 0;
+        switch (type)
+        {
+        case 0: inert = new NullParticleTemplate0(*name); break;
+        case 1: inert = new NullParticleTemplate1(*name); break;
+        case 2: inert = new NullParticleTemplate2(*name); break;
+        case 3: inert = new NullParticleTemplate3(*name); break;
+        case 4: inert = new NullParticleTemplate4(*name); break;
+        default: break;
+        }
+        g_templatesByName[key] = inert;
+        return inert;
+    }
+#endif
 
     if (manager->m_nextTemplateId >= 0x800u)
     {
