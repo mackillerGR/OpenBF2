@@ -109,7 +109,10 @@ const char* const kBits[]={"nothing","hasuvanimation","hasnormalmap","hasgimap",
     "hasstaticgloss","hasdot3alphatest","pointlight","hasshadowocclusion",
     "hashemiocclusion",0};
 template<class T> T& materialField(BundledMeshMaterial* m,unsigned int offset)
-{ return *reinterpret_cast<T*>(reinterpret_cast<char*>(m)+offset); }
+{
+    // Offsets here are retail, counted from the material; its Ra block starts at +0x10.
+    return *reinterpret_cast<T*>(dx9rend::Ra::raMaterialFieldBytes(m->m_parameters,offset-0x10));
+}
 void assignTexture(BundledMeshMaterial* m,unsigned int offset,dx9rend::EngineTexture* texture)
 {
     dx9rend::EngineTexture*& slot=materialField<dx9rend::EngineTexture*>(m,offset);

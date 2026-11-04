@@ -669,7 +669,7 @@ void TerrainEditable::init()
         void* const storage = ::renddx9abi::engineAlloc(0x78);
         TerrainDetailTexture* const record =
             storage ? new (storage) TerrainDetailTextureEditable() : 0;
-        vc71::vectorPushBackIn(m_detailTextures, 4u, &record);
+        vc71::vectorPushBackIn(m_detailTextures, sizeof(void*), &record);
     }
 
     ::dice::hfe::eventManager->registerEventHandler(ECEditor, static_cast<IEventListener*>(this), 0);   // +0x2C

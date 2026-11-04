@@ -1038,7 +1038,7 @@ void Terrain::loadDetailTextures(TerrainRawReader& reader)
             void* const storage = ::renddx9abi::engineAlloc(0x2C);
             if (storage)
                 record = new (storage) TerrainDetailTexture();
-            vc71::vectorPushBackIn(m_detailTextures, 4u, &record);              // the +0x338 vector
+            vc71::vectorPushBackIn(m_detailTextures, sizeof(void*), &record);              // the +0x338 vector
 
             vc71::string name;
             reader.readLine(name, 10);
@@ -2130,7 +2130,7 @@ Terrain::~Terrain()
     //     through vslot 0 with 1 (0x100E1730), then vector::clear() - _Tidy in VC7.1.
     //     The bound is the file's count (+0x320), re-read every pass, not the vector's size: a
     //     high-quality reloadForLowQuality appends a second set whose records are never deleted.
-    if (vc71::vectorSizeIn(m_detailTextures, 4u) != 0)
+    if (vc71::vectorSizeIn(m_detailTextures, sizeof(void*)) != 0)
     {
         for (int i = 0; i < m_detailTextureCount; ++i)
         {

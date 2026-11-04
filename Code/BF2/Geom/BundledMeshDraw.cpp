@@ -370,7 +370,7 @@ void BundledMesh::draw(void*,void*,void*)
         const int maximum=g_LightManager->getMaxLightsPerBundledMesh();
         g_LightManager->gatherLightsForGeometry(this,m_lights,maximum,required,0,true);
     }
-    const unsigned int lightCount=vc71::vectorSizeIn(m_lights,4);
+    const unsigned int lightCount=vc71::vectorSizeIn(m_lights,sizeof(void*));
     resizePod(m_lightRecords,lightCount,sizeof(RaLightRecord),true);
     for(unsigned int i=0;i<lightCount;++i)
     {
@@ -431,7 +431,7 @@ void BundledMesh::draw(void*,void*,void*)
             }
         }
     }
-    const unsigned int materialCount=vc71::vectorSizeIn(*m_lodMaterials,4);
+    const unsigned int materialCount=vc71::vectorSizeIn(*m_lodMaterials,sizeof(void*));
     const Mat4& animationCamera=slot<const Mat4&>(slot<void*>(dx9rend::g_rendererBase,0x50),0x64);
     const unsigned int animation=animationIndex(position(animationCamera));
     const float heightScale=2.0f/worldHeight(m_template->m_bounds,*m_partTransforms[0]);

@@ -387,7 +387,7 @@ ShaderMaterial* staticMeshFindCachedMaterial(StaticMeshStateManager* self,
 {
     const unsigned int count =
         self->m_cache.first
-            ? static_cast<unsigned int>((self->m_cache.last - self->m_cache.first) >> 2)
+            ? static_cast<unsigned int>((self->m_cache.last - self->m_cache.first) / sizeof(void*))
             : 0u;
     for (unsigned int i = 0; i < count; ++i)
     {
@@ -416,9 +416,9 @@ ShaderMaterial* staticMeshFindCachedMaterial(StaticMeshStateManager* self,
 void staticMeshCachePush(vc71::vector_layout& cache, ShaderMaterial* value)
 {
     const unsigned int size =
-        cache.first ? static_cast<unsigned int>((cache.last - cache.first) >> 2) : 0u;
+        cache.first ? static_cast<unsigned int>((cache.last - cache.first) / sizeof(void*)) : 0u;
     const unsigned int capacity =
-        cache.first ? static_cast<unsigned int>((cache.end - cache.first) >> 2) : 0u;
+        cache.first ? static_cast<unsigned int>((cache.end - cache.first) / sizeof(void*)) : 0u;
 
     if (!cache.first || size >= capacity)
     {

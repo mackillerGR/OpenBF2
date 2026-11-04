@@ -440,25 +440,25 @@ const vc71::vector_layout kEmptyNestedVector = { 0, 0, 0, 0 };
 void pointerVectorPush(vc71::vector_layout& v, const void* value)
 {
     const unsigned int size =
-        v.first ? static_cast<unsigned int>((v.last - v.first) >> 2) : 0u;
+        v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(void*)) : 0u;
     const unsigned int capacity =
-        v.first ? static_cast<unsigned int>((v.end - v.first) >> 2) : 0u;
+        v.first ? static_cast<unsigned int>((v.end - v.first) / sizeof(void*)) : 0u;
 
     if (size == capacity)
     {
         unsigned int grown = capacity + (capacity >> 1);
         if (grown < size + 1u)
             grown = size + 1u;
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 4u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * sizeof(void*)));
         if (!buffer)
             return;
         if (size)
-            std::memcpy(buffer, v.first, size * 4u);
+            std::memcpy(buffer, v.first, size * sizeof(void*));
         if (v.first)
             ::renddx9abi::engineFree(v.first);
         v.first = buffer;
-        v.last  = buffer + size * 4u;
-        v.end   = buffer + grown * 4u;
+        v.last  = buffer + size * sizeof(void*);
+        v.end   = buffer + grown * sizeof(void*);
     }
 
     *reinterpret_cast<const void**>(v.last) = value;

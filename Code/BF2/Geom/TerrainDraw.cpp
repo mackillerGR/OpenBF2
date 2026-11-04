@@ -685,7 +685,7 @@ void Terrain::drawMain()
                     break;
                 previous = patch;
                 if (patch->gatherShadowRanges(&m_indexBufferBits, &cursor))
-                    vc71::vectorPushBackIn(m_shadowPatches, 4u, &patch);
+                    vc71::vectorPushBackIn(m_shadowPatches, sizeof(void*), &patch);
             }
             ++it;
         }
@@ -1125,9 +1125,9 @@ void Terrain::drawWaterCell(float x0, float z0, float x1, float z1, void* lightm
         {
             vc71::vector_layout elements = { 0, 0, 0, 0 };
             const Ra::RaVertexElementDesc* desc;
-            desc = &Ra::g_desc_1023EF04; vc71::vectorPushBackIn(elements, 4u, &desc);   // Position
-            desc = &Ra::g_desc_1023ED4C; vc71::vectorPushBackIn(elements, 4u, &desc);   // TBase2D
-            desc = &Ra::g_desc_1023EF2C; vc71::vectorPushBackIn(elements, 4u, &desc);   // TLightMap2D
+            desc = &Ra::g_desc_1023EF04; vc71::vectorPushBackIn(elements, sizeof(void*), &desc);   // Position
+            desc = &Ra::g_desc_1023ED4C; vc71::vectorPushBackIn(elements, sizeof(void*), &desc);   // TBase2D
+            desc = &Ra::g_desc_1023EF2C; vc71::vectorPushBackIn(elements, sizeof(void*), &desc);   // TLightMap2D
             void* const storage = ::renddx9abi::engineAlloc(0x1A4);
             Ra::RaStreamDataEditable* const grid = storage
                 ? new (storage) Ra::RaStreamDataEditable(4225u, 24576u, 28u, elements, Ra::raRendererDevice())

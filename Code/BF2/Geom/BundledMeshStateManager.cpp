@@ -24,7 +24,7 @@ BundledMeshStateManager* g_bundledMeshStateManager = 0;
 namespace {
 unsigned int pointerCount(const vc71::vector_layout& v)
 {
-    return v.first ? static_cast<unsigned int>((v.last - v.first) / 4) : 0;
+    return v.first ? static_cast<unsigned int>((v.last - v.first) / sizeof(void*)) : 0;
 }
 
 // Both callers resize a newly constructed vector, with zero as the fill value

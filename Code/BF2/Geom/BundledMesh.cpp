@@ -244,7 +244,7 @@ int BundledMesh::setAnimationIndex(int value)
 }
 int BundledMesh::getAnimationIndex() const { return m_animationIndex; }
 int BundledMesh::getMaterialCount() const
-{ return m_lodMaterials && m_lodMaterials->first ? static_cast<int>((m_lodMaterials->last-m_lodMaterials->first)/4) : 0; }
+{ return m_lodMaterials && m_lodMaterials->first ? static_cast<int>((m_lodMaterials->last-m_lodMaterials->first)/sizeof(void*)) : 0; }
 void BundledMesh::setUvTranslation(int index,float x,float y)
 {
     // All three setters really use OR, admitting many out-of-range indices (retail defect).
@@ -381,7 +381,7 @@ void BundledMesh::drawShadowMap(void* light,void*,void*,void*,void*,void*)
     const int lodCount=dispatch<int>(this,0x80);
     if(currentLod!=shadowLod)dispatch<void>(this,0x78,lodCount-1<shadowLod ? lodCount-1 : shadowLod);
     Mat4 combined;
-    const unsigned int materialCount=m_lodMaterials->first ? static_cast<unsigned int>((m_lodMaterials->last-m_lodMaterials->first)/4):0;
+    const unsigned int materialCount=m_lodMaterials->first ? static_cast<unsigned int>((m_lodMaterials->last-m_lodMaterials->first)/sizeof(void*)):0;
     dx9rend::vertexDeclarationBind(m_template->m_vertexDeclaration);
     dx9rend::vertexBufferBindStream(m_template->m_vertexBuffer,0);
     dx9rend::indexBufferBind(m_template->m_indexBuffer);
