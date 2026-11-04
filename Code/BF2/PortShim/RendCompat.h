@@ -41,5 +41,4 @@ inline HANDLE GetCurrentProcess() { return (HANDLE)(intptr_t)-1; }
 inline BOOL GetProcessAffinityMask(HANDLE, DWORD_PTR* a, DWORD_PTR* b) { *a = *b = 1; return 1; }
 inline BOOL SetProcessAffinityMask(HANDLE, DWORD_PTR) { return 1; }
 inline void Sleep(DWORD ms) { usleep(ms * 1000); }
-typedef struct { DWORD dwLength, dwMemoryLoad; size_t dwTotalPhys, dwAvailPhys, dwTotalPageFile, dwAvailPageFile, dwTotalVirtual, dwAvailVirtual; } MEMORYSTATUS;
 void GlobalMemoryStatus(MEMORYSTATUS*);

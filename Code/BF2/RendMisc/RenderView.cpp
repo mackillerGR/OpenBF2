@@ -3,6 +3,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include "Core/X87Emu.h"
 #include "IRenderView.h"
 #include "../Math/Frustum.h"
 #include "../../RendDX9Abi/ModuleCommon.h"
@@ -259,6 +260,7 @@ void RenderView::setFov(float fovRadians)
         // PE101C252D..258B uses x87 fcos/fsin and retains the quotient while
         // storing zoom and computing its reciprocal. CRT overloads introduce
         // different rounding (including a non-unit zoom at the reference FOV).
+#if defined(_M_IX86)
         __asm {
             fld fovRadians
             fmul halfScale
@@ -295,6 +297,45 @@ void RenderView::setFov(float fovRadians)
         zoomDone:
             fstp st(0)
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(fovRadians);
+            c.s(0) *= halfScale;
+            c.push(reference);
+            c.s(0) *= halfScale;
+            referenceHalf = static_cast<std::remove_reference<decltype(referenceHalf)>::type>(c.s(0)); c.pop();
+            c.push(c.s(0));
+            c.s(0) = std::cos(c.s(0));
+            { double t = c.s(0); c.s(0) = c.s(1); c.s(1) = t; }
+            c.s(0) = std::sin(c.s(0));
+            c.s(1) /= c.s(0); c.pop();
+            c.push(referenceHalf);
+            c.s(0) = std::cos(c.s(0));
+            c.push(referenceHalf);
+            c.s(0) = std::sin(c.s(0));
+            c.s(1) /= c.s(0); c.pop();
+            c.s(1) /= c.s(0); c.pop();
+            c.edx = x87::toReg(zoomOut);
+            x87::f32(c.edx) = float(c.s(0));
+            c.push(0.0);
+            c.push(c.s(1));
+            c.compare(c.s(0), c.s(1)); c.pop(); c.pop();
+            c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+            c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x44)));
+            if (!c.pf) goto zeroZoom;
+            c.push(1.0);
+            c.s(0) /= c.s(1);
+            c.edx = x87::toReg(inverseOut);
+            x87::f32(c.edx) = float(c.s(0)); c.pop();
+            goto zoomDone;
+            zeroZoom: ;
+            c.edx = x87::toReg(inverseOut);
+            x87::u32(c.edx) = uint32_t(uintptr_t(0));
+            zoomDone: ;
+            c.s(0) = c.s(0); c.pop();
+        }
+#endif
     }
 
     m_fov      = fovRadians;
@@ -351,12 +392,22 @@ void RenderView::setAdjustedFov(float radians)
     }
     const float aspect = m_aspect;
     // The two products remain in x87 until the by-value float argument store.
+#if defined(_M_IX86)
     __asm {
         fld radians
         fmul aspect
         fmul scale
         fstp radians
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(radians);
+        c.s(0) *= aspect;
+        c.s(0) *= scale;
+        radians = static_cast<std::remove_reference<decltype(radians)>::type>(c.s(0)); c.pop();
+    }
+#endif
     setFov(radians);
 }
 float RenderView::getFov() { return m_fov; }
