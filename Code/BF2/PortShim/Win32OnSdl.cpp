@@ -97,6 +97,8 @@ bool portablePointerPosition(float* x, float* y) {
 }
 DWORD GetTickCount() { return (DWORD)SDL_GetTicks(); }
 DWORD GetCurrentProcessId() { return (DWORD)getpid(); }
+// Renderer TUs see the 32-bit MEMORYSTATUS from the D3D headers, so they ask for the size directly.
+extern "C" unsigned int portableSystemRamMB() { return (unsigned int)SDL_GetSystemRAM(); }
 void GlobalMemoryStatus(MEMORYSTATUS* s) { *s = MEMORYSTATUS(); s->dwTotalPhys = (size_t)SDL_GetSystemRAM() * 1048576u; s->dwAvailPhys = s->dwTotalPhys; }
 WORD RegisterClassExA(const WNDCLASSEXA* c) { g_wndProc = c->lpfnWndProc; return 1; }
 HWND CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD style, int, int, int w, int h, HWND, HMENU, HINSTANCE, LPVOID) {

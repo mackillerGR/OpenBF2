@@ -1143,12 +1143,19 @@ double cpuFamilyMultiplier()
 
 // sub_1000F010: total physical RAM in MB, rounded up to a multiple of 4 (GlobalMemoryStatus, the
 // non-Ex 32-bit form the shipped body uses).
+#if defined(BF2_PORTABLE_CLIENT)
+extern "C" unsigned int portableSystemRamMB();     // PortShim/Win32OnSdl.cpp
+#endif
 unsigned int systemRamMB()
 {
+#if defined(BF2_PORTABLE_CLIENT)
+    unsigned int mb = portableSystemRamMB();
+#else
     MEMORYSTATUS ms;
     ms.dwLength = sizeof(ms);
     GlobalMemoryStatus(&ms);
     unsigned int mb = (unsigned int)(((unsigned __int64)ms.dwTotalPhys + 0x7FFFF) >> 20);
+#endif
     if (mb & 3u)
         mb += 4u - (mb & 3u);
     return mb;

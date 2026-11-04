@@ -1201,7 +1201,11 @@ bool BF2Engine::startGame(bool noAutoJoin, bool startFromMenu)   // 2nd bool fro
         // The same skipped login applies the video profile. Without it the scale stays zero, the
         // far plane collapses onto the near plane and the frustum culls nearly the whole world.
         if (g_bf2Render && g_bf2Render->getRenderer())
-            g_bf2Render->getRenderer()->getVideoOptions()->setViewDistanceScale(1.0f);
+        {
+            IVideoOptions* const video = g_bf2Render->getRenderer()->getVideoOptions();
+            video->applyQualityPreset(1);
+            video->apply();
+        }
     }
 #endif
     if (settings->boolGet("GSIsServer", false))         // ISettingsRepostitory vtable +0x50
