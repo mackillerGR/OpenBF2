@@ -26,10 +26,10 @@
 #include <vector>
 #include "../BF2/Core/ClassManager.h"
 
-#if !defined(_MSC_VER) || !defined(_MT) || !defined(_DLL)
+#if defined(_MSC_VER) && (!defined(_MT) || !defined(_DLL))
 #error BF2_PLUGIN_ABI_NATIVE requires the supported MSVC dynamic-CRT (/MD) build
 #endif
-#if !defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL != 0
+#if defined(_MSC_VER) && (!defined(_ITERATOR_DEBUG_LEVEL) || _ITERATOR_DEBUG_LEVEL != 0)
 #error BF2_PLUGIN_ABI_NATIVE requires _ITERATOR_DEBUG_LEVEL=0 in both host and plugin images
 #endif
 #endif

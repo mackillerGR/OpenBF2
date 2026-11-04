@@ -246,6 +246,7 @@ list(REMOVE_ITEM bf2_engine_sources "${BF2_ROOT}/VoipServer/BF2VoipServerShell.c
 # carries the mirror list). Client-only REGIONS of shared TUs are not a manifest matter: they sit
 # under #if !DEDICATED, and bf2_set_image() below is what selects them per target.
 set(bf2_client_only_sources
+    "${BF2_ROOT}/PortShim/Win32OnSdl.cpp"
     "${BF2_ROOT}/Math/Mat4Inverse.cpp" # client PE inverse; explicitly reused by x86 bf2_aidll below
     "${BF2_ROOT}/Game/Main/BF2Window.cpp"    # the game window (2026-09-02); its body is #if !DEDICATED as well
     "${BF2_ROOT}/Game/Main/BF2FrameInterpolator.cpp"    # attested client-only TU; ctor recovered 2026-09-03
@@ -659,6 +660,7 @@ if(BF2_BUILD_LINUX)
     target_compile_options(bf2_client_objects PRIVATE
         -include "${BF2_ROOT}/Core/PortableClient.h")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim")
+    target_include_directories(bf2_client_objects PRIVATE "${BF2_SDL3_INCLUDE}")
 endif()
 target_compile_definitions(bf2_client_objects PRIVATE
     BF2_PLUGIN_ABI_NATIVE=1

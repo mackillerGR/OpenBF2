@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <string.h>
 #define __assume(x) __builtin_unreachable()
+#define __declspec(x)
 typedef int __time32_t;
 static inline __time32_t _time32(__time32_t* out) { __time32_t t = (__time32_t)time(0); if (out) *out = t; return t; }
 static inline int _vsnwprintf(wchar_t* b, size_t n, const wchar_t* f, va_list a) { return vswprintf(b, n, f, a); }
