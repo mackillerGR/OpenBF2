@@ -9,7 +9,13 @@ namespace renddx9abi {
 
 void* engineAlloc(unsigned int size)
 {
+#if !defined(_M_IX86)
+    // [CHOSEN, not recovered] Recovered call sites pass retail x86 object sizes. No object more
+    // than doubles when its pointers widen, so doubling keeps those sites in bounds.
+    return std::calloc(1, static_cast<size_t>(size) * sizeof(void*) / 4 + 16);
+#else
     return std::malloc(size);
+#endif
 }
 
 void engineFree(void* p)
@@ -25,7 +31,7 @@ void engineFree(void* p)
 
 void* operator new(size_t size)
 {
-    void* p = renddx9abi::engineAlloc(static_cast<unsigned int>(size ? size : 1));
+    void* p = std::malloc(size ? size : 1);
     if (!p)
         throw std::bad_alloc();
     return p;
@@ -38,12 +44,12 @@ void* operator new[](size_t size)
 
 void* operator new(size_t size, const std::nothrow_t&) throw()
 {
-    return renddx9abi::engineAlloc(static_cast<unsigned int>(size ? size : 1));
+    return std::malloc(size ? size : 1);
 }
 
 void* operator new[](size_t size, const std::nothrow_t&) throw()
 {
-    return renddx9abi::engineAlloc(static_cast<unsigned int>(size ? size : 1));
+    return std::malloc(size ? size : 1);
 }
 
 void operator delete(void* p) throw()

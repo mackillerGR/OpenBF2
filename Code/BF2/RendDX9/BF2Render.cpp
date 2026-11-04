@@ -1,3 +1,4 @@
+#include <cstddef>
 // Path: attested by RendDX9.dll __FILE__ at 0x101E00A0 (initialize, line 437).
 // Renderer implementation for RendDX9.dll, separate from Game/Main/BF2Render.cpp.
 // Recovered from the PE; unread bodies remain named [FRONTIER] stops.
@@ -395,7 +396,7 @@ public:
     // which the native plugin cannot express as a host carrier - see rendererApplyCurrentDisplayMode.
     bool applyCurrentDisplayMode();
 
-private:
+public: // [CHOSEN, not recovered] offsetof needs these on portable targets.
     // Step 6 factors the two identical debug-text-writer calls; see its definition.
     void setDebugTextWriterFont(const char* singletonName, const char* fontPath);
     void initializeFontAndConsoleOverlay();   // BF2Render_initializeFontAndConsoleOverlay 0x1002BA40
@@ -407,7 +408,7 @@ private:
 
     // The base occupies +0x000..+0x537 and is accessed through RendDX9Base's overlay.
     // The primary vptr is already declared, so storage starts at +0x004.
-    char         m_baseStorage[0x538 - 4];   // +0x004 .. +0x537
+    char         m_baseStorage[sizeof(RendDX9Base) - sizeof(void*)];   // +0x004 .. +0x537
     void*        m_evHandlerVptr;        // +0x538  ECCoreEventHandler       - kECCoreEventHandlerVtable
     void*        m_deviceLostVptr;       // +0x53C  DeviceLostResetListener  - kRendererDeviceLostVtable
     void*        m_renderPathVptr;       // +0x540  RenderPathListener       - kRendererRenderPathVtable
@@ -494,6 +495,13 @@ namespace {
 template <typename T>
 inline T& rendererField(void* base, unsigned int offset)
 {
+#if !defined(_M_IX86)
+    // [CHOSEN, not recovered] Retail byte offsets do not exist in a 64-bit Renderer. Each named
+    // offset owns a pointer-wide cell in side storage, which only rendererField reaches.
+    static unsigned char storage[0x1000 * sizeof(void*) / 4];
+    (void)base;
+    return *reinterpret_cast<T*>(storage + offset * sizeof(void*) / 4);
+#endif
     return *reinterpret_cast<T*>(static_cast<unsigned char*>(base) + offset);
 }
 
@@ -534,7 +542,7 @@ void __fastcall renderer_handleECCoreEvent(void* self, void* /*edx, unused*/,
 
     // `lea ecx, [esi-538h]` - the handler's own `this` is the Renderer's +0x538 subobject.
     Renderer* const renderer =
-        reinterpret_cast<Renderer*>(static_cast<unsigned char*>(self) - 0x538);
+        reinterpret_cast<Renderer*>(static_cast<unsigned char*>(self) - offsetof(Renderer, m_evHandlerVptr));
 
     switch (id)
     {
@@ -715,7 +723,7 @@ void createRendererPathResources(void* base)
 
 void __fastcall renderer_renderPathActivated(void* listener BF2_EDX_PARAM, int path)
 {
-    unsigned char* const base = static_cast<unsigned char*>(listener) - 0x540;
+    unsigned char* const base = static_cast<unsigned char*>(listener) - offsetof(Renderer, m_renderPathVptr);
     rendererField<unsigned int>(base, 0x544) = static_cast<unsigned int>(path);
 
     RendDX9Base* const renderer = reinterpret_cast<RendDX9Base*>(base);
@@ -735,7 +743,7 @@ void __fastcall renderer_renderPathActivated(void* listener BF2_EDX_PARAM, int p
 
 void __fastcall renderer_renderPathDeactivated(void* listener BF2_EDX_PARAM)
 {
-    releaseRendererPathResources(static_cast<unsigned char*>(listener) - 0x540);
+    releaseRendererPathResources(static_cast<unsigned char*>(listener) - offsetof(Renderer, m_renderPathVptr));
 }
 
 void __fastcall renderer_renderPathNull(void* BF2_EDX_PARAM) {}
@@ -777,7 +785,7 @@ void rendererReloadOverlayTexture(unsigned char* base)
 // StateManager's higher-priority listener has already released its surface references.
 void __fastcall renderer_onDeviceLost(void* listener BF2_EDX_PARAM)
 {
-    unsigned char* const base = static_cast<unsigned char*>(listener) - 0x53C;
+    unsigned char* const base = static_cast<unsigned char*>(listener) - offsetof(Renderer, m_deviceLostVptr);
     dx9rend::textureReleaseRef(rendererField<dx9rend::EngineTexture*>(base, 0x8D8));
     releaseRendererPathResources(base);
 }
@@ -786,7 +794,7 @@ void __fastcall renderer_onDeviceLost(void* listener BF2_EDX_PARAM)
 // LightManager restores its own shadow resources; D3D acquisition results are unchecked.
 void __fastcall renderer_onDeviceReset(void* listener BF2_EDX_PARAM)
 {
-    unsigned char* const base = static_cast<unsigned char*>(listener) - 0x53C;
+    unsigned char* const base = static_cast<unsigned char*>(listener) - offsetof(Renderer, m_deviceLostVptr);
     RendDX9Base* const renderer = reinterpret_cast<RendDX9Base*>(base);
 
     renderer->device->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO,
@@ -2055,8 +2063,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
             flushRenderTargetsSeam();
             {
                 typedef IDirect3DDevice9* DevPtr;
-                DevPtr dev = *reinterpret_cast<DevPtr*>(
-                    static_cast<unsigned char*>(g_rendererBase) + 0x0C);
+                DevPtr dev = static_cast<RendDX9Base*>(g_rendererBase)->device;
                 dev->Clear(0, 0, 7, 0, 1.0f, 0);
             }
 
@@ -2301,8 +2308,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
                 // sub_100057E0(2, 0, 1.0f, 0, 0, 0) - the z-only clear before the first-person
                 // passes.
                 flushRenderTargetsSeam();
-                IDirect3DDevice9* dev = *reinterpret_cast<IDirect3DDevice9**>(
-                    static_cast<unsigned char*>(g_rendererBase) + 0x0C);
+                IDirect3DDevice9* dev = static_cast<RendDX9Base*>(g_rendererBase)->device;
                 dev->Clear(0, 0, 2, 0, 1.0f, 0);
             }
 
@@ -4221,6 +4227,11 @@ bool DX9RendModule::close()
     // behaviour and nothing reads it after unload.
 
     return true;     // the body ends "return 1"
+}
+
+void* rendererRenderPathSubobject()
+{
+    return &reinterpret_cast<Renderer*>(g_rendererBase)->m_renderPathVptr;
 }
 
 } // namespace dx9rend

@@ -7192,8 +7192,7 @@ void constructLightManager(void* self)
     constructShadowTree(lmField<ShadowTree>(self, 0x964));
     constructEmptyVector(self, 0x970);
 
-    IDirect3DDevice9* const device = *reinterpret_cast<IDirect3DDevice9**>(
-        static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x0C);
+    IDirect3DDevice9* const device = static_cast<dx9rend::RendDX9Base*>(dx9rend::g_rendererBase)->device;
     lmField<IDirect3DDevice9*>(self, 0x908) = device;
     device->AddRef();
 

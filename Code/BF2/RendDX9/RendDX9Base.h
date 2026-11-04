@@ -145,8 +145,8 @@ struct RendDX9Base
 
     // Device-lost list: unused word, circular head, size, lost flag, sort-dirty flag.
     // Render-path list: active path at +0x00, head at +0x08, flag at +0x10.
-    /* 0x05C */ unsigned char          deviceLostList[0x06C - 0x05C];
-    /* 0x06C */ unsigned char          renderPathList[0x080 - 0x06C];
+    /* 0x05C */ unsigned char          deviceLostList[(0x06C - 0x05C) * sizeof(void*) / 4];
+    /* 0x06C */ unsigned char          renderPathList[(0x080 - 0x06C) * sizeof(void*) / 4];
 
     /* 0x080 */ unsigned int           adapter;           // base ctor: 0, set in sub_1000B0D0
     /* 0x084 */ unsigned int           deviceType;        // GSDeviceType,     default 1
@@ -219,7 +219,7 @@ struct RendDX9Base
     /* 0x3AE */ unsigned char          opaque3AE[0x3F8 - 0x3AE];
 
     // VideoOptions_ctor(this + 1016). 284 bytes, running to +0x513.
-    /* 0x3F8 */ unsigned char          videoOptions[0x514 - 0x3F8];
+    /* 0x3F8 */ unsigned char          videoOptions[(0x514 - 0x3F8) * sizeof(void*) / 4];
 
     dice::hfe::IVideoOptions* embeddedVideoOptions()
     {

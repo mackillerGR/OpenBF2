@@ -173,8 +173,7 @@ namespace {
 
 inline IDirect3DDevice9* rendererDevice()
 {
-    return *reinterpret_cast<IDirect3DDevice9**>(
-        static_cast<unsigned char*>(g_rendererBase) + 0x0C);
+    return static_cast<RendDX9Base*>(g_rendererBase)->device;
 }
 
 inline StateManager* sm() { return static_cast<StateManager*>(g_stateManager); }

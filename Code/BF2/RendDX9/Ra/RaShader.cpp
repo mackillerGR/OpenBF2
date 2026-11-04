@@ -5,6 +5,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include "../RendDX9Base.h"
 #include "RaShader.h"
 #include "../Texture.h"                    // EngineTexture - the engine-texture holder apply
 
@@ -1197,8 +1198,7 @@ RaShader::RaShader(const vc71::string& shaderName, void* renderQueue)
     m_device = 0;
     if (g_rendererBase)
     {
-        m_device = *reinterpret_cast<IDirect3DDevice9* const*>(
-            static_cast<const unsigned char*>(g_rendererBase) + 0x0C);
+        m_device = static_cast<const RendDX9Base*>(g_rendererBase)->device;
     }
 
     // Rows 1..20 of the vertex-element table.

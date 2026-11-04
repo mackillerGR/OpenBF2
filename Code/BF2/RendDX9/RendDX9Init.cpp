@@ -653,6 +653,7 @@ void setActiveRenderPath(void* list, int path)
 // has already been selected, notify slot +0 now.  The public registration wrapper then invokes
 // listener slot +0x08 with the Renderer listener's current-path getter (+0x10), even though both
 // shipped Renderer and LightManager implementations make that +0x08 callback a nullsub.
+void* rendererRenderPathSubobject();
 void registerRenderPathListener(RenderPathListener* listener)
 {
     RendDX9Base* const base = static_cast<RendDX9Base*>(g_rendererBase);
@@ -684,8 +685,7 @@ void registerRenderPathListener(RenderPathListener* listener)
     if (l->changed)
         listener->onRenderPathActivated(l->activeRenderPath);
 
-    RenderPathListener* const rendererListener = reinterpret_cast<RenderPathListener*>(
-        static_cast<unsigned char*>(g_rendererBase) + 0x540);
+    RenderPathListener* const rendererListener = reinterpret_cast<RenderPathListener*>(rendererRenderPathSubobject());
     listener->onRenderPathChanged(rendererListener->getCurrentRenderPath());
 }
 
@@ -729,8 +729,7 @@ void unregisterRenderPathListener(void* listener)
 // range check; all recovered callers pass a literal in [0, 20].
 bool rendererPerformanceFlag(unsigned int bit)
 {
-    const unsigned int flags = *reinterpret_cast<const unsigned int*>(
-        static_cast<const unsigned char*>(g_rendererBase) + 0x518);
+    const unsigned int flags = *reinterpret_cast<const unsigned int*>(static_cast<const RendDX9Base*>(g_rendererBase)->opaque518);
     const unsigned int mask = 1u << bit;
     return (flags & mask) == mask;
 }

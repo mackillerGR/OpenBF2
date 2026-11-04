@@ -15,6 +15,9 @@
 
 namespace vc71 {
 
+// Bytes the three node links gain beyond their retail 12 on the current target.
+const unsigned kLinkGrowth = 3 * (sizeof(void*) - 4);
+
 // The node, exactly as _Buynode shapes it.
 struct map_node
 {
@@ -50,7 +53,7 @@ struct map_layout
         unsigned char* node = static_cast<unsigned char*>(::renddx9abi::engineAlloc(nodeSize));
         if (node)
         {
-            for (unsigned i = 0; i < nodeSize; ++i)
+            for (unsigned i = 0; i < nodeSize + kLinkGrowth; ++i)
                 node[i] = 0;
 
             void** links = reinterpret_cast<void**>(node);
@@ -58,8 +61,8 @@ struct map_layout
             links[1] = node;                 // _Parent -> self
             links[2] = node;                 // _Right  -> self
 
-            node[nodeSize - 4] = 1;          // _Color = black
-            node[nodeSize - 3] = 1;          // _Isnil = 1  (the header is the nil node)
+            node[nodeSize - 4 + kLinkGrowth] = 1;          // _Color = black
+            node[nodeSize - 3 + kLinkGrowth] = 1;          // _Isnil = 1  (the header is the nil node)
         }
 
         head = reinterpret_cast<map_node*>(node);
@@ -78,16 +81,16 @@ struct map_layout
         unsigned char* const raw = static_cast<unsigned char*>(::renddx9abi::engineAlloc(nodeSize));
         if (!raw)
             return 0;
-        for (unsigned i = 0; i < nodeSize; ++i)
+        for (unsigned i = 0; i < nodeSize + kLinkGrowth; ++i)
             raw[i] = 0;
 
         map_node* const n = reinterpret_cast<map_node*>(raw);
         n->left  = head;
         n->right = head;
-        *reinterpret_cast<float*>(raw + 0x0C) = key;
-        *reinterpret_cast<void**>(raw + 0x10) = value;
-        raw[nodeSize - 4] = 0;                 // _Color = red, as a fresh node is
-        raw[nodeSize - 3] = 0;                 // _Isnil = 0
+        *reinterpret_cast<float*>(raw + 0x0C + kLinkGrowth) = key;
+        *reinterpret_cast<void**>(raw + 0x10 + kLinkGrowth) = value;
+        raw[nodeSize - 4 + kLinkGrowth] = 0;                 // _Color = red, as a fresh node is
+        raw[nodeSize - 3 + kLinkGrowth] = 0;                 // _Isnil = 0
 
         map_node* const root = head->parent;
         if (root == head)                      // empty: the new node becomes the root
@@ -564,8 +567,8 @@ inline map_node* mapInsert(map_layout& m, unsigned nodeSize, const char* key)
     new (n->value) vc71::string(key);      // the key, in place at node+12
     n->left   = head;                      // absent children point at the nil sentinel
     n->right  = head;
-    raw[nodeSize - 4] = 0;                 // _Color: red
-    raw[nodeSize - 3] = 0;                 // _Isnil: 0
+    raw[nodeSize - 4 + kLinkGrowth] = 0;                 // _Color: red
+    raw[nodeSize - 3 + kLinkGrowth] = 0;                 // _Isnil: 0
 
     if (!parent)                           // the tree was empty - this becomes the root
     {
@@ -848,8 +851,8 @@ inline map_node* mapInsertInsensitive(map_layout& m, unsigned nodeSize,
     new (n->value) vc71::string(key);
     n->left   = head;
     n->right  = head;
-    raw[nodeSize - 4] = 0;
-    raw[nodeSize - 3] = 0;
+    raw[nodeSize - 4 + kLinkGrowth] = 0;
+    raw[nodeSize - 3 + kLinkGrowth] = 0;
 
     if (!parent)
     {

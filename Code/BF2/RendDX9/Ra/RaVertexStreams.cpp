@@ -36,7 +36,7 @@ namespace Ra {
 // StateManager.cpp's rendererDevice() reads.
 IDirect3DDevice9* raRendererDevice()
 {
-    return *reinterpret_cast<IDirect3DDevice9**>(static_cast<unsigned char*>(g_rendererBase) + 0x0C);
+    return static_cast<RendDX9Base*>(g_rendererBase)->device;
 }
 
 
