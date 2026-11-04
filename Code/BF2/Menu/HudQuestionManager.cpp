@@ -1,4 +1,5 @@
 // Client HUD questions and responses. [INFERRED] Names and source placement.
+#include "Core/X87Emu.h"
 #include "HudQuestionManager.h"
 #if !DEDICATED
 #include "../Core/System.h"
@@ -45,22 +46,48 @@ int voteMinutes(float seconds)
     // the final x87 conversion truncates and preserves the caller's control word.
     const float fraction = 0.01666666753590107f;
     float minutes;
+#if defined(_M_IX86)
     __asm {
         fld seconds
         fmul fraction
         fstp minutes
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(seconds);
+        c.s(0) *= fraction;
+        minutes = static_cast<std::remove_reference<decltype(minutes)>::type>(c.s(0)); c.pop();
+    }
+#endif
     const double rounded = std::ceil(static_cast<double>(minutes));
     unsigned short saved, truncated;
     int result;
+#if defined(_M_IX86)
     __asm { fnstcw saved }
+#else
+    {
+        x87::Cpu c;
+        saved = c.cw;
+    }
+#endif
     truncated = saved | 0x0c00;
+#if defined(_M_IX86)
     __asm {
         fld rounded
         fldcw truncated
         fistp result
         fldcw saved
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(rounded);
+        c.cw = truncated;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = saved;
+    }
+#endif
     return result;
 }
 }

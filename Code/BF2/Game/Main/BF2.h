@@ -38,7 +38,7 @@ private:
     BF2Engine* m_engine;            // offset 0 - the only member
 };
 
-#if defined(_WIN32) && !DEDICATED
+#if !DEDICATED
 // Keyboard rings filled by window messages and consumed by menu/console text input.
 // Toggling either UI flushes its ring. [INFERRED] Global names.
 extern char consoleCharBuffer[256];

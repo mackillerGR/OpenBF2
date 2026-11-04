@@ -1,5 +1,6 @@
 // Frustum setup and intersection queries.
 
+#include "Core/X87Emu.h"
 #include "Frustum.h"
 
 #include <cmath>
@@ -163,6 +164,7 @@ void Frustum::setOrtho(float width, float height, float nearDist, float farDist,
     float* radiusSquared = &m_boundingRadiusSq;
     float* center = &m_center.x;
     const float* matrix = m.m;
+#if defined(_M_IX86)
     __asm {
         fld nearDist
         fadd farDist
@@ -209,6 +211,55 @@ void Frustum::setOrtho(float width, float height, float nearDist, float farDist,
         fstp dword ptr [edx+4]
         fstp dword ptr [edx+8]
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(nearDist);
+        c.s(0) += farDist;
+        c.s(0) *= half;
+        c.ecx = x87::toReg(radius);
+        x87::f32(c.ecx) = float(c.s(0));
+        c.push(c.s(0));
+        c.s(0) *= c.s(1);
+        c.ecx = x87::toReg(radiusSquared);
+        x87::f32(c.ecx) = float(c.s(0)); c.pop();
+        c.edx = x87::toReg(center);
+        x87::u32(c.edx) = uint32_t(uintptr_t(0));
+        x87::u32(c.edx + 4) = uint32_t(uintptr_t(0));
+        x87::f32(c.edx + 8) = float(c.s(0)); c.pop();
+        c.eax = x87::toReg(matrix);
+        c.push(x87::f32(c.eax + 40));
+        c.s(0) *= x87::f32(c.edx + 8);
+        c.push(x87::f32(c.eax + 24));
+        c.s(0) *= x87::f32(c.edx + 4);
+        c.s(1) += c.s(0); c.pop();
+        c.push(x87::f32(c.eax + 8));
+        c.s(0) *= x87::f32(c.edx);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) += x87::f32(c.eax + 56);
+        c.push(x87::f32(c.eax + 36));
+        c.s(0) *= x87::f32(c.edx + 8);
+        c.push(x87::f32(c.eax + 20));
+        c.s(0) *= x87::f32(c.edx + 4);
+        c.s(1) += c.s(0); c.pop();
+        c.push(x87::f32(c.eax + 4));
+        c.s(0) *= x87::f32(c.edx);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) += x87::f32(c.eax + 52);
+        c.push(x87::f32(c.eax));
+        c.s(0) *= x87::f32(c.edx);
+        c.push(x87::f32(c.eax + 16));
+        c.s(0) *= x87::f32(c.edx + 4);
+        c.s(1) += c.s(0); c.pop();
+        c.push(x87::f32(c.eax + 32));
+        c.s(0) *= x87::f32(c.edx + 8);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) += x87::f32(c.eax + 48);
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+        x87::f32(c.edx + 4) = float(c.s(0)); c.pop();
+        x87::f32(c.edx + 8) = float(c.s(0)); c.pop();
+    }
+#endif
 #else
     const long double midpoint = (static_cast<long double>(nearDist) + farDist) * 0.5L;
     m_boundingRadius = static_cast<float>(midpoint);

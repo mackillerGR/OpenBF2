@@ -1,4 +1,5 @@
 // HUD chat-input routing. [INFERRED] Source split. Named send and descriptor frontiers remain at their call sites.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "BfEditData.h"
@@ -23,6 +24,7 @@ int chatSecondsRemaining(double deadline, double now)
 {
     unsigned short original, truncating;
     int result;
+#if defined(_M_IX86)
     __asm {
         fld deadline
         fsub now
@@ -34,6 +36,20 @@ int chatSecondsRemaining(double deadline, double now)
         fistp result
         fldcw original
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(deadline);
+        c.s(0) -= now;
+        original = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(original) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncating, (c.eax & 0xFFFF));
+        c.cw = truncating;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = original;
+    }
+#endif
     return result;
 }
 

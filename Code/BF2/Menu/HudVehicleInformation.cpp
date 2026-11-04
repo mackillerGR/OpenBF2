@@ -1,4 +1,5 @@
 // HUD vehicle information. [INFERRED] Class and source placement.
+#include "Core/X87Emu.h"
 #include "HudVehicleInformation.h"
 #if !DEDICATED
 #include "HudBlinker.h"
@@ -689,6 +690,7 @@ void HudVehicleInformation::setMouseLook(bool active)
         const float tolerance = 0.01f;
         const float first = m_playerAngle, second = m_vehicleAngle;
         bool aligned;
+#if defined(_M_IX86)
         __asm {
             fld first
             fsub second
@@ -698,6 +700,18 @@ void HudVehicleInformation::setMouseLook(bool active)
             test ah, 41h
             setnp aligned
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(first);
+            c.s(0) -= second;
+            c.s(0) = std::fabs(c.s(0));
+            c.compare(c.s(0), tolerance); c.pop();
+            c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+            c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+            aligned = !c.pf;
+        }
+#endif
         if (aligned) m_guiIndex = m_field0a4;
     }
 }

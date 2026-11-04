@@ -20,6 +20,26 @@
 #include <cmath>        // std::isfinite, std::isnan
 
 // Win32 calling-convention spellings are empty for this non-MSVC native port.
+
+// [CHOSEN, not recovered] CRT spellings the portable client uses.
+#include <time.h>
+#include <stdarg.h>
+#include <string.h>
+#define __assume(x) __builtin_unreachable()
+typedef int __time32_t;
+static inline __time32_t _time32(__time32_t* out) { __time32_t t = (__time32_t)time(0); if (out) *out = t; return t; }
+static inline int _vsnwprintf(wchar_t* b, size_t n, const wchar_t* f, va_list a) { return vswprintf(b, n, f, a); }
+static inline int _swprintf(wchar_t* b, const wchar_t* f, ...) { va_list a; va_start(a, f); int r = vswprintf(b, 4096, f, a); va_end(a); return r; }
+static inline void _splitpath(const char* path, char* drive, char* dir, char* name, char* ext) {
+    const char* slash = strrchr(path, '/'); const char* back = strrchr(path, '\\');
+    const char* base = slash > back ? slash + 1 : (back ? back + 1 : path);
+    if (!slash && back) base = back + 1;
+    const char* dot = strrchr(base, '.');
+    if (drive) *drive = 0;
+    if (dir) { size_t n = (size_t)(base - path); memcpy(dir, path, n); dir[n] = 0; }
+    if (name) { size_t n = dot ? (size_t)(dot - base) : strlen(base); memcpy(name, base, n); name[n] = 0; }
+    if (ext) strcpy(ext, dot ? dot : "");
+}
 #ifndef __cdecl
 #define __cdecl
 #endif

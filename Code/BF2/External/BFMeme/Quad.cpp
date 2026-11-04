@@ -1,3 +1,4 @@
+#include "Core/X87Emu.h"
 #include "Quad.h"
 #if !DEDICATED
 namespace dice { namespace meme {
@@ -75,6 +76,7 @@ Quad::Quad(const Rect* bounds, const Rect* clipping, const Color* color)
 void rotateQuad(Quad* quad, const float center[2], float radians)
 {
     float cosine, sine;
+#if defined(_M_IX86)
     __asm {
         fld radians
         fcos
@@ -83,6 +85,17 @@ void rotateQuad(Quad* quad, const float center[2], float radians)
         fsin
         fstp sine
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(radians);
+        c.s(0) = std::cos(c.s(0));
+        cosine = static_cast<std::remove_reference<decltype(cosine)>::type>(c.s(0)); c.pop();
+        c.push(radians);
+        c.s(0) = std::sin(c.s(0));
+        sine = static_cast<std::remove_reference<decltype(sine)>::type>(c.s(0)); c.pop();
+    }
+#endif
     for (unsigned int i = 0; i < 4; ++i) {
         const float dx = quad->corners[i].x - center[0];
         const float dy = quad->corners[i].y - center[1];

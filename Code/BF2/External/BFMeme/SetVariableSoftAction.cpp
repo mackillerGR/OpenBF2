@@ -1,5 +1,6 @@
 // [INFERRED] path. Complete table94CF98, metadata94CD4C and every differing
 // body/factory/eager instruction read.
+#include "Core/X87Emu.h"
 #include "SetVariableSoftAction.h"
 #if !DEDICATED
 #include "Data.h"
@@ -16,6 +17,7 @@ bool chooseSoftValue(float current, float target, float delta, float speed, floa
 {
     float rounded;
     bool changed = false;
+#if defined(_M_IX86)
     __asm {
         fld target
         fld current
@@ -57,6 +59,50 @@ bool chooseSoftValue(float current, float target, float delta, float speed, floa
         fstp st(0)
     done:
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(target);
+        c.push(current);
+        c.compare(c.s(0), c.s(1)); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto decreasing;
+        c.push(delta);
+        c.s(0) *= speed;
+        c.s(0) += current;
+        rounded = static_cast<std::remove_reference<decltype(rounded)>::type>(c.s(0));
+        c.compare(c.s(0), c.s(1)); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        if (c.zf) goto use_target;
+        keep_candidate: ;
+        c.s(0) = c.s(0); c.pop();
+        goto write_value;
+        decreasing: ;
+        c.push(current);
+        c.compare(c.s(0), c.s(1)); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        if (!c.zf) goto unchanged;
+        c.push(delta);
+        c.s(0) *= speed;
+        c.s(0) = current - c.s(0);
+        rounded = static_cast<std::remove_reference<decltype(rounded)>::type>(c.s(0));
+        c.compare(c.s(0), c.s(1)); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto keep_candidate;
+        use_target: ;
+        rounded = static_cast<std::remove_reference<decltype(rounded)>::type>(c.s(0)); c.pop();
+        write_value: ;
+        x87::fromReg(changed, uintptr_t(1));
+        goto done;
+        unchanged: ;
+        c.s(0) = c.s(0); c.pop();
+        done: ;
+    }
+#endif
     if (changed) value = rounded;
     return changed;
 }

@@ -1,6 +1,7 @@
 // [INFERRED] path and shared class name beside the client HUD owners.
 // Complete BF2.exe A1781C list: 228 constructors75C964..77007E and their
 // static initialization order862D41..864291.
+#include "Core/X87Emu.h"
 #include "HudConsoleBindings.h"
 #if !DEDICATED
 #include "BF2HudManager.h"
@@ -1400,6 +1401,7 @@ public:
         float argument;
         // Preserve FLD before the flag and fstp before getBuilder, including
         // the x87 behavior for a signaling NaN or nondefault exception mask.
+#if defined(_M_IX86)
         __asm {
             mov eax, input
             fld dword ptr [eax]
@@ -1407,6 +1409,16 @@ public:
             mov byte ptr [eax], 1
             fstp argument
         }
+#else
+        {
+            x87::Cpu c;
+            c.eax = x87::toReg(input);
+            c.push(x87::f32(c.eax));
+            c.eax = x87::toReg(returnFlag);
+            x87::u8(c.eax) = uint8_t(uintptr_t(1));
+            argument = static_cast<std::remove_reference<decltype(argument)>::type>(c.s(0)); c.pop();
+        }
+#endif
         m_result = (hudManager->getBuilder()->*Method)(argument);
     }
     void setArgFromString(int index, const std::string& value) override

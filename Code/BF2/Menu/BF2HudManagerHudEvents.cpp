@@ -1,4 +1,5 @@
 // HUD event payload handling. [INFERRED] Source split. Unimplemented leaves stop when invoked.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Bf2MenuMapNode.h"
@@ -58,6 +59,7 @@ float stingerDelay(const char* name)
         if (sample) {
             // PE75BA4D/75BC73 retains z+y+x in x87 until the one float store.
 #if defined(_MSC_VER) && defined(_M_IX86)
+#if defined(_M_IX86)
             __asm {
                 mov eax, sample
                 fld dword ptr [eax+8]
@@ -65,6 +67,16 @@ float stingerDelay(const char* name)
                 fadd dword ptr [eax]
                 fstp delay
             }
+#else
+            {
+                x87::Cpu c;
+                c.eax = x87::toReg(sample);
+                c.push(x87::f32(c.eax + 8));
+                c.s(0) += x87::f32(c.eax + 4);
+                c.s(0) += x87::f32(c.eax);
+                delay = static_cast<std::remove_reference<decltype(delay)>::type>(c.s(0)); c.pop();
+            }
+#endif
 #else
             delay = static_cast<float>(static_cast<long double>(sample[2]) + sample[1] + sample[0]);
 #endif

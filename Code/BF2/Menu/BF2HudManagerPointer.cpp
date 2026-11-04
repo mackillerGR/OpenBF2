@@ -1,4 +1,5 @@
 // HUD pointer positioning and routing. [INFERRED] Source split.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Ref2System.h"
@@ -13,21 +14,39 @@ float centerPointer(float center, float dimension)
 {
     const float half=0.5f;
     float result;
+#if defined(_M_IX86)
     __asm {
         fld dimension
         fmul half
         fsubr center
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(dimension);
+        c.s(0) *= half;
+        c.s(0) = center - c.s(0);
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 float pointerDimension(int dimension) // 751200 fild and two equal float stores
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fild dimension
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(double(dimension));
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 }

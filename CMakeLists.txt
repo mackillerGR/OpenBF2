@@ -653,6 +653,13 @@ bf2_set_platform_compat(bf2_client_objects)
 # This is the native rebuilt-client side of the plugin ABI.  The DLL and executable must use the
 # same MSVC STL layout even when this CMake tree is configured as Debug; iterator debugging changes
 # container layout and cannot cross the image boundary.  PluginAbi.h enforces the matching contract.
+if(BF2_BUILD_LINUX)
+    # [CHOSEN, not recovered] Portable client: retail-layout asserts off, GameSpy POSIX path on.
+    target_compile_definitions(bf2_client_objects PRIVATE _LINUX)
+    target_compile_options(bf2_client_objects PRIVATE
+        -include "${BF2_ROOT}/Core/PortableClient.h")
+    target_include_directories(bf2_client_objects PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim")
+endif()
 target_compile_definitions(bf2_client_objects PRIVATE
     BF2_PLUGIN_ABI_NATIVE=1
     _ITERATOR_DEBUG_LEVEL=0

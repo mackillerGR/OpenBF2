@@ -1,4 +1,5 @@
 // Client list-box cell data. [INFERRED] Source placement.
+#include "Core/X87Emu.h"
 #include "BfListBoxData.h"
 #include "BfNewListBoxNode.h"
 #if !DEDICATED
@@ -21,6 +22,7 @@ int truncateListWidth(double value)
 {
     unsigned short original, truncating;
     int result;
+#if defined(_M_IX86)
     __asm {
         fnstcw original
         mov ax, original
@@ -31,6 +33,19 @@ int truncateListWidth(double value)
         fistp result
         fldcw original
     }
+#else
+    {
+        x87::Cpu c;
+        original = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(original) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncating, (c.eax & 0xFFFF));
+        c.cw = truncating;
+        c.push(value);
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = original;
+    }
+#endif
     return result;
 }
 }
@@ -684,6 +699,7 @@ int BfListBoxData::measureText(System* system, std::wstring text, int column, in
             system->getGlyphMetrics(character, m_node->m_fonts[mode], &metrics);
             ++index;
             // Keep all three additions on x87 until the single float store.
+#if defined(_M_IX86)
             __asm {
                 lea eax, metrics
                 fld dword ptr [eax+8]
@@ -692,6 +708,17 @@ int BfListBoxData::measureText(System* system, std::wstring text, int column, in
                 fadd width
                 fstp width
             }
+#else
+            {
+                x87::Cpu c;
+                c.eax = reinterpret_cast<uintptr_t>(&metrics);
+                c.push(x87::f32(c.eax + 8));
+                c.s(0) += x87::f32(c.eax + 4);
+                c.s(0) += x87::f32(c.eax);
+                c.s(0) += width;
+                width = static_cast<std::remove_reference<decltype(width)>::type>(c.s(0)); c.pop();
+            }
+#endif
         }
         if (index >= 250) break;
         float imageX = 0;

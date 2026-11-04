@@ -1,4 +1,5 @@
 // Weapon status and ammunition display.
+#include "Core/X87Emu.h"
 #include "HudAmmo.h"
 #if !DEDICATED
 #include "BF2HudManager.h"
@@ -1012,6 +1013,7 @@ float armorAbilityRatio(float hitPoints, float maximum, float previous, bool ble
 {
     const float half = 0.5f;
     float result;
+#if defined(_M_IX86)
     __asm {
         fld hitPoints
         fdiv maximum
@@ -1022,6 +1024,19 @@ float armorAbilityRatio(float hitPoints, float maximum, float previous, bool ble
     armor_no_blend:
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(hitPoints);
+        c.s(0) /= maximum;
+        c.zf = uint32_t(x87::toReg(blend)) == uint32_t(uintptr_t(0));
+        if (c.zf) goto armor_no_blend;
+        c.s(0) += previous;
+        c.s(0) *= half;
+        armor_no_blend: ;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 float ammoAbilityRatio(int status, float previous, bool blend)
@@ -1029,6 +1044,7 @@ float ammoAbilityRatio(int status, float previous, bool blend)
     const float scale = 0.06666667014360428f; // PE934BB0, bits3D888889
     const float half = 0.5f;
     float result;
+#if defined(_M_IX86)
     __asm {
         fild status
         fmul scale
@@ -1039,6 +1055,19 @@ float ammoAbilityRatio(int status, float previous, bool blend)
     ammo_no_blend:
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(double(status));
+        c.s(0) *= scale;
+        c.zf = uint32_t(x87::toReg(blend)) == uint32_t(uintptr_t(0));
+        if (c.zf) goto ammo_no_blend;
+        c.s(0) += previous;
+        c.s(0) *= half;
+        ammo_no_blend: ;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 const char repairAbilityIcon[] = "Ingame/Player/Bars/abilitybar_smallRepairIcon.tga";

@@ -1,5 +1,6 @@
 // Full 4x4 inverse for client and supported aidll builds.
 // The dedicated implementation has different rounding and remains declaration-only.
+#include "Core/X87Emu.h"
 #include "Mat4.h"
 #if !DEDICATED || (defined(BF2_IMAGE_AIDLL) && defined(_MSC_VER) && defined(_M_IX86))
 namespace dice { namespace hfe {
@@ -10,27 +11,46 @@ namespace {
 float roundedPairProduct(float left, float right)
 {
     float value;
+#if defined(_M_IX86)
     __asm {
         fld left
         fmul right
         fstp value
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(left);
+        c.s(0) *= right;
+        value = static_cast<std::remove_reference<decltype(value)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return value;
 }
 double pairProduct(float left, float right)
 {
     double value;
+#if defined(_M_IX86)
     __asm {
         fld left
         fmul right
         fstp value
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(left);
+        c.s(0) *= right;
+        value = static_cast<std::remove_reference<decltype(value)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return value;
 }
 void cofactor(float& output, double a0, double b0, double a1, double b1,
               double a2, double b2, double a3, double b3, double a4, double b4,
               double a5, double b5)
 {
+#if defined(_M_IX86)
     __asm {
         mov edx, output
         fld a0
@@ -53,12 +73,38 @@ void cofactor(float& output, double a0, double b0, double a1, double b1,
         fsubr dword ptr [edx]
         fstp dword ptr [edx]
     }
+#else
+    {
+        x87::Cpu c;
+        c.edx = x87::toReg(output);
+        c.push(a0);
+        c.s(0) *= b0;
+        c.push(a1);
+        c.s(0) *= b1;
+        c.s(1) += c.s(0); c.pop();
+        c.push(a2);
+        c.s(0) *= b2;
+        c.s(1) += c.s(0); c.pop();
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+        c.push(a3);
+        c.s(0) *= b3;
+        c.push(a4);
+        c.s(0) *= b4;
+        c.s(1) += c.s(0); c.pop();
+        c.push(a5);
+        c.s(0) *= b5;
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) = x87::f32(c.edx) - c.s(0);
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+    }
+#endif
 }
 void divideByDeterminant(const float* input, float* output)
 {
     const float one = 1.0f;
     // Retain the reciprocal on the x87 stack throughout all16 scaled stores.
     // No zero/NaN/infinity test exists in either shipped image.
+#if defined(_M_IX86)
     __asm {
         mov ecx, input
         mov edx, output
@@ -84,6 +130,34 @@ void divideByDeterminant(const float* input, float* output)
         jnz scaleElement
         fstp st
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(input);
+        c.edx = x87::toReg(output);
+        c.push(x87::f32(c.ecx + 16));
+        c.s(0) *= x87::f32(c.edx + 4);
+        c.push(x87::f32(c.ecx));
+        c.s(0) *= x87::f32(c.edx);
+        c.s(1) += c.s(0); c.pop();
+        c.push(x87::f32(c.ecx + 32));
+        c.s(0) *= x87::f32(c.edx + 8);
+        c.s(1) += c.s(0); c.pop();
+        c.push(x87::f32(c.ecx + 48));
+        c.s(0) *= x87::f32(c.edx + 12);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) = one / c.s(0);
+        c.ecx = uintptr_t(16);
+        scaleElement: ;
+        c.push(c.s(0));
+        c.s(0) *= x87::f32(c.edx);
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+        c.edx += 4;
+        c.ecx -= 1; c.zf = uint32_t(c.ecx) == 0;
+        if (!c.zf) goto scaleElement;
+        c.s(0) = c.s(0); c.pop();
+    }
+#endif
 }
 }
 void fullInvert(const Mat4& source, Mat4& destination)

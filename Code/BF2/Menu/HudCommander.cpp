@@ -1,4 +1,5 @@
 // Commander HUD controls. [INFERRED] Owner, name and source placement.
+#include "Core/X87Emu.h"
 #include "HudCommander.h"
 #if !DEDICATED
 #include "BF2HudManager.h"
@@ -73,6 +74,7 @@ void updateCooldown(float deadline, double now, float duration, float& remaining
 {
     float* remainingValue = &remaining;
     float* fractionValue = &fraction;
+#if defined(_M_IX86)
     __asm {
         fld deadline
         fsub now
@@ -82,6 +84,18 @@ void updateCooldown(float deadline, double now, float duration, float& remaining
         mov eax, fractionValue
         fstp dword ptr [eax]
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(deadline);
+        c.s(0) -= now;
+        c.eax = x87::toReg(remainingValue);
+        x87::f32(c.eax) = float(c.s(0));
+        c.s(0) /= duration;
+        c.eax = x87::toReg(fractionValue);
+        x87::f32(c.eax) = float(c.s(0)); c.pop();
+    }
+#endif
 }
 }
 HudCommander::HudCommander(meme::System* system)

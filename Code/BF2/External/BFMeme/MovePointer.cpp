@@ -1,6 +1,7 @@
 // Full operational instructions read from BF2.exe. Construction and descriptor
 // remain declaration-only while TransformNode identity is unpublished.
 // No raw Node suffix dispatch is introduced.
+#include "Core/X87Emu.h"
 #include "MovePointer.h"
 #if !DEDICATED
 #include "TransformNode.h"
@@ -15,23 +16,43 @@ namespace {
 float moveOffset(float value, float start, float origin)
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld value
         fsub start
         fadd origin
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(value);
+        c.s(0) -= start;
+        c.s(0) += origin;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 float outlineThickness(float dimension) // 82B6D9..82B6EF and three repeated arms
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld1
         fsub dimension
         fadd dimension
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(1.0);
+        c.s(0) -= dimension;
+        c.s(0) += dimension;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 TransformNode* asTransform(Node* node)

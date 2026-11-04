@@ -1,5 +1,6 @@
 // [INFERRED] split in the attested BF2HudManager.cpp family. Complete653-byte
 // PE752B00 and its helpers read. Filters stay separate.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Ref2System.h"
@@ -13,12 +14,22 @@ float centeredInputOrigin(float origin, float dimension)
 {
     const float half = 0.5f;
     float result;
+#if defined(_M_IX86)
     __asm {
         fld dimension
         fmul half
         fsubr origin
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(dimension);
+        c.s(0) *= half;
+        c.s(0) = origin - c.s(0);
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 
@@ -27,6 +38,7 @@ void moveInputPointer(float* position, float x, float y, int sensitivity,
 {
     const float half = 0.5f;
     if (absolute) {
+#if defined(_M_IX86)
         __asm {
             mov eax, position
             fld x
@@ -38,8 +50,23 @@ void moveInputPointer(float* position, float x, float y, int sensitivity,
             fmul half
             fstp dword ptr [eax+4]
         }
+#else
+        {
+            x87::Cpu c;
+            c.eax = x87::toReg(position);
+            c.push(x);
+            c.s(0) *= width;
+            c.s(0) *= half;
+            x87::f32(c.eax) = float(c.s(0)); c.pop();
+            c.push(y);
+            c.s(0) *= height;
+            c.s(0) *= half;
+            x87::f32(c.eax + 4) = float(c.s(0)); c.pop();
+        }
+#endif
     } else {
         // fild preserves all bits of the signed sensitivity until multiplication.
+#if defined(_M_IX86)
         __asm {
             mov eax, position
             fild sensitivity
@@ -51,12 +78,27 @@ void moveInputPointer(float* position, float x, float y, int sensitivity,
             fadd dword ptr [eax+4]
             fstp dword ptr [eax+4]
         }
+#else
+        {
+            x87::Cpu c;
+            c.eax = x87::toReg(position);
+            c.push(double(sensitivity));
+            c.push(x);
+            c.s(0) *= c.s(1);
+            c.s(0) += x87::f32(c.eax);
+            x87::f32(c.eax) = float(c.s(0)); c.pop();
+            c.s(0) *= y;
+            c.s(0) += x87::f32(c.eax + 4);
+            x87::f32(c.eax + 4) = float(c.s(0)); c.pop();
+        }
+#endif
     }
 }
 
 void clampInputCoordinate(float& value, float origin, float extent)
 {
     // Keep the unrounded upper-bound sum and the shipped unordered comparisons.
+#if defined(_M_IX86)
     __asm {
         mov edx, value
         fld dword ptr [edx]
@@ -80,6 +122,32 @@ void clampInputCoordinate(float& value, float origin, float extent)
         fstp st(0)
     clamp_done:
     }
+#else
+    {
+        x87::Cpu c;
+        c.edx = x87::toReg(value);
+        c.push(x87::f32(c.edx));
+        c.compare(c.s(0), origin); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto upper_bound;
+        c.eax = x87::toReg(origin);
+        x87::u32(c.edx) = uint32_t(c.eax);
+        goto clamp_done;
+        upper_bound: ;
+        c.push(extent);
+        c.s(0) += origin;
+        c.compare(c.s(0), x87::f32(c.edx));
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto upper_unchanged;
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+        goto clamp_done;
+        upper_unchanged: ;
+        c.s(0) = c.s(0); c.pop();
+        clamp_done: ;
+    }
+#endif
 }
 }
 

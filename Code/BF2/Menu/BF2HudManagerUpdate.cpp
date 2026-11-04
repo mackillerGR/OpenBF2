@@ -1,4 +1,5 @@
 // Per-frame HUD and pending-request updates. [INFERRED] Source split.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "HudVoip.h"
@@ -43,6 +44,7 @@ namespace {
 bool subtractTimer(float& timer, float delta, bool inclusive)
 {
     bool expired;
+#if defined(_M_IX86)
     __asm {
         mov ecx, timer
         fld dword ptr [ecx]
@@ -61,12 +63,34 @@ bool subtractTimer(float& timer, float delta, bool inclusive)
         setnp expired
     expiry_done:
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(timer);
+        c.push(x87::f32(c.ecx));
+        c.s(0) -= delta;
+        x87::f32(c.ecx) = float(c.s(0));
+        c.compare(c.s(0), 0.0);
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.s(0) = c.s(0); c.pop();
+        c.zf = uint32_t(x87::toReg(inclusive)) == uint32_t(uintptr_t(0));
+        if (c.zf) goto strict_expiry;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        expired = !c.pf;
+        goto expiry_done;
+        strict_expiry: ;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        expired = !c.pf;
+        expiry_done: ;
+    }
+#endif
     return expired;
 }
 bool addDemoTimer(float& timer, float delta)
 {
     const float threshold = 10.0f;
     bool due;
+#if defined(_M_IX86)
     __asm {
         mov ecx, timer
         fld delta
@@ -77,6 +101,19 @@ bool addDemoTimer(float& timer, float delta)
         test ah, 1
         setz due
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(timer);
+        c.push(delta);
+        c.s(0) += x87::f32(c.ecx);
+        x87::f32(c.ecx) = float(c.s(0));
+        c.compare(c.s(0), threshold); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(1)));
+        due = c.zf;
+    }
+#endif
     return due;
 }
 std::string requestInUseMessage(int type)
@@ -271,6 +308,7 @@ void BF2HudManager::updateMapPosition(world::IPlayer* player, Vec3 direction)
     float heading;
     if (player->getIsAlive()) {
         const float x = direction.x, z = direction.z;
+#if defined(_M_IX86)
         __asm {
             fld x
             fld z
@@ -287,8 +325,28 @@ void BF2HudManager::updateMapPosition(world::IPlayer* player, Vec3 direction)
             fmul scaleZ
             fstp position.y
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(x);
+            c.push(z);
+            c.s(1) = std::atan2(c.s(1), c.s(0)); c.pop();
+            heading = static_cast<std::remove_reference<decltype(heading)>::type>(c.s(0)); c.pop();
+            c.push(worldX);
+            c.s(0) *= half;
+            c.s(0) += cameraX;
+            c.s(0) *= scaleX;
+            position.x = static_cast<std::remove_reference<decltype(position.x)>::type>(c.s(0)); c.pop();
+            c.push(worldZ);
+            c.s(0) *= half;
+            c.s(0) += cameraZ;
+            c.s(0) *= scaleZ;
+            position.y = static_cast<std::remove_reference<decltype(position.y)>::type>(c.s(0)); c.pop();
+        }
+#endif
     } else {
         heading = 0.0f;
+#if defined(_M_IX86)
         __asm {
             fld worldX
             fmul half
@@ -299,6 +357,19 @@ void BF2HudManager::updateMapPosition(world::IPlayer* player, Vec3 direction)
             fmul scaleZ
             fstp position.y
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(worldX);
+            c.s(0) *= half;
+            c.s(0) *= scaleX;
+            position.x = static_cast<std::remove_reference<decltype(position.x)>::type>(c.s(0)); c.pop();
+            c.push(worldZ);
+            c.s(0) *= half;
+            c.s(0) *= scaleZ;
+            position.y = static_cast<std::remove_reference<decltype(position.y)>::type>(c.s(0)); c.pop();
+        }
+#endif
     }
     hudMap->setPlayerPosition(position, heading);
 }

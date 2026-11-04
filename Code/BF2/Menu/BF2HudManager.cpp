@@ -1,4 +1,5 @@
 // Owns the HUD modules and their shared menu system.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "HudBlinker.h"
@@ -70,6 +71,7 @@ bool commanderWaitRemaining(double last, double cooldown, double now, double& re
     const double minutesPerSecond = 1.0 / 60.0;
     double value;
     bool denied;
+#if defined(_M_IX86)
     __asm {
         fld now
         fsub last
@@ -86,6 +88,25 @@ bool commanderWaitRemaining(double last, double cooldown, double now, double& re
         fstp st(0)
     wait_done:
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(now);
+        c.s(0) -= last;
+        c.s(0) *= minutesPerSecond;
+        c.s(0) = cooldown - c.s(0);
+        c.compare(c.s(0), 0.0);
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        denied = c.pf;
+        if (!c.pf) goto no_wait;
+        value = static_cast<std::remove_reference<decltype(value)>::type>(c.s(0)); c.pop();
+        goto wait_done;
+        no_wait: ;
+        c.s(0) = c.s(0); c.pop();
+        wait_done: ;
+    }
+#endif
     if (denied) remaining = value;
     return denied;
 }
@@ -94,6 +115,7 @@ int commanderWaitInteger(double remaining)
     const double rounded = std::ceil(remaining);
     unsigned short original, truncating;
     int result;
+#if defined(_M_IX86)
     __asm {
         fld rounded
         fnstcw original
@@ -104,6 +126,19 @@ int commanderWaitInteger(double remaining)
         fistp result
         fldcw original
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(rounded);
+        original = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(original) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncating, (c.eax & 0xFFFF));
+        c.cw = truncating;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = original;
+    }
+#endif
     return result;
 }
 }

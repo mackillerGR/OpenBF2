@@ -1,5 +1,6 @@
 // [INFERRED] split in the attested BF2HudManager.cpp family. Complete PE755870
 // and every local helper read.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Ref2System.h"
@@ -60,12 +61,22 @@ static_assert(sizeof(SpottedRayPredicator)==16 && sizeof(SpottedPcoPredicator)==
 float multiplyAdd(float value, float factor, float translation)
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld value
         fmul factor
         fadd translation
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(value);
+        c.s(0) *= factor;
+        c.s(0) += translation;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 
@@ -77,11 +88,21 @@ float targetDistance(const Vec3& from, const Vec3& to, float scale, bool storeX)
     const float toX=to.x, toY=to.y, toZ=to.z;
     float x, result;
     if (storeX) {
+#if defined(_M_IX86)
         __asm {
             fld toX
             fsub fromX
             fstp x
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(toX);
+            c.s(0) -= fromX;
+            x = static_cast<std::remove_reference<decltype(x)>::type>(c.s(0)); c.pop();
+        }
+#endif
+#if defined(_M_IX86)
         __asm {
             fld toZ
             fsub fromZ
@@ -97,7 +118,26 @@ float targetDistance(const Vec3& from, const Vec3& to, float scale, bool storeX)
             fmul scale
             fstp result
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(toZ);
+            c.s(0) -= fromZ;
+            c.s(0) *= c.s(0);
+            c.push(x);
+            c.s(0) *= c.s(0);
+            c.s(1) += c.s(0); c.pop();
+            c.push(toY);
+            c.s(0) -= fromY;
+            c.s(0) *= c.s(0);
+            c.s(1) += c.s(0); c.pop();
+            c.s(0) = std::sqrt(c.s(0));
+            c.s(0) *= scale;
+            result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+        }
+#endif
     } else {
+#if defined(_M_IX86)
         __asm {
             fld toZ
             fsub fromZ
@@ -114,6 +154,25 @@ float targetDistance(const Vec3& from, const Vec3& to, float scale, bool storeX)
             fmul scale
             fstp result
         }
+#else
+        {
+            x87::Cpu c;
+            c.push(toZ);
+            c.s(0) -= fromZ;
+            c.s(0) *= c.s(0);
+            c.push(toX);
+            c.s(0) -= fromX;
+            c.s(0) *= c.s(0);
+            c.s(1) += c.s(0); c.pop();
+            c.push(toY);
+            c.s(0) -= fromY;
+            c.s(0) *= c.s(0);
+            c.s(1) += c.s(0); c.pop();
+            c.s(0) = std::sqrt(c.s(0));
+            c.s(0) *= scale;
+            result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+        }
+#endif
     }
     return result;
 }
@@ -128,6 +187,7 @@ void pullHitTowardOrigin(const Vec3& hit, const Vec3& origin, Vec3& output)
     const float bias=0.2f;
     float dy, dz, magnitude, scale, offsetX;
     float* result=&output.x;
+#if defined(_M_IX86)
     __asm {
         fld hz
         fsub oz
@@ -169,6 +229,50 @@ void pullHitTowardOrigin(const Vec3& hit, const Vec3& origin, Vec3& output)
         fstp dword ptr [edx+8]
     pullDone:
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(hz);
+        c.s(0) -= oz;
+        dz = static_cast<std::remove_reference<decltype(dz)>::type>(c.s(0));
+        c.s(0) *= c.s(0);
+        c.push(hy);
+        c.s(0) -= oy;
+        dy = static_cast<std::remove_reference<decltype(dy)>::type>(c.s(0));
+        c.s(0) *= c.s(0);
+        c.s(1) += c.s(0); c.pop();
+        c.push(hx);
+        c.s(0) -= ox;
+        c.s(0) *= c.s(0);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) = std::sqrt(c.s(0));
+        magnitude = static_cast<std::remove_reference<decltype(magnitude)>::type>(c.s(0));
+        c.compare(c.s(0), bias); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        if (!c.zf) goto pullDone;
+        c.push(bias);
+        c.s(0) /= magnitude;
+        scale = static_cast<std::remove_reference<decltype(scale)>::type>(c.s(0)); c.pop();
+        c.push(hx);
+        c.s(0) -= ox;
+        c.s(0) *= scale;
+        offsetX = static_cast<std::remove_reference<decltype(offsetX)>::type>(c.s(0)); c.pop();
+        c.push(hx);
+        c.s(0) -= offsetX;
+        c.edx = x87::toReg(result);
+        x87::f32(c.edx) = float(c.s(0)); c.pop();
+        c.push(dy);
+        c.s(0) *= scale;
+        c.s(0) = hy - c.s(0);
+        x87::f32(c.edx + 4) = float(c.s(0)); c.pop();
+        c.push(dz);
+        c.s(0) *= scale;
+        c.s(0) = hz - c.s(0);
+        x87::f32(c.edx + 8) = float(c.s(0)); c.pop();
+        pullDone: ;
+    }
+#endif
 }
 }
 

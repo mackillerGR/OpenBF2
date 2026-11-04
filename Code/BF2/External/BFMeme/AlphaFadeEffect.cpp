@@ -1,5 +1,6 @@
 // Path [INFERRED]. All primary/metadata targets, eager/factory and differing
 // bodies read from the client PE before implementation. See the status document.
+#include "Core/X87Emu.h"
 #include "AlphaFadeEffect.h"
 #if !DEDICATED
 #include "Node.h"
@@ -31,6 +32,7 @@ public:
 // native mulss does not reproduce that case. Both operands are loaded afresh.
 void multiplyAlpha(float* alpha, const float* factor)
 {
+#if defined(_M_IX86)
     __asm {
         mov edx, factor
         mov eax, alpha
@@ -38,6 +40,16 @@ void multiplyAlpha(float* alpha, const float* factor)
         fmul dword ptr [eax]
         fstp dword ptr [eax]
     }
+#else
+    {
+        x87::Cpu c;
+        c.edx = x87::toReg(factor);
+        c.eax = x87::toReg(alpha);
+        c.push(x87::f32(c.edx));
+        c.s(0) *= x87::f32(c.eax);
+        x87::f32(c.eax) = float(c.s(0)); c.pop();
+    }
+#endif
 }
 }
 

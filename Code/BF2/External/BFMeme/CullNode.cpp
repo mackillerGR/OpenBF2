@@ -2,6 +2,7 @@
 // factory836060 and every differing existing-prefix body read. The native
 // 33-slot prefix uses the owner-approved startup exception; inherited
 // event/reset suffix calls still stop at their known Node callers.
+#include "Core/X87Emu.h"
 #include "CullNode.h"
 #if !DEDICATED
 #include "Data.h"
@@ -40,6 +41,7 @@ float decreaseFade(float current, float delta, float duration)
 {
     float result;
     const float zero = 0.0f;
+#if defined(_M_IX86)
     __asm {
         fld delta
         fdiv duration
@@ -52,12 +54,28 @@ float decreaseFade(float current, float delta, float duration)
         mov result, 0
     decreased:
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(delta);
+        c.s(0) /= duration;
+        c.s(0) = current - c.s(0);
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0));
+        c.compare(c.s(0), zero); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto decreased;
+        x87::fromReg(result, uintptr_t(0));
+        decreased: ;
+    }
+#endif
     return result;
 }
 float increaseFade(float current, float delta, float duration)
 {
     float result;
     const float one = 1.0f;
+#if defined(_M_IX86)
     __asm {
         fld delta
         fdiv duration
@@ -70,6 +88,21 @@ float increaseFade(float current, float delta, float duration)
         mov result, 3F800000h
     increased:
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(delta);
+        c.s(0) /= duration;
+        c.s(0) += current;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0));
+        c.compare(c.s(0), one); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        if (!c.zf) goto increased;
+        x87::fromReg(result, uintptr_t(0x3F800000));
+        increased: ;
+    }
+#endif
     return result;
 }
 }

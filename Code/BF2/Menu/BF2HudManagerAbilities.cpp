@@ -1,4 +1,5 @@
 // Ability display. [INFERRED] Source split from Menu/BF2HudManager.cpp.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Bf2MenuMapNode.h"
@@ -35,6 +36,7 @@ bool hasAbilityPosition(const Vec2& position)
     const float sentinel = -4000.0f;
     const float epsilon = FLT_EPSILON;
     bool valid;
+#if defined(_M_IX86)
     __asm {
         mov ecx, position
         fld dword ptr [ecx+4]
@@ -49,6 +51,23 @@ bool hasAbilityPosition(const Vec2& position)
         test ah, 41h
         setp valid
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(position);
+        c.push(x87::f32(c.ecx + 4));
+        c.s(0) -= sentinel;
+        c.s(0) = std::fabs(c.s(0));
+        c.push(x87::f32(c.ecx));
+        c.s(0) -= sentinel;
+        c.s(0) = std::fabs(c.s(0));
+        c.s(1) += c.s(0); c.pop();
+        c.compare(c.s(0), epsilon); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        valid = c.pf;
+    }
+#endif
     return valid;
 }
 
@@ -57,6 +76,7 @@ bool hasAbilityPosition(const Vec2& position)
 void beginSupplyCooldown(double now, const float& duration, float& remaining,
                          bool& reloading, float& deadline)
 {
+#if defined(_M_IX86)
     __asm {
         fld now
         mov eax, duration
@@ -69,11 +89,27 @@ void beginSupplyCooldown(double now, const float& duration, float& remaining,
         mov ecx, deadline
         fstp dword ptr [ecx]
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(now);
+        c.eax = x87::toReg(duration);
+        c.s(0) += x87::f32(c.eax);
+        c.ecx = x87::u32(c.eax);
+        c.edx = x87::toReg(remaining);
+        x87::u32(c.edx) = uint32_t(c.ecx);
+        c.eax = x87::toReg(reloading);
+        x87::u8(c.eax) = uint8_t(uintptr_t(1));
+        c.ecx = x87::toReg(deadline);
+        x87::f32(c.ecx) = float(c.s(0)); c.pop();
+    }
+#endif
 }
 
 void beginVehicleCooldown(double now, const float& duration, float& remaining,
                           float& deadline, bool& reloading)
 {
+#if defined(_M_IX86)
     __asm {
         fld now
         mov eax, duration
@@ -86,6 +122,21 @@ void beginVehicleCooldown(double now, const float& duration, float& remaining,
         mov ecx, reloading
         mov byte ptr [ecx], 1
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(now);
+        c.eax = x87::toReg(duration);
+        c.s(0) += x87::f32(c.eax);
+        c.ecx = x87::u32(c.eax);
+        c.edx = x87::toReg(remaining);
+        x87::u32(c.edx) = uint32_t(c.ecx);
+        c.eax = x87::toReg(deadline);
+        x87::f32(c.eax) = float(c.s(0)); c.pop();
+        c.ecx = x87::toReg(reloading);
+        x87::u8(c.ecx) = uint8_t(uintptr_t(1));
+    }
+#endif
 }
 }
 

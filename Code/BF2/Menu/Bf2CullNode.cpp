@@ -1,5 +1,6 @@
 // Menu culling node. [INFERRED] Source placement.
 // Inherited unimplemented Node operations retain their diagnostic stops.
+#include "Core/X87Emu.h"
 #include "Bf2CullNode.h"
 #if !DEDICATED
 #include "../External/BFMeme/Data.h"
@@ -45,6 +46,7 @@ char* cloneCullNodeName(const char* name)
 void decreaseCullFade(float& current, float delta, float duration)
 {
     const float zero = 0.0f;
+#if defined(_M_IX86)
     __asm {
         mov ecx, current
         fld delta
@@ -58,10 +60,27 @@ void decreaseCullFade(float& current, float delta, float duration)
         mov dword ptr [ecx], 0
     decreased:
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(current);
+        c.push(delta);
+        c.s(0) /= duration;
+        c.s(0) = x87::f32(c.ecx) - c.s(0);
+        x87::f32(c.ecx) = float(c.s(0));
+        c.compare(c.s(0), zero); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto decreased;
+        x87::u32(c.ecx) = uint32_t(uintptr_t(0));
+        decreased: ;
+    }
+#endif
 }
 void increaseCullFade(float& current, float delta, float duration)
 {
     const float one = 1.0f;
+#if defined(_M_IX86)
     __asm {
         mov ecx, current
         fld delta
@@ -75,6 +94,22 @@ void increaseCullFade(float& current, float delta, float duration)
         mov dword ptr [ecx], 3F800000h
     increased:
     }
+#else
+    {
+        x87::Cpu c;
+        c.ecx = x87::toReg(current);
+        c.push(delta);
+        c.s(0) /= duration;
+        c.s(0) += x87::f32(c.ecx);
+        x87::f32(c.ecx) = float(c.s(0));
+        c.compare(c.s(0), one); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(0x41)));
+        if (!c.zf) goto increased;
+        x87::u32(c.ecx) = uint32_t(uintptr_t(0x3F800000));
+        increased: ;
+    }
+#endif
 }
 }
 

@@ -1,4 +1,5 @@
 // Transform-node state updates and metadata; unsupported Node suffix calls retain diagnostic stops.
+#include "Core/X87Emu.h"
 #include "TransformNode.h"
 #if !DEDICATED
 #include "NodeState.h"
@@ -38,6 +39,7 @@ bool streamPair(hfe::Vec2& value, Stream* stream, const char* first, const char*
 float decodedState(float value) // float stores in838F40 and82D340
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld value
         ftst
@@ -50,6 +52,21 @@ float decodedState(float value) // float stores in838F40 and82D340
     decoded:
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(value);
+        c.compare(c.s(0), 0.0);
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto decoded;
+        c.push(1.0);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) = -c.s(0);
+        decoded: ;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 float stateRate(const NodeState& state) // 838F40 ->82BD30; System/Node receivers unused
@@ -63,6 +80,7 @@ float stateRate(const NodeState& state) // 838F40 ->82BD30; System/Node receiver
 bool sumNotLess(float first, float second, float limit) // 82D49E..4BB, unordered passes
 {
     bool result;
+#if defined(_M_IX86)
     __asm {
         fld first
         fadd second
@@ -71,6 +89,17 @@ bool sumNotLess(float first, float second, float limit) // 82D49E..4BB, unordere
         test ah, 5
         setp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(first);
+        c.s(0) += second;
+        c.compare(c.s(0), limit); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        result = c.pf;
+    }
+#endif
     return result;
 }
 }

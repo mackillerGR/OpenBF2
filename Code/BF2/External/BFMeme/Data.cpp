@@ -1,4 +1,5 @@
 // All instructions read from BF2.exe. No matching dedicated ELF Data class.
+#include "Core/X87Emu.h"
 #include "Data.h"
 #if !DEDICATED
 #include "DataFormatting.h"
@@ -49,6 +50,7 @@ void formatStringDataFloat(float value, char* output, int digits)
     unsigned short oldControl, truncControl;
     __int64 whole;
     int integral;
+#if defined(_M_IX86)
     __asm {
         fnstcw oldControl
         mov ax, oldControl
@@ -63,6 +65,21 @@ void formatStringDataFloat(float value, char* output, int digits)
         mov eax, dword ptr whole
         mov integral, eax
     }
+#else
+    {
+        x87::Cpu c;
+        oldControl = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(oldControl) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncControl, (c.eax & 0xFFFF));
+        c.push(magnitude);
+        c.cw = truncControl;
+        whole = static_cast<std::remove_reference<decltype(whole)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = oldControl;
+        c.eax = x87::toReg(whole);
+        x87::fromReg(integral, c.eax);
+    }
+#endif
     int remaining = integral;
     if (remaining == 0) {
         *cursor++ = '0';
@@ -78,6 +95,7 @@ void formatStringDataFloat(float value, char* output, int digits)
     *cursor++ = '.';
     const double ten = 10.0;
     int digit;
+#if defined(_M_IX86)
     __asm {
         fld magnitude
         fisub integral
@@ -99,6 +117,30 @@ void formatStringDataFloat(float value, char* output, int digits)
         fstp st(0)
         mov cursor, edi
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(magnitude);
+        c.s(0) -= double(integral);
+        c.edi = x87::toReg(cursor);
+        c.ecx = x87::toReg(digits);
+        string_data_digit: ;
+        c.s(0) *= ten;
+        c.push(c.s(0));
+        c.cw = truncControl;
+        digit = static_cast<std::remove_reference<decltype(digit)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = oldControl;
+        c.eax = x87::toReg(digit);
+        c.eax = (c.eax & ~uintptr_t(0xFF)) | ((c.eax + 0x30) & 0xFF);
+        x87::u8(c.edi) = uint8_t((c.eax & 0xFF));
+        c.edi += 1;
+        c.s(0) -= double(digit);
+        c.ecx -= 1; c.zf = uint32_t(c.ecx) == 0;
+        if (!c.zf) goto string_data_digit;
+        c.s(0) = c.s(0); c.pop();
+        x87::fromReg(cursor, c.edi);
+    }
+#endif
     *cursor = 0;
 }
 

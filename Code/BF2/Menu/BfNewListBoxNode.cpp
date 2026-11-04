@@ -1,3 +1,4 @@
+#include "Core/X87Emu.h"
 #include "BfNewListBoxNode.h"
 #if !DEDICATED
 #include "BfListBoxData.h"
@@ -24,6 +25,7 @@ int floorToInt(double value)
     const double floored = std::floor(value);
     unsigned short original, truncating;
     int result;
+#if defined(_M_IX86)
     __asm {
         fnstcw original
         mov ax, original
@@ -34,6 +36,19 @@ int floorToInt(double value)
         fistp result
         fldcw original
     }
+#else
+    {
+        x87::Cpu c;
+        original = c.cw;
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | (x87::toReg(original) & 0xFFFF);
+        c.eax |= 0x0C00;
+        x87::fromReg(truncating, (c.eax & 0xFFFF));
+        c.cw = truncating;
+        c.push(floored);
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.round(c.s(0))); c.pop();
+        c.cw = original;
+    }
+#endif
     return result;
 }
 int floorFloatToInt(float value) { return floorToInt(static_cast<double>(value)); }

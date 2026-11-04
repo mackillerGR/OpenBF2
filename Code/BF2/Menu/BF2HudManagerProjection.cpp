@@ -1,4 +1,5 @@
 // World-to-HUD projection. [INFERRED] Source split from Menu/BF2HudManager.cpp.
+#include "Core/X87Emu.h"
 #include "BF2HudManager.h"
 #if !DEDICATED
 #include "Ref2System.h"
@@ -14,6 +15,7 @@ float affineComponent(float a, float ma, float b, float mb,
                       float c, float mc, float translation)
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld a
         fmul ma
@@ -26,6 +28,22 @@ float affineComponent(float a, float ma, float b, float mb,
         fadd translation
         fstp result
     }
+#else
+    {
+        const double cIn = c;
+        x87::Cpu cpu;
+        cpu.push(a);
+        cpu.s(0) *= ma;
+        cpu.push(b);
+        cpu.s(0) *= mb;
+        cpu.s(1) += cpu.s(0); cpu.pop();
+        cpu.push(cIn);
+        cpu.s(0) *= mc;
+        cpu.s(1) += cpu.s(0); cpu.pop();
+        cpu.s(0) += translation;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(cpu.s(0)); cpu.pop();
+    }
+#endif
     return result;
 }
 
@@ -45,11 +63,20 @@ Vec3 affineInOrder(const Mat4& matrix, const Vec3& point, int first, int second,
 float screenCoordinate(float numerator, float denominator)
 {
     float result;
+#if defined(_M_IX86)
     __asm {
         fld numerator
         fdiv denominator
         fstp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(numerator);
+        c.s(0) /= denominator;
+        result = static_cast<std::remove_reference<decltype(result)>::type>(c.s(0)); c.pop();
+    }
+#endif
     return result;
 }
 
@@ -64,6 +91,7 @@ void projectToScreen(const Vec3& clip, float halfWidth, float height, Vec3& resu
     }
     const float x = clip.x, y = clip.y, z = clip.z;
     float outputX, outputY, outputZ;
+#if defined(_M_IX86)
     __asm {
         fld height
         fmul half
@@ -80,6 +108,25 @@ void projectToScreen(const Vec3& clip, float halfWidth, float height, Vec3& resu
         fstp outputY
         fstp outputZ
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(height);
+        c.s(0) *= half;
+        c.push(1.0);
+        c.s(0) /= z;
+        c.push(x);
+        c.s(0) *= c.s(1);
+        c.s(0) *= halfWidth;
+        outputX = static_cast<std::remove_reference<decltype(outputX)>::type>(c.s(0)); c.pop();
+        { double t = c.s(0); c.s(0) = c.s(1); c.s(1) = t; }
+        c.s(0) = -c.s(0);
+        c.s(0) *= y;
+        c.s(0) *= c.s(1);
+        outputY = static_cast<std::remove_reference<decltype(outputY)>::type>(c.s(0)); c.pop();
+        outputZ = static_cast<std::remove_reference<decltype(outputZ)>::type>(c.s(0)); c.pop();
+    }
+#endif
     result.x = outputX;
     result.y = outputY;
     result.z = outputZ;

@@ -1,5 +1,6 @@
 // HUD transform-node position and bounds. [INFERRED] Source placement.
 // Higher accessors use the documented native interface where original Node slots remain incomplete.
+#include "Core/X87Emu.h"
 #include "Bf2TransformNode.h"
 #if !DEDICATED
 #include "Bf2ButtonNode.h"
@@ -17,6 +18,7 @@ namespace {
 bool sumNotLess(float first, float second, float limit) // 7C1ED1..7C1EEE, unordered passes
 {
     bool result;
+#if defined(_M_IX86)
     __asm {
         fld first
         fadd second
@@ -25,12 +27,24 @@ bool sumNotLess(float first, float second, float limit) // 7C1ED1..7C1EEE, unord
         test ah, 5
         setp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(first);
+        c.s(0) += second;
+        c.compare(c.s(0), limit); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        result = c.pf;
+    }
+#endif
     return result;
 }
 bool stateEnabled(float value) // 7C1EF3..7C1F24; decoded value stays in x87
 {
     const float one = 1.0f;
     bool result;
+#if defined(_M_IX86)
     __asm {
         fld value
         ftst
@@ -46,6 +60,24 @@ bool stateEnabled(float value) // 7C1EF3..7C1F24; decoded value stays in x87
         test ah, 5
         setp result
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(value);
+        c.compare(c.s(0), 0.0);
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        if (c.pf) goto decoded;
+        c.push(1.0);
+        c.s(1) += c.s(0); c.pop();
+        c.s(0) = -c.s(0);
+        decoded: ;
+        c.compare(c.s(0), one); c.pop();
+        c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;
+        c.testFlags(uint32_t(((c.eax >> 8) & 0xFF) & uintptr_t(5)));
+        result = c.pf;
+    }
+#endif
     return result;
 }
 
