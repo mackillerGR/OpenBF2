@@ -1025,6 +1025,12 @@ void ModuleGame::handleEvent(EventCategory category, unsigned int id, EventNode*
 
     if (category == static_cast<EventCategory>(10))         // ECMenu
     {
+#if !defined(_WIN32)
+        // [CHOSEN, not recovered] Without a Swiff player the Flash loading screen cannot exist.
+        // [RETIRE-WHEN: portable-swiff-player] Remove when a menu player exists on this host.
+        if (getenv("BF2_PORT_DIRECT_START"))
+            return;
+#endif
         switch (id)
         {
         case 3:                                             // ECMenuMenuEvent_InitLoadingScreen

@@ -334,7 +334,7 @@ IGeometryTemplate* GeometryTemplateManager::createTemplate(unsigned int classId,
     }
 
     vc71::mapNodeValueRef(node) = value;
-    reinterpret_cast<unsigned char*>(value)[4] = 0; // GeometryTemplate's shipped load/keep byte.
+    reinterpret_cast<unsigned char*>(value)[sizeof(void*)] = 0; // GeometryTemplate's shipped load/keep byte.
     templateBase(value)->addRef();                  // registry ownership
     setTemplateName(value, name);
 
