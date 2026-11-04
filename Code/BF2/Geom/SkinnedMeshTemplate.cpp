@@ -1123,7 +1123,7 @@ void SkinnedMeshTemplate::readLods(::renddx9abi::HostNonlinearStream* stream)
             bool stored = false;
             if (m_lodDistances.first
                 && static_cast<unsigned int>(
-                       (m_lodDistances.last - m_lodDistances.first) >> 4) > geom)
+                       (m_lodDistances.last - m_lodDistances.first) / sizeof(vc71::vector_layout)) > geom)
             {
                 const vc71::vector_layout* const inner =
                     reinterpret_cast<const vc71::vector_layout*>(m_lodDistances.first) + geom;
@@ -1305,7 +1305,7 @@ void SkinnedMeshTemplate::finalizeMaterials()
 {
     const unsigned int geomCount =
         m_vector0CC.first
-            ? static_cast<unsigned int>(m_vector0CC.last - m_vector0CC.first) >> 4
+            ? static_cast<unsigned int>((m_vector0CC.last - m_vector0CC.first) / sizeof(vc71::vector_layout))
             : 0u;
 
     for (unsigned int geom = 0; geom < geomCount; ++geom)
@@ -1316,7 +1316,7 @@ void SkinnedMeshTemplate::finalizeMaterials()
             continue;
 
         const unsigned int lodCount =
-            static_cast<unsigned int>(geomCompanion->last - geomCompanion->first) >> 4;
+            static_cast<unsigned int>((geomCompanion->last - geomCompanion->first) / sizeof(vc71::vector_layout));
 
         for (unsigned int lod = 0; lod < lodCount; ++lod)
         {

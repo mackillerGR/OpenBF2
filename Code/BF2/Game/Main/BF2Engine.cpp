@@ -1481,7 +1481,13 @@ bool BF2Engine::initLocalization()
         io::ILexicon* lexicon = static_cast<io::ILexicon*>(io::lexicon);
         if (!lexicon)
             return false;
-        const std::string language = registry->getString(RegKeyLocalMachine, "Language", "English", "");
+        std::string language = registry->getString(RegKeyLocalMachine, "Language", "English", "");
+#if !DEDICATED && !defined(_WIN32)
+        // [CHOSEN, not recovered] No registry here; the launcher names the language in the
+        // environment, and folder names are lower case on this host.
+        const char* const portLanguage = getenv("BF2_PORT_LANGUAGE");
+        language = portLanguage ? portLanguage : "english";
+#endif
         settings->stringSet("GSLanguage", language);
         const std::string localizationPath = std::string("localization/") + language + "/";
         std::list<std::string> directories;

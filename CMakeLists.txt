@@ -662,7 +662,10 @@ bf2_set_platform_compat(bf2_client_objects)
 if(BF2_BUILD_LINUX)
     # [CHOSEN, not recovered] Portable client: retail-layout asserts off, GameSpy POSIX path on.
     target_compile_definitions(bf2_client_objects PRIVATE _LINUX "BF2_EDX_PARAM=")
+    # Recovered code views objects from other images through interface classes local to a TU;
+    # with no visible override GCC would otherwise turn those calls into pure-virtual traps.
     target_compile_options(bf2_client_objects PRIVATE
+        -fno-devirtualize
         -include "${BF2_ROOT}/Core/PortableClient.h")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_SDL3_INCLUDE}")

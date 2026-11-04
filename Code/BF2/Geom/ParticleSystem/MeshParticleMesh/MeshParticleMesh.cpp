@@ -78,7 +78,7 @@ void selectFromTemplate(MeshParticleMesh* self)
 {
     MeshParticleMeshTemplate* const t = self->m_template;
     if (t->m_geoms.first
-        && static_cast<unsigned int>(static_cast<int>(t->m_geoms.last - t->m_geoms.first) >> 4) >= 2u)
+        && static_cast<unsigned int>((t->m_geoms.last - t->m_geoms.first) / static_cast<long>(sizeof(vc71::vector_layout))) >= 2u)
         self->m_geomIndex = 1;
 
     const int geom = self->m_geomIndex;
@@ -199,7 +199,7 @@ void* MeshParticleMesh::queryInterface(unsigned int iid)
         || iid == 0xADCBF4FCu)                             // dword_1021AE64, IID_IRenderable
         return this;
     if (iid == 0xEBC881FAu && this)                        // dword_1021AE68, IID_IScaleable
-        return reinterpret_cast<unsigned char*>(this) + 0x30;
+        return &m_scaleableVptr;
     return 0;
 }
 
@@ -300,7 +300,7 @@ int MeshParticleMesh::getGeomCount() const
     const MeshParticleMeshTemplate* const t = m_template;
     if (!t->m_geoms.first)
         return 0;
-    return static_cast<int>(t->m_geoms.last - t->m_geoms.first) >> 4;
+    return static_cast<int>((t->m_geoms.last - t->m_geoms.first) / static_cast<long>(sizeof(vc71::vector_layout)));
 }
 
 // +0x78, 0x101B0120. -1 = back to lod 0 and clear the explicit byte; otherwise store and raise it.
@@ -483,7 +483,7 @@ namespace {
 MeshParticleMesh* self(void* p) { return static_cast<MeshParticleMesh*>(p); }
 MeshParticleMesh* fromScaleable(void* p)
 {
-    return reinterpret_cast<MeshParticleMesh*>(static_cast<unsigned char*>(p) - 0x30);
+    return reinterpret_cast<MeshParticleMesh*>(static_cast<unsigned char*>(p) - offsetof(MeshParticleMesh, m_scaleableVptr));
 }
 
 int   __fastcall mpm_addRef(void* s BF2_EDX_PARAM)                   { return self(s)->addRef(); }

@@ -1871,7 +1871,7 @@ int StaticMesh::getGeomCount() const
 
     const unsigned char* const last =
         *reinterpret_cast<const unsigned char* const*>(objectTemplate + offsetof(StaticMeshTemplate, m_geoms) + offsetof(vc71::vector_layout, last));
-    return static_cast<int>(static_cast<unsigned int>(last - first) >> 5);
+    return static_cast<int>(static_cast<std::size_t>(last - first) / sizeof(StaticMeshGeom));
 }
 
 
