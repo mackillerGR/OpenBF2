@@ -48,10 +48,10 @@ void geometrySetConnectionEffect(void* geometry, int enabled)
 {
 #if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef void (__thiscall *Method)(void*, int);
-    const unsigned int slot = 0xD4 / sizeof(void*);
+    const unsigned int slot = 0xD4 / 4;
 #else
     typedef void (*Method)(void*, int);
-    const unsigned int slot = 0xD8 / sizeof(void*);
+    const unsigned int slot = 0xD8 / 4;
 #endif
     void** const vtable = *reinterpret_cast<void***>(geometry);
     reinterpret_cast<Method>(vtable[slot])(geometry, enabled);

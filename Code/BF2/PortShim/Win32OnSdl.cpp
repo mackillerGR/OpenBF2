@@ -42,6 +42,8 @@ static void pushInput(std::deque<DIDEVICEOBJECTDATA>& q, DWORD ofs, DWORD data) 
     if (q.size() > 512) q.pop_front();
 }
 static void post(UINT m, WPARAM w, LPARAM l) { MSG msg{}; msg.hwnd = g_window; msg.message = m; msg.wParam = w; msg.lParam = l; g_messages.push_back(msg); }
+static float g_pointerX = 0.0f, g_pointerY = 0.0f;
+static bool g_pointerSeen = false;
 static void pumpSdl() {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -57,6 +59,7 @@ static void pumpSdl() {
                 for (const char* p = e.text.text; *p; ++p) post(WM_CHAR, (unsigned char)*p, 0);
                 break;
             case SDL_EVENT_MOUSE_MOTION:
+                g_pointerX = e.motion.x; g_pointerY = e.motion.y; g_pointerSeen = true;
                 if (g_mouseAcquired) {
                     if (e.motion.xrel != 0) pushInput(g_mouseEvents, DIMOFS_X, (DWORD)(LONG)e.motion.xrel);
                     if (e.motion.yrel != 0) pushInput(g_mouseEvents, DIMOFS_Y, (DWORD)(LONG)e.motion.yrel);
@@ -82,6 +85,16 @@ HMODULE GetModuleHandleA(LPCSTR) { return (HMODULE)&g_window; }
 HMODULE LoadLibraryA(LPCSTR name) { return dlopen(name, RTLD_NOW); }
 FARPROC GetProcAddress(HMODULE m, LPCSTR n) { return (FARPROC)dlsym(m, n); }
 BOOL FreeLibrary(HMODULE m) { return m && dlclose(m) == 0; }
+// [CHOSEN, not recovered] The latest pointer position across the window, each axis 0..1. Touch
+// screens and test drivers report positions, which DirectInput's relative deltas cannot carry.
+bool portablePointerPosition(float* x, float* y) {
+    int width = 0, height = 0;
+    if (!g_pointerSeen || !g_window || !SDL_GetWindowSize(g_window, &width, &height) || width <= 0 || height <= 0)
+        return false;
+    *x = g_pointerX / width;
+    *y = g_pointerY / height;
+    return true;
+}
 DWORD GetTickCount() { return (DWORD)SDL_GetTicks(); }
 DWORD GetCurrentProcessId() { return (DWORD)getpid(); }
 void GlobalMemoryStatus(MEMORYSTATUS* s) { *s = MEMORYSTATUS(); s->dwTotalPhys = (size_t)SDL_GetSystemRAM() * 1048576u; s->dwAvailPhys = s->dwTotalPhys; }

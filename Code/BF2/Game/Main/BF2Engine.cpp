@@ -102,6 +102,7 @@ void pcreCreditNotice();
 void pmeCreditNotice();
 void zlibCreditNotice();
 
+namespace dice { namespace hfe { namespace io { extern IBase* controlMapManager; } } }
 namespace dice {
 namespace hfe {
 
@@ -1185,6 +1186,19 @@ bool BF2Engine::startGame(bool noAutoJoin, bool startFromMenu)   // 2nd bool fro
     }
 #endif
 
+#if !DEDICATED && !defined(_WIN32)
+    // [CHOSEN, not recovered] [RETIRE-WHEN: portable-swiff-player] A direct start skips the
+    // profile login that loads the control maps, so take the mod's defaults here.
+    if (getenv("BF2_PORT_DIRECT_START"))
+    {
+        IControlSettings* const control = static_cast<IControlSettings*>(g_controlSettings);
+        control->setDefaults();
+        control->backupControlMaps();
+        io::IControlMapManager* const maps = static_cast<io::IControlMapManager*>(io::controlMapManager);
+        maps->setActive(maps->getControlMap("InfantryPlayerInputControlMap"));
+        control->apply();
+    }
+#endif
     if (settings->boolGet("GSIsServer", false))         // ISettingsRepostitory vtable +0x50
     {
         // The registry stores the address of the IGame pointer using its generic IBase

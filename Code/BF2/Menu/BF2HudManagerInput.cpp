@@ -7,6 +7,9 @@
 #include "../External/BFMeme/Pointer.h"
 #include "../External/BFMeme/Style.h"
 #include "../IO/Input/Input.h"
+#if defined(BF2_PORTABLE_CLIENT)
+bool portablePointerPosition(float* x, float* y); // PortShim/Win32OnSdl.cpp
+#endif
 namespace dice { namespace hfe { namespace io { extern IBase* inputDeviceManager; } } }
 namespace dice { namespace hfe { namespace hud {
 namespace {
@@ -180,6 +183,13 @@ void BF2HudManager::handleGameInput(float /*delta*/, io::GameInput& input)
             ->getInputDevice(io::IDFFalcon)
         && static_cast<io::IInputDeviceManager*>(io::inputDeviceManager)
             ->getInputDevice(io::IDFFalcon)->isActive();
+#if defined(BF2_PORTABLE_CLIENT)
+    float pointerFractionX, pointerFractionY;
+    if (portablePointerPosition(&pointerFractionX, &pointerFractionY)) {
+        position[0] = -400.0f + pointerFractionX * 800.0f;
+        position[1] = -300.0f + pointerFractionY * 600.0f;
+    } else
+#endif
     moveInputPointer(position, x, y, sensitivity, absolute, bounds.width, bounds.height);
     clampInputCoordinate(position[0], bounds.x, bounds.width);
     clampInputCoordinate(position[1], bounds.y, bounds.height);

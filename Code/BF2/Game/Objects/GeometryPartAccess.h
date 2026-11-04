@@ -19,7 +19,7 @@ namespace dice { namespace hfe { namespace world { namespace geometry_part {
 
 template<class Function> inline Function slot(void* geometry, unsigned int pe, unsigned int elf)
 {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     const unsigned int offset = pe;
 #else
     const unsigned int offset = elf;

@@ -63,10 +63,10 @@ void geometryHandleMessage(void* geometry, TemplateMessage message, void* payloa
 {
 #if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
     typedef void (__thiscall *Method)(void*, TemplateMessage, void*);
-    const unsigned int slot = 0x60 / sizeof(void*);
+    const unsigned int slot = 0x60 / 4;
 #else
     typedef void (*Method)(void*, TemplateMessage, void*);
-    const unsigned int slot = 0x64 / sizeof(void*);
+    const unsigned int slot = 0x64 / 4;
 #endif
     void** const vtable = *reinterpret_cast<void***>(geometry);
     reinterpret_cast<Method>(vtable[slot])(geometry, message, payload);
@@ -90,7 +90,7 @@ const unsigned int kGeometryGatherUsedBonesSlot   = 0x5C;
 
 template<class F> F geometrySlot(void* geometry, unsigned int offset)
 {
-    return reinterpret_cast<F>((*static_cast<void***>(geometry))[offset / sizeof(void*)]);
+    return reinterpret_cast<F>((*static_cast<void***>(geometry))[offset / 4]);
 }
 
 void geometrySetFov(void* geometry, float fov)
