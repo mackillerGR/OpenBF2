@@ -376,6 +376,11 @@ int UnixFileSystem::findFiles_recursionHelper(const std::string& path, bool recu
 // then hands back "/tmp" anyway. Line 435 of this file, and the source of its attested path.
 const std::string& UnixFileSystem::getHomeSubstitution() const
 {
+#if !DEDICATED
+    // [CHOSEN, not recovered] The portable client keeps profiles in the user's home directory.
+    static const std::string userHome(std::getenv("HOME") ? std::getenv("HOME") : ".");
+    return userHome;
+#endif
     Debug(DEBUGTYPE_6, __FILE__, 435, std::string())
         << "dep: dedicated servers aren't allowed to write to @HOME@";
 
