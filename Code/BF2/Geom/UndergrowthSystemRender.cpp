@@ -73,6 +73,7 @@ void  rendererDrawIndexedPrimitive(unsigned int primCount, unsigned int type, in
 } // namespace dx9rend
 
 namespace geom {
+dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset);
 
 extern LightManager* g_LightManager;                                         // dword_1024B914
 
@@ -1237,8 +1238,7 @@ void UndergrowthSystem::render(float time)
         const vc71::vector_layout& records = terrainShadowRecords();
         if (records.first && (records.last - records.first) / 1176 != 0)
         {
-            m_paramShadowMap->setValue(*reinterpret_cast<void* const*>(
-                reinterpret_cast<unsigned char*>(g_LightManager) + 0x21C), 0);
+            m_paramShadowMap->setValue(lightManagerTexture(0x21C), 0);
             m_paramShadowProjMatrix->setValue(terrainShadowRecords().first + 0x2F8, 0);
             m_paramShadowTrapMatrix->setValue(terrainShadowRecords().first + 0x3B8, 0);
         }

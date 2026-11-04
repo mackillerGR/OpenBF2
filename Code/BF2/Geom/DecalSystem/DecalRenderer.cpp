@@ -46,6 +46,7 @@ void  rendererDrawPrimitive(unsigned int primCount, unsigned int type,
 } // namespace dx9rend
 
 namespace geom {
+dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset);
 
 extern LightManager* g_LightManager;                                       // dword_1024B914
 // StaticMesh.cpp (published in StaticMesh.h) - sub_1008DD80.
@@ -160,8 +161,7 @@ bool lightRecordUsesSecondShadowMap(void* record)
 // creates and releases them at 0x100F0xxx through its lmField accessor).
 dx9rend::EngineTexture* lightManagerShadowMap(unsigned int byteOffset)
 {
-    return *reinterpret_cast<dx9rend::EngineTexture**>(
-        reinterpret_cast<unsigned char*>(g_LightManager) + byteOffset);
+    return lightManagerTexture(byteOffset);
 }
 
 // the sort predicate _Sort receives in edx (0x101AA75C):

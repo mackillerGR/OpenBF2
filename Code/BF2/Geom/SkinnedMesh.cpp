@@ -73,6 +73,7 @@ void rendererDrawIndexedPrimitive(unsigned int primCount, unsigned int type, int
 } // namespace dx9rend
 
 namespace geom {
+double lightManagerDouble(unsigned int retailOffset);
 
 extern LightManager* g_LightManager;      // XpLightManager.cpp, dword_1024B914
 extern IBase*        g_SkinnedMeshRenderer;   // ModuleGeom.cpp, dword_1024B8F8
@@ -469,8 +470,7 @@ void* skinnedMeshObjectOf(void* object)
 
 double lightManagerFadeSeconds()
 {
-    return *reinterpret_cast<const double*>(
-        reinterpret_cast<const unsigned char*>(g_LightManager) + 0x838);
+    return lightManagerDouble(0x838);
 }
 
 // The draw tail's remaining seams. [UNRESOLVED] owners; offsets are read.

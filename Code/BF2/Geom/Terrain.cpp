@@ -78,6 +78,7 @@ bool  rendererIsExpansionPack();
 } // namespace dx9rend
 
 namespace geom {
+dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset);
 
 extern LightManager* g_LightManager;                                                  // ModuleGeom.cpp, dword_1024B914
 
@@ -1787,7 +1788,7 @@ void Terrain::setupWater()
         // builds; XpLightManager.cpp writes that field and publishes no getter) [UNRESOLVED member].
         dx9rend::EngineTexture* const cube = m_waterEnvMap
             ? static_cast<dx9rend::EngineTexture*>(m_waterEnvMap->texture)
-            : *reinterpret_cast<dx9rend::EngineTexture**>(reinterpret_cast<unsigned char*>(g_LightManager) + 0x248);
+            : lightManagerTexture(0x248);
         holderSetTexture(static_cast<unsigned char*>(m_materialParameters) + 0x11C, cube);   // CubeMap
         if (g_terrainWaterUsesRendererTexture)
         {

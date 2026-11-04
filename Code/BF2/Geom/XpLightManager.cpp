@@ -18,6 +18,8 @@
 #include "../../RendDX9Abi/Vc71Map.h"
 #include "../../RendDX9Abi/Vc71Vector.h"
 #include "../Math/Frustum.h"
+#include "../Math/Mat4.h"
+#include <type_traits>
 #include "../RendMisc/IRenderView.h"
 #include "../Game/Main/IVideoOptions.h"
 #include "../RendDX9/RendDX9Base.h"
@@ -182,16 +184,49 @@ extern const void* const kPrimaryVtable[189];
 extern const void* const kDeviceLostVtable[3];
 extern const void* const kRenderPathVtable[6];
 
+// [CHOSEN, not recovered] LightManager is raw storage addressed by retail x86 offsets. On other
+// targets the offsets keep their contiguity in a flat zone for numbers and float records, while
+// pointers and pointer-bearing records get a doubled zone so they cannot overlap their neighbours.
+// The primary vptr alone stays at the object's start, where C++ virtual calls read it.
+template <typename T> struct LmFlat
+{ static const bool value = std::is_arithmetic<T>::value || std::is_enum<T>::value; };
+template <> struct LmFlat<Vec2> { static const bool value = true; };
+template <> struct LmFlat<Vec3> { static const bool value = true; };
+template <> struct LmFlat<Mat4> { static const bool value = true; };
+template <> struct LmFlat<Frustum> { static const bool value = true; };
+
+inline unsigned char* lmCell(void* self, unsigned int offset, bool flat, bool primaryVptr)
+{
+    unsigned char* const base = static_cast<unsigned char*>(self);
+#if defined(_M_IX86)
+    (void)flat; (void)primaryVptr;
+    return base + offset;
+#else
+    if (primaryVptr) return base;
+    return flat ? base + 8u + offset : base + 8u + kLightManagerSize + offset * 2u;
+#endif
+}
+// The storage size the zones above need.
+const unsigned int kLightManagerStorage = 8u + kLightManagerSize * 3u;
+
 template <typename T>
 inline T& lmField(void* self, unsigned int offset)
 {
-    return *reinterpret_cast<T*>(static_cast<unsigned char*>(self) + offset);
+    return *reinterpret_cast<T*>(lmCell(self, offset, LmFlat<T>::value, offset == 0 && !LmFlat<T>::value));
 }
 
 template <typename T>
 inline const T& lmField(const void* self, unsigned int offset)
 {
-    return *reinterpret_cast<const T*>(static_cast<const unsigned char*>(self) + offset);
+    return lmField<T>(const_cast<void*>(self), offset);
+}
+
+// A listener subobject inside the object, and the object from that subobject.
+inline void* lmSubobject(void* self, unsigned int offset) { return &lmField<void*>(self, offset); }
+inline void* lmOwner(void* subobject, unsigned int offset)
+{
+    return static_cast<unsigned char*>(subobject) -
+           (lmCell(nullptr, offset, false, false) - static_cast<unsigned char*>(nullptr));
 }
 
 inline void lmSetVec3(void* self, unsigned int offset, float x, float y, float z)
@@ -4824,10 +4859,10 @@ void destroyLightManager(void* self)
     lmField<IDirect3DDevice9*>(self, 0x908)->Release();
     dx9rend::unregisterDeviceLostResetListener(
         reinterpret_cast<dx9rend::DeviceLostResetListener*>(
-            static_cast<unsigned char*>(self) + 4));
+            lmSubobject(self, 4)));
     dx9rend::unregisterRenderPathListener(
         reinterpret_cast<dx9rend::RenderPathListener*>(
-            static_cast<unsigned char*>(self) + 8));
+            lmSubobject(self, 8)));
 
     destroyVectorStorage(lmField<vc71::vector_layout>(self, 0x970));
     destroyShadowTree(effects, false);
@@ -6783,17 +6818,17 @@ namespace {
 
 void __fastcall lm_deviceLost(void* self BF2_EDX_PARAM)
 {
-    releaseShadowResources(static_cast<unsigned char*>(self) - 4, true);
+    releaseShadowResources(lmOwner(self, 4), true);
 }
 void __fastcall lm_deviceReset(void* self BF2_EDX_PARAM)
 {
-    createShadowResourcesBody(static_cast<unsigned char*>(self) - 4);
+    createShadowResourcesBody(lmOwner(self, 4));
 }
 void __fastcall lm_deviceNull(void* BF2_EDX_PARAM) {}
 
 void __fastcall lm_renderPathActivated(void* self BF2_EDX_PARAM, int path)
 {
-    void* const base = static_cast<unsigned char*>(self) - 8;
+    void* const base = lmOwner(self, 8);
     rebuildShadowAtlas(base);
     if (path == 2)
     {
@@ -7135,8 +7170,8 @@ void constructLightManager(void* self)
     lmField<unsigned char>(self, 0x268) = 1;
     lmField<unsigned int>(self, 0x274) = 0;
 
-    new (static_cast<unsigned char*>(self) + 0x278) Frustum();
-    new (static_cast<unsigned char*>(self) + 0x460) Frustum();
+    new (&lmField<Frustum>(self, 0x278)) Frustum();
+    new (&lmField<Frustum>(self, 0x460)) Frustum();
     setIdentityMatrix(self, 0x648);
     setIdentityMatrix(self, 0x688);
     setIdentityMatrix(self, 0x6C8);
@@ -7230,10 +7265,10 @@ void constructLightManager(void* self)
 
     dx9rend::registerDeviceLostResetListener(
         reinterpret_cast<dx9rend::DeviceLostResetListener*>(
-            static_cast<unsigned char*>(self) + 4), 4);
+            lmSubobject(self, 4)), 4);
     dx9rend::registerRenderPathListener(
         reinterpret_cast<dx9rend::RenderPathListener*>(
-            static_cast<unsigned char*>(self) + 8));
+            lmSubobject(self, 8)));
     createSmallLightTextures(self);
     reserveEmptyVector(lmField<vc71::vector_layout>(self, 0x79C), 150, 0x498);
 
@@ -7277,13 +7312,23 @@ IBase* __fastcall createLightManager(unsigned int iid, IBase* outer)
         return 0;
 
     LightManager* const self = static_cast<LightManager*>(
-        ::renddx9abi::engineAlloc(kLightManagerSize));
+        ::renddx9abi::engineAlloc(kLightManagerStorage));
     if (self)
         constructLightManager(self);
     void* const itf = self->LightManager::queryInterface(iid);
     if (!itf)
         self->LightManager::release();
     return static_cast<IBase*>(itf);
+}
+
+// Typed views of retail LightManager fields for renderers outside this file.
+dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset)
+{
+    return lmField<dx9rend::EngineTexture*>(g_LightManager, retailOffset);
+}
+double lightManagerDouble(unsigned int retailOffset)
+{
+    return lmField<double>(g_LightManager, retailOffset);
 }
 
 } // namespace geom

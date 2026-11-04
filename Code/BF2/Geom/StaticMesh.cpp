@@ -80,6 +80,7 @@ void stateManagerPop();
 }
 
 namespace geom {
+dx9rend::EngineTexture* lightManagerTexture(unsigned int retailOffset);
 
 extern LightManager* g_LightManager;      // XpLightManager.cpp, dword_1024B914
 extern IBase*        g_StaticMeshRenderer; // StaticMeshRenderer.cpp, dword_1024B8F8
@@ -2590,8 +2591,7 @@ void StaticMesh::drawVanilla()
                         *reinterpret_cast<const unsigned char* const*>(terrain + 0x6C0);
                     dx9rend::EngineTexture* const cube = terrainCube
                         ? *reinterpret_cast<dx9rend::EngineTexture* const*>(terrainCube + 0x10)
-                        : *reinterpret_cast<dx9rend::EngineTexture* const*>(
-                              reinterpret_cast<const unsigned char*>(g_LightManager) + 0x248);
+                        : lightManagerTexture(0x248);
                     staticMeshAssignTexture(*reinterpret_cast<void**>(material + 0x14C), cube);
                 }
                 entry->shader = staticMeshMaterialShader(material);
