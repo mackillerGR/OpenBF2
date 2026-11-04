@@ -53,12 +53,11 @@ unsigned int* allocSentinel(unsigned int size, unsigned int flagOffset)
     node[flagOffset - 1] = 1;   // the allocator writes this one
     node[flagOffset]     = 1;   // ... and the constructor overwrites the second with 1
 
-    unsigned int* words = reinterpret_cast<unsigned int*>(node);
-    const unsigned int self = reinterpret_cast<unsigned int>(node);
-    words[0] = self;            // next -> self
-    words[1] = self;            // prev -> self
-    words[2] = self;            // and the third self-pointer the constructor also writes
-    return words;
+    void** words = reinterpret_cast<void**>(node);
+    words[0] = node;            // next -> self
+    words[1] = node;            // prev -> self
+    words[2] = node;            // and the third self-pointer the constructor also writes
+    return reinterpret_cast<unsigned int*>(words);
 }
 
 void initList(BmList& list, unsigned int nodeSize, unsigned int flagOffset)
@@ -69,6 +68,10 @@ void initList(BmList& list, unsigned int nodeSize, unsigned int flagOffset)
 }
 
 } // anonymous namespace
+
+// Sized in the declaration-cache node definition below this class on x86; these match it.
+const unsigned int kDeclarationNodeSize = 3 * sizeof(void*) + sizeof(vc71::vector_layout) + sizeof(void*) + 8;
+const unsigned int kDeclarationNilOffset = 3 * sizeof(void*) + sizeof(vc71::vector_layout) + sizeof(void*) + 1;
 
 class BufferManager : public DeviceLostResetListener
 {
@@ -109,13 +112,16 @@ BufferManager::BufferManager(IDirect3DDevice9* device)
 {
     // The node sizes, in the constructor's own order. The first four lists share an allocator and
     // therefore an element type; the last three each have their own.
-    initList(m_lists[0], 0x14, 17);
-    initList(m_lists[1], 0x14, 17);
-    initList(m_lists[2], 0x14, 17);
-    initList(m_lists[3], 0x14, 17);
-    initList(m_lists[4], 0x24, 33);
-    initList(m_lists[5], 0x34, 49);
-    initList(m_lists[6], 0x30, 45);
+    // [CHOSEN, not recovered] Node links and pointer keys widen with the target; the flags follow.
+    const unsigned int linkGrowth = 3u * (sizeof(void*) - 4u);
+    const unsigned int setGrowth = linkGrowth + (sizeof(void*) - 4u);
+    initList(m_lists[0], 0x14 + setGrowth, 17 + setGrowth);
+    initList(m_lists[1], 0x14 + setGrowth, 17 + setGrowth);
+    initList(m_lists[2], 0x14 + setGrowth, 17 + setGrowth);
+    initList(m_lists[3], 0x14 + setGrowth, 17 + setGrowth);
+    initList(m_lists[4], kDeclarationNodeSize, kDeclarationNilOffset);
+    initList(m_lists[5], 0x34 * 2, 49 + linkGrowth);
+    initList(m_lists[6], 0x30 * 2, 45 + linkGrowth);
 
     // Retain and store the device after constructing the lists.
     if (device)

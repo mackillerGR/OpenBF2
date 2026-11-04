@@ -11,6 +11,7 @@
 #include "Vc71String.h"
 
 #include <string.h>
+#include <cstdint>
 #include <new>
 
 namespace vc71 {
@@ -196,7 +197,7 @@ struct set_node
     set_node*     left;     // +0
     set_node*     parent;   // +4
     set_node*     right;    // +8
-    unsigned int  key;      // +12
+    uintptr_t     key;      // +12
     unsigned char color;    // +16
     unsigned char isNil;    // +17
     unsigned char pad[2];   // +18
@@ -238,7 +239,7 @@ struct set_layout
 
     // find(), transcribed from sub_100048C0: descend, then the classic lower_bound check that
     // turns a not-less-than result into end().
-    set_node* find(unsigned int key) const
+    set_node* find(uintptr_t key) const
     {
         if (!head)
             return 0;
@@ -457,7 +458,7 @@ struct set_layout
     }
 
 private:
-    set_node* newNode(unsigned int key)
+    set_node* newNode(uintptr_t key)
     {
         set_node* n = static_cast<set_node*>(::renddx9abi::engineAlloc(sizeof(set_node)));
         if (!n)

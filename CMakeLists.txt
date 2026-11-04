@@ -422,6 +422,8 @@ set(bf2_client_only_sources
     "${BF2_ROOT}/Menu/MenuTeamManagerConsole.cpp"
     "${BF2_ROOT}/Menu/SwiffHostConsole.cpp"
 )
+# [CHOSEN, not recovered] The renderer plugin owns these, not the engine or client images.
+list(FILTER bf2_engine_sources EXCLUDE REGEX "PortShim/(D3dx|stb_)")
 if(bf2_client_only_sources)
     list(REMOVE_ITEM bf2_engine_sources ${bf2_client_only_sources})
 endif()
@@ -1885,6 +1887,7 @@ endif()
 if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     add_library(bf2_renddx9_portable SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/PortShim/D3dxPortable.cpp"
+    "${BF2_ROOT}/PortShim/D3dxTextures.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/Packer.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlas.cpp"
     "${BF2_ROOT}/RendDX9/TextureAtlas/TextureAtlasBuilder/TextureAtlasConfiguration.cpp"

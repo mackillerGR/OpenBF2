@@ -757,8 +757,7 @@ void* shaderManagerFindCachedEffect(const char* rawPath)
     ::_snprintf_s(key, sizeof(key), _TRUNCATE, "%s", rawPath);
     toLowerAscii(key);
 
-    vc71::map_layout& cache = *reinterpret_cast<vc71::map_layout*>(
-        reinterpret_cast<unsigned char*>(sm) + 0x14);
+    vc71::map_layout& cache = sm->effectCache;
     vc71::map_node* hit = vc71::mapFind(cache, key);
     return hit ? vc71::mapNodeValueRef(hit) : 0;
 }
@@ -784,8 +783,7 @@ void* shaderManagerGetEffect(void* shaderManager, const char* rawPath)
     }
     toLowerAscii(key);
 
-    vc71::map_layout& cache = *reinterpret_cast<vc71::map_layout*>(
-        reinterpret_cast<unsigned char*>(sm) + 0x14);
+    vc71::map_layout& cache = sm->effectCache;
 
     vc71::map_node* hit = vc71::mapFind(cache, key);
     if (hit)

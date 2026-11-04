@@ -9,11 +9,11 @@
 
 #define FRONTIER(name) extern "C" long name() { std::fprintf(stderr, "[FRONTIER] " #name " reached\n"); std::fflush(stderr); std::abort(); }
 FRONTIER(D3DXAssembleShader) FRONTIER(D3DXComputeBoundingBox) FRONTIER(D3DXComputeBoundingSphere)
-FRONTIER(D3DXCreateBox) FRONTIER(D3DXCreateBuffer) FRONTIER(D3DXCreateCylinder) FRONTIER(D3DXCreateEffect)
+FRONTIER(D3DXCreateBox)  FRONTIER(D3DXCreateCylinder) FRONTIER(D3DXCreateEffect)
 FRONTIER(D3DXCreateMeshFVF) FRONTIER(D3DXCreateRenderToSurface) FRONTIER(D3DXCreateSphere)
-FRONTIER(D3DXCreateTexture) FRONTIER(D3DXCreateTextureFromFileInMemory) FRONTIER(D3DXFillTexture)
-FRONTIER(D3DXFilterTexture) FRONTIER(D3DXGetImageInfoFromFileInMemory) FRONTIER(D3DXGetShaderVersion)
-FRONTIER(D3DXLoadSurfaceFromMemory) FRONTIER(D3DXLoadSurfaceFromSurface)
+  
+  FRONTIER(D3DXGetShaderVersion)
+ 
 FRONTIER(D3DXSaveSurfaceToFileA) FRONTIER(D3DXSaveTextureToFileA)
 FRONTIER(BinkClose) FRONTIER(BinkCopyToBuffer) FRONTIER(BinkDoFrame) FRONTIER(BinkGetSummary)
 FRONTIER(BinkNextFrame) FRONTIER(BinkPause) FRONTIER(BinkWait)
