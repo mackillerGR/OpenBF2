@@ -41,6 +41,12 @@ static inline void _splitpath(const char* path, char* drive, char* dir, char* na
     if (name) { size_t n = dot ? (size_t)(dot - base) : strlen(base); memcpy(name, base, n); name[n] = 0; }
     if (ext) strcpy(ext, dot ? dot : "");
 }
+
+#define _TRUNCATE ((size_t)-1)
+static inline int _snprintf_s(char* b, size_t n, size_t, const char* f, ...) { va_list a; va_start(a, f); int r = vsnprintf(b, n, f, a); va_end(a); return r; }
+template <size_t N> static inline int _snprintf_s(char (&b)[N], size_t, const char* f, ...) { va_list a; va_start(a, f); int r = vsnprintf(b, N, f, a); va_end(a); return r; }
+static inline int sprintf_s(char* b, size_t n, const char* f, ...) { va_list a; va_start(a, f); int r = vsnprintf(b, n, f, a); va_end(a); return r; }
+template <size_t N> static inline int sprintf_s(char (&b)[N], const char* f, ...) { va_list a; va_start(a, f); int r = vsnprintf(b, N, f, a); va_end(a); return r; }
 #ifndef __cdecl
 #define __cdecl
 #endif

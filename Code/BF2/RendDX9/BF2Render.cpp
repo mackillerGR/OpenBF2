@@ -6,6 +6,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include "Core/X87Emu.h"
 #include "../../RendDX9Abi/PluginModules.h"
 #include "../../RendDX9Abi/PluginEntry.h"    // dice::hfe::classManager, for hWndBf2TempSlt
 #include "../../RendDX9Abi/ModuleCommon.h"
@@ -2961,13 +2962,22 @@ void setRotationYDegrees(Mat4& matrix, float degrees)
     const float radians = 0.01745329238474369f * degrees;
     float sine;
     float cosine;
-    __asm
-    {
+#if defined(_M_IX86)
+    __asm {
         fld radians
         fsincos
         fstp cosine
         fstp sine
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(radians);
+        { double t = c.s(0); c.s(0) = std::sin(t); c.push(std::cos(t)); }
+        cosine = static_cast<std::remove_reference<decltype(cosine)>::type>(c.s(0)); c.pop();
+        sine = static_cast<std::remove_reference<decltype(sine)>::type>(c.s(0)); c.pop();
+    }
+#endif
     for (unsigned int i = 0; i < 16; ++i)
         matrix.m[i] = 0.0f;
     matrix.m[0] = 1.0f;
@@ -2985,13 +2995,22 @@ void setRotationXDegrees(Mat4& matrix, float degrees)
     const float radians = 0.01745329238474369f * degrees;
     float sine;
     float cosine;
-    __asm
-    {
+#if defined(_M_IX86)
+    __asm {
         fld radians
         fsincos
         fstp cosine
         fstp sine
     }
+#else
+    {
+        x87::Cpu c;
+        c.push(radians);
+        { double t = c.s(0); c.s(0) = std::sin(t); c.push(std::cos(t)); }
+        cosine = static_cast<std::remove_reference<decltype(cosine)>::type>(c.s(0)); c.pop();
+        sine = static_cast<std::remove_reference<decltype(sine)>::type>(c.s(0)); c.pop();
+    }
+#endif
     for (unsigned int i = 0; i < 16; ++i)
         matrix.m[i] = 0.0f;
     matrix.m[0] = 1.0f;
