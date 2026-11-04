@@ -42,7 +42,7 @@ public:
 
     IDirect3DVertexBuffer9*  m_vertexBuffer;         // +0x004
     IDirect3DIndexBuffer9*   m_indexBuffer;          // +0x008
-    unsigned char            m_materialParameters[0x150];   // +0x00C  raMaterialParametersConstruct (sub_10044270) - unused by the water, which queues the Terrain's block
+    unsigned char            m_materialParameters[0x150 * sizeof(void*) / 4];   // +0x00C  raMaterialParametersConstruct (sub_10044270) - unused by the water, which queues the Terrain's block
     vc71::vector_layout      m_elements;             // +0x15C  vector<const RaVertexElementDesc*> (first at +0x160)
     int                      m_unresolved16C;        // +0x16C  0
     IDirect3DDevice9*        m_device;               // +0x170

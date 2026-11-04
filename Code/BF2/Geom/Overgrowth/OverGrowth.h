@@ -339,7 +339,7 @@ public:
 private:
     // [UNRESOLVED] Names for the unrecovered members; constructor writes only observed fields.
     // The string at +0x88 is explicitly constructed/destroyed in its original order.
-    alignas(4) unsigned char m_storage[0x150];
+    alignas(4) unsigned char m_storage[0x150 * sizeof(void*) / 4];
 };
 static_assert(sizeof(OverGrowth) == 0x154, "OverGrowth PE image-owned layout");
 

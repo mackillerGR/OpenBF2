@@ -236,7 +236,7 @@ public:
     int                 m_refCount;             // +0x034  ctor 1
 
     // +0x038 .. +0x25B - raObjectParametersConstruct. See the header note.
-    unsigned char       m_objectParameters[0x224];
+    unsigned char       m_objectParameters[0x224 * sizeof(void*) / 4];
 
     float               m_float25C;             // +0x25C  ctor 1.0f
     vc71::map_layout    m_map260;               // +0x260  the lightmap cache; 0x28 nodes

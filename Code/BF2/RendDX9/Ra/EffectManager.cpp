@@ -141,13 +141,16 @@ unsigned int* allocSentinel(unsigned int size, unsigned int flagOffset)
     unsigned char* node = static_cast<unsigned char*>(::renddx9abi::engineAlloc(size));
     if (!node)
         return 0;
-    for (unsigned int i = 0; i < size; ++i)
+    for (unsigned int i = 0; i < size * sizeof(void*) / 4; ++i)
         node[i] = 0;
-    node[flagOffset - 1] = 1;
-    node[flagOffset]     = 1;
+    // Links and string keys widen on 64-bit hosts; the 44-byte set node holds only its key.
+    const unsigned int shift = size == 44
+        ? vc71::kLinkGrowth + (sizeof(vc71::string) - 28) : vc71::nodeGrowth(size);
+    node[flagOffset - 1 + shift] = 1;
+    node[flagOffset + shift]     = 1;
     unsigned int* w = reinterpret_cast<unsigned int*>(node);
-    const unsigned int self = reinterpret_cast<unsigned int>(node);
-    w[0] = self; w[1] = self; w[2] = self;
+    void** const links = reinterpret_cast<void**>(node);
+    links[0] = node; links[1] = node; links[2] = node;
     return w;
 }
 
@@ -527,7 +530,7 @@ struct EffectNode48
     EffectNode48* left;
     EffectNode48* parent;
     EffectNode48* right;
-    unsigned char key[28];
+    unsigned char key[sizeof(vc71::string)];
     IBase* effect;
     unsigned char color;
     unsigned char isNil;
@@ -539,8 +542,8 @@ struct EffectNode72
     EffectNode72* left;
     EffectNode72* parent;
     EffectNode72* right;
-    unsigned char key[28];
-    unsigned char value[28];
+    unsigned char key[sizeof(vc71::string)];
+    unsigned char value[sizeof(vc71::string)];
     unsigned char color;
     unsigned char isNil;
     unsigned char pad[2];
@@ -1195,7 +1198,7 @@ struct EffectNode44
     EffectNode44* left;
     EffectNode44* parent;
     EffectNode44* right;
-    unsigned char key[28];
+    unsigned char key[sizeof(vc71::string)];
     unsigned char color;
     unsigned char isNil;
     unsigned char pad[2];

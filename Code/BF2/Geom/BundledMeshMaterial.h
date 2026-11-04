@@ -40,7 +40,7 @@ public:
     unsigned int m_dword04;                                  // +004
     BundledMeshTemplate* m_template;                          // +008
     BundledMeshState* m_state;                               // +00C
-    unsigned char m_parameters[0x150];                       // +010 Ra material block
+    unsigned char m_parameters[0x150 * sizeof(void*) / 4];                       // +010 Ra material block
     int m_kind;                                             // +160
     unsigned int m_vertexStart;                             // +164
     unsigned int m_indexStart;                              // +168

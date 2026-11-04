@@ -1212,7 +1212,7 @@ RaShader::RaShader(const vc71::string& shaderName, void* renderQueue)
 
     // Temporary parameter blocks trigger one-time registry initialization.
     // Preserve construction and destruction order, including light-array teardown first.
-    unsigned int materialStorage[0x150 / 4];
+    unsigned int materialStorage[0x150 * sizeof(void*) / 16];
     unsigned int constantsStorage[0xAFC / 4];
     RaLightingParameters   lightingStorage;
     RaObjectParameters     objectStorage;

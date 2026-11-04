@@ -26,7 +26,7 @@ public:
     virtual unsigned int getIndexCapacity() const;                    // +0x3C
     virtual void createBuffers();                                     // +0x40  10048C70 [FRONTIER]
 
-    unsigned char m_objectParameters[0x224];                          // +0x1A4 sub_100458E0
+    unsigned char m_objectParameters[0x224 * sizeof(void*) / 4];                          // +0x1A4 sub_100458E0
 };
 
 #if defined(_M_IX86)

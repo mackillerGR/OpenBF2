@@ -571,7 +571,8 @@ void destroyRaShaderConstantsObject(RaShaderConstants* constants)
 
     IDirect3DBaseTexture9** array = reinterpret_cast<IDirect3DBaseTexture9**>(
         reinterpret_cast<unsigned char*>(constants) + 0x2C8);
-    for (unsigned int i = 0; i != 128; ++i)
+    // 0x200 bytes of pointers: 128 on the retail image, fewer where pointers are wider.
+    for (unsigned int i = 0; i != 0x200 / sizeof(void*); ++i)
         if (array[i])
             array[i]->Release();
 

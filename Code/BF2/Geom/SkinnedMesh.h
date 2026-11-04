@@ -210,7 +210,7 @@ public:
     // +0x360 .. +0x583 - raObjectParametersConstruct (0x100458E0), the same 0x224-byte block
     // StaticMesh embeds at its +0x38 and Terrain.cpp already drives. Its `Transparency` holder is
     // the +0x510 that slot +0xF4 writes.
-    unsigned char       m_objectParameters[0x224];   // +0x360
+    unsigned char       m_objectParameters[0x224 * sizeof(void*) / 4];   // +0x360
 
     // +0x584: the same unwritten-allocator vector shape again. The draw appends one 68-byte record
     // per gathered light here and walks it with (last - first) / 68.

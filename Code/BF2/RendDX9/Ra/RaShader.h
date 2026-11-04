@@ -260,7 +260,7 @@ static_assert(offsetof(RaShader, m_buildSerial) == 0x174, "build serial at +0x17
 
 struct RaShaderTable
 {
-    unsigned char       opaque000[0x84];   // vptr + the thirty-two render-queue slots
+    unsigned char       opaque000[0x84 * sizeof(void*) / 4];   // vptr + the thirty-two render-queue slots
     RaShader*           defaultShader;     // +0x084
     vc71::map_layout    shaders;           // +0x088
     vc71::vector_layout worldQueues;       // +0x094

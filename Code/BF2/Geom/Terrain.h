@@ -551,7 +551,7 @@ public:
     dx9rend::Ra::RaStreamDataEditable* m_waterGridGeometry;      // +0x490  0; drawWaterCell builds the 65x65 water grid once (RaStreamDataEditable)
     dx9rend::Ra::RaStreamDataEditable* m_waterGridGeometryTemp;  // +0x494  0; its construction slot, nulled once moved into +0x490
     void*          m_materialParameters;    // +0x498  the 0x150-byte Ra material block (raMaterialParametersConstruct); +0x14C holds the water technique
-    unsigned char  m_objectParameters[0x224]; // +0x49C  the 0x224-byte Ra object block (raObjectParametersConstruct)
+    unsigned char  m_objectParameters[0x224 * sizeof(void*) / 4]; // +0x49C  the 0x224-byte Ra object block (raObjectParametersConstruct)
     TerrainEnvMapRecord* m_waterEnvMap;     // +0x6C0  setupWater's envmap record (null when neither file exists)
     float          m_waterAnimSpeed;        // +0x6C4  10.0
     Vec2           m_waterScroll;           // +0x6C8  (0.1, 0.1)
