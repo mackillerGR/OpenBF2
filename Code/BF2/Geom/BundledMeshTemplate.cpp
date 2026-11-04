@@ -86,7 +86,7 @@ unsigned int asBits(float v) { unsigned int i; std::memcpy(&i,&v,4); return i; }
 vc71::vector_layout& materials(BundledMeshTemplate* t,int g,int l)
 { return data<vc71::vector_layout>(data<vc71::vector_layout>(t->m_materials)[g])[l]; }
 int rendererInt(unsigned int offset)
-{ return *reinterpret_cast<const int*>(reinterpret_cast<const char*>(dx9rend::g_Renderer)+offset); }
+{ return *reinterpret_cast<const int*>(::dice::hfe::dx9rend::rendererRetailBytes(offset)); }
 void constructSet(vc71::set_layout& s) //100EB000, comparator/key/padding untouched
 {
     vc71::set_node* p=static_cast<vc71::set_node*>(::renddx9abi::engineAlloc(20));

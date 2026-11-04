@@ -145,7 +145,7 @@ R viewSlot(void* view, unsigned int slot)
 // The Renderer's two gate bytes, read at +0x6A3 and +0x6AB off the console object.
 bool rendererFlagAt(unsigned int byteOffset)
 {
-    return *(reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer) + byteOffset) != 0;
+    return *(::dice::hfe::dx9rend::rendererRetailBytes(byteOffset)) != 0;
 }
 
 // SkinnedMeshRenderer +0x40 - a mode word the draw compares against 2 in three places.
@@ -321,7 +321,7 @@ void skinnedMeshReserveLightRecords(SkinnedMesh* mesh, unsigned int count)
 double rendererTimeSeconds()
 {
     void* const timer = *reinterpret_cast<void* const*>(
-        reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer) + 0x5DC);
+        ::dice::hfe::dx9rend::rendererRetailBytes(0x5DC));
     return *reinterpret_cast<const double*>(static_cast<const unsigned char*>(timer) + 0x20);
 }
 
@@ -802,7 +802,7 @@ void skinnedMeshCountShadowPrimitives(unsigned int primitives)
 float rendererLodScaleAt(unsigned int byteOffset)
 {
     return *reinterpret_cast<const float*>(
-        reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer) + byteOffset);
+        ::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 
@@ -1930,7 +1930,7 @@ void SkinnedMesh::draw(void*, void*, void*)
 
         // Only the alternate path clamps this index, and it clamps to the LOD index.
         unsigned int index = *reinterpret_cast<const unsigned int*>(
-            reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer) + 0x6CC);
+            ::dice::hfe::dx9rend::rendererRetailBytes(0x6CC));
         if (rendererFlagAt(0x6D0))
         {
             const unsigned int available = shaderMaskTableSize();

@@ -10,6 +10,7 @@
 #include <new>
 #include <string>
 
+namespace dice { namespace hfe { namespace dx9rend { unsigned char* rendererRetailBytes(unsigned int offset); } } }
 namespace dice { namespace hfe {
 namespace dx9rend {
 extern IBase* g_Renderer;
@@ -250,7 +251,7 @@ BundledMeshState* BundledMeshStateManager::read(void* effect, const vc71::string
                 mapName = "@@ABSOLUTE@@Common/Textures/SpecularLUT_pow36.dds";
 
             if (!skipTextures &&
-                (*reinterpret_cast<const int*>(reinterpret_cast<const char*>(dx9rend::g_Renderer) + 0x6CC) == 0 ||
+                (*reinterpret_cast<const int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x6CC)) == 0 ||
                  !contains(mapName, "_b.dds")))
             {
                 vc71::string full(prefix);

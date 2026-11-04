@@ -447,7 +447,7 @@ double nametagFrameDelta()
 {
     // g_Renderer +0x5E8 - the delta Renderer::update stores (BF2Render.cpp: self + 1512).
     return *reinterpret_cast<const double*>(
-        static_cast<const unsigned char*>(static_cast<const void*>(dx9rend::g_Renderer)) + 0x5E8);
+        ::dice::hfe::dx9rend::rendererRetailBytes(0x5E8));
 }
 
 

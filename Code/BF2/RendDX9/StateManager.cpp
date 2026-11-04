@@ -981,7 +981,7 @@ void popBracket(StateManager* self)
 
 inline StateManager* fromListener(void* listener)
 {
-    return reinterpret_cast<StateManager*>(static_cast<unsigned char*>(listener) - 4);
+    return reinterpret_cast<StateManager*>(static_cast<unsigned char*>(listener) - sizeof(void*));
 }
 
 // sub_10025980 - release all three references of all 16 texture cells.
@@ -1321,7 +1321,7 @@ void rendererDrawPrimitive(unsigned int primCount, unsigned int type, unsigned i
         return;
     preDrawApply(sm());
     rendererDevice()->DrawPrimitive(static_cast<D3DPRIMITIVETYPE>(type), startVertex, primCount);
-    unsigned char* stats = static_cast<unsigned char*>(g_rendererBase) + 0x108;
+    unsigned char* stats = ::dice::hfe::dx9rend::rendererRetailBytes(0x108);
     if (stats[644])
     {
         ++*reinterpret_cast<unsigned int*>(stats + 460);
@@ -1341,7 +1341,7 @@ void rendererDrawIndexedPrimitive(unsigned int primCount, unsigned int type, int
     preDrawApply(sm());
     rendererDevice()->DrawIndexedPrimitive(static_cast<D3DPRIMITIVETYPE>(type), baseVertex,
                                            minIndex, numVertices, startIndex, primCount);
-    unsigned char* stats = static_cast<unsigned char*>(g_rendererBase) + 0x108;
+    unsigned char* stats = ::dice::hfe::dx9rend::rendererRetailBytes(0x108);
     if (stats[644])
     {
         ++*reinterpret_cast<unsigned int*>(stats + 452);
@@ -1363,7 +1363,7 @@ void rendererDrawPrimitiveUP(unsigned int primCount, const void* data,
     preDrawApply(sm());
     rendererDevice()->DrawPrimitiveUP(static_cast<D3DPRIMITIVETYPE>(type), primCount, data,
                                       stride);
-    unsigned char* stats = static_cast<unsigned char*>(g_rendererBase) + 0x108;
+    unsigned char* stats = ::dice::hfe::dx9rend::rendererRetailBytes(0x108);
     if (stats[644])
     {
         ++*reinterpret_cast<unsigned int*>(stats + 468);

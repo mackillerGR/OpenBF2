@@ -130,6 +130,12 @@ private:
 static_assert(sizeof(Mode40) == 40, "Mode40 is the shipped 40-byte display-mode record");
 static_assert(sizeof(MultiSample8) == 8, "multisample descriptor is 8 bytes");
 
+// [CHOSEN, not recovered] The address of a retail Renderer byte offset on this host. Retail
+// offsets are direct; on a 64-bit host typed members are mapped by name and the remaining offsets
+// each own a pointer-wide cell, so any field may be read at its retail offset from any module.
+// A block spanning several retail words must not be addressed through this on 64-bit hosts.
+unsigned char* rendererRetailBytes(unsigned int offset);
+
 struct RendDX9Base
 {
     /* 0x000 */ void*                  vptr;              // 0x101DDA38 in the shipped image
@@ -190,7 +196,13 @@ struct RendDX9Base
     /* 0x0D8 */ void**                 hwndLast;
     /* 0x0DC */ void**                 hwndEnd;
 
-    /* 0x0E0 */ unsigned char          opaque0E0[0x0F8 - 0x0E0];
+    // The swap chains, the index present uses, and the temporary back buffer.
+    /* 0x0E0 */ void*                  swapChainAlloc;
+    /* 0x0E4 */ IUnknown**             swapChainFirst;
+    /* 0x0E8 */ IUnknown**             swapChainLast;
+    /* 0x0EC */ IUnknown**             swapChainEnd;
+    /* 0x0F0 */ unsigned int           swapChainIndex;
+    /* 0x0F4 */ void*                  tempBackBuffer;
     /* 0x0F8 */ void*                  renderView;        // zeroed here, filled by Renderer's ctor
     // A second render view, and it is a different object from the one above. The constructor builds
     // renderView directly; this one comes from createInstance(820301, 820201) in initialize step 8.
@@ -220,6 +232,13 @@ struct RendDX9Base
 
     // VideoOptions_ctor(this + 1016). 284 bytes, running to +0x513.
     /* 0x3F8 */ unsigned char          videoOptions[(0x514 - 0x3F8) * sizeof(void*) / 4];
+
+    // Addresses a retail offset in the scalar block after framePresented. These blocks hold no
+    // pointers, so they keep their retail spacing relative to +0x100 on every host.
+    unsigned char* retailBlock(unsigned int offset)
+    {
+        return &inScene + (offset - 0x100u);
+    }
 
     dice::hfe::IVideoOptions* embeddedVideoOptions()
     {

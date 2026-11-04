@@ -77,7 +77,7 @@ unsigned int floatBits(float value)
 dx9rend::EngineTexture* rendererPathTarget780()
 {
     return *reinterpret_cast<dx9rend::EngineTexture**>(
-        static_cast<unsigned char*>(static_cast<void*>(dx9rend::g_Renderer)) + 0x780);
+        ::dice::hfe::dx9rend::rendererRetailBytes(0x780));
 }
 
 // (retn 8) - a row vector through a Mat4: out = in * m. Every product is formed before the

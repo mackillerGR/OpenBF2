@@ -231,7 +231,7 @@ void updateShaderDefines(void* shaderManager, void* base)
     ShaderManager* sm = static_cast<ShaderManager*>(shaderManager);
     RendDX9Base*   b  = static_cast<RendDX9Base*>(base);
     const VideoOptions* vo = reinterpret_cast<const VideoOptions*>(
-        reinterpret_cast<const unsigned char*>(b) + 1016);
+        static_cast<const RendDX9Base*>(b)->videoOptions);
 
     clearDefines(sm);
 
@@ -501,7 +501,7 @@ typedef long (__stdcall* D3dxOnResetDeviceFn)(void*);   // ID3DXEffect +0x118
 
 inline ShaderManager* smFromListener(void* listener)
 {
-    return reinterpret_cast<ShaderManager*>(static_cast<unsigned char*>(listener) - 8);
+    return reinterpret_cast<ShaderManager*>(static_cast<unsigned char*>(listener) - 2 * sizeof(void*));
 }
 
 // The value map inside each +0x48 object: {_Left, _Parent, _Right, key, ID3DXEffect*, _Color,
@@ -665,7 +665,7 @@ bool createShaderManager(void* base, IDirect3DDevice9* device)
 // is shipped (it registers a null listener).
 void* shaderManagerDeviceLostListener()
 {
-    return g_shaderManager ? static_cast<unsigned char*>(g_shaderManager) + 8 : 0;
+    return g_shaderManager ? static_cast<unsigned char*>(g_shaderManager) + 2 * sizeof(void*) : 0;
 }
 
 // sub_10024A10 - init. On anything but nvidia it does nothing and returns 1. Reproduced whole.

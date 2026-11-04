@@ -207,6 +207,7 @@ public:
     void findTexturePath(vc71::string& out, const vc71::string& name);
 
     // The accessor family the Texture constructor and the consumers use.
+    void*         mipClassRecords()              { return m_mipClasses; }
     int           defaultMipClass() const        { return m_defaultMipClass; }
     int           swapDefaultMipClass(int v)     { const int o = m_defaultMipClass; m_defaultMipClass = v; return o; }
     int           managedFlag() const            { return m_managedTextures; }
@@ -355,7 +356,7 @@ RD9_TM_SLOT(tm_slot14,    "slot_0x14 (0x1001A040)",            0x14)
 // Recovers the texture manager from its listener subobject at +0x04.
 inline TextureManager* tmFromListener(void* listener)
 {
-    return reinterpret_cast<TextureManager*>(static_cast<unsigned char*>(listener) - 4);
+    return reinterpret_cast<TextureManager*>(static_cast<unsigned char*>(listener) - sizeof(void*));
 }
 
 void __fastcall tm_onDeviceLost(void* listener BF2_EDX_PARAM)   { tmFromListener(listener)->onDeviceLost(); }
@@ -1155,9 +1156,15 @@ void TextureManager::onDeviceDestroy()
 
 // the expression initializeD3DSubsystems registers at 0x1000B5F7..0x1000B60C:
 // `dword_1023B974 ? dword_1023B974 + 4 : 0` (the listener subobject). The null arm is shipped.
+// The fourteen mip-class records, which VideoOptions::apply rewrites.
+void* textureManagerMipClassRecords()
+{
+    return g_textureManager ? static_cast<TextureManager*>(g_textureManager)->mipClassRecords() : 0;
+}
+
 void* textureManagerDeviceLostListener()
 {
-    return g_textureManager ? static_cast<unsigned char*>(g_textureManager) + 4 : 0;
+    return g_textureManager ? static_cast<unsigned char*>(g_textureManager) + sizeof(void*) : 0;
 }
 
 // PE 0x100196B0, reached through 0x10019890 after ResourceManager clears its defer flag.

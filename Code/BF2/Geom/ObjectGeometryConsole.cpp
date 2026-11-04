@@ -72,7 +72,7 @@ RoadCompiled* activeRoadCompiled()
         return 0;
     if (tmpl->getClassId() != CID_RoadCompiledTemplate)
         return 0;
-    return reinterpret_cast<RoadCompiled*>(reinterpret_cast<unsigned char*>(geometry) - 4);
+    return reinterpret_cast<RoadCompiled*>(reinterpret_cast<unsigned char*>(geometry) - sizeof(void*));
 }
 
 // geometry.GenerateLightmapForThisInstance: the active object's geometry flag behind IGeometry

@@ -42,7 +42,9 @@ template<class R,class... A> R dispatch(void* self,unsigned int offset,A... args
     return reinterpret_cast<Fn>((*static_cast<void***>(self))[offset/4])(self,args...);
 }
 template<class T> T& field(void* p,unsigned int offset)
-{ return *reinterpret_cast<T*>(static_cast<unsigned char*>(p)+offset); }
+{
+    if(p==static_cast<void*>(dx9rend::g_Renderer))
+        return *reinterpret_cast<T*>(dx9rend::rendererRetailBytes(offset)); return *reinterpret_cast<T*>(static_cast<unsigned char*>(p)+offset); }
 
 // A host object's geometry: IObject's +0x38 field. Typed in the native flavour (RW-266); the
 // retail-ABI flavour keeps the raw offset, which IObject's retail-aligned prefix shares.

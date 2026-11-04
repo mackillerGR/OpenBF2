@@ -782,26 +782,26 @@ void* staticMeshAllocateMapNode()
 // Accesses renderer configuration through its fixed compatibility layout.
 unsigned char rendererByte(unsigned int byteOffset)
 {
-    return *(reinterpret_cast<const unsigned char*>(::dice::hfe::dx9rend::g_Renderer) + byteOffset);
+    return *(::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 unsigned int rendererDword(unsigned int byteOffset)
 {
     return *reinterpret_cast<const unsigned int*>(
-        reinterpret_cast<const unsigned char*>(::dice::hfe::dx9rend::g_Renderer) + byteOffset);
+        ::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 float rendererFloat(unsigned int byteOffset)
 {
     return *reinterpret_cast<const float*>(
-        reinterpret_cast<const unsigned char*>(::dice::hfe::dx9rend::g_Renderer) + byteOffset);
+        ::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 // The base object's +0x102 byte, the "editor / lightmap generation" gate BF2Render.cpp's step 14
 // tests too.
 unsigned char rendererBaseByte(unsigned int byteOffset)
 {
-    return *(static_cast<const unsigned char*>(::dice::hfe::dx9rend::g_rendererBase) + byteOffset);
+    return *(::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 } // anonymous namespace - the two helpers below are shared with
@@ -2605,7 +2605,7 @@ void StaticMesh::drawVanilla()
                             dx9rend::rendererGetRenderViewDup()->getViewProjectionMatrixPtr()->m,
                             sizeof(op.viewProjection.value));
                 dx9rend::EngineTexture* const scratch = *reinterpret_cast<dx9rend::EngineTexture**>(
-                    reinterpret_cast<unsigned char*>(dx9rend::g_Renderer) + 0x774);
+                    ::dice::hfe::dx9rend::rendererRetailBytes(0x774));
                 if (scratch)
                     staticMeshSwapD3DTexture(entry->lighting.lightMap.value, scratch->baseTexture);
 

@@ -246,7 +246,7 @@ struct SwapChainVec
 void swapChainVectorPushBack(void* base, IDirect3DSwapChain9* chain)
 {
     SwapChainVec* v = reinterpret_cast<SwapChainVec*>(
-        static_cast<unsigned char*>(base) + 0xE0);
+        &static_cast<RendDX9Base*>(base)->swapChainAlloc);
 
     if (v->first && v->last < v->end)
     {
@@ -276,7 +276,7 @@ void swapChainVectorPushBack(void* base, IDirect3DSwapChain9* chain)
 
     // base+0xF0 - the current swap-chain index present indexes by. The base ctor leaves it 0; make
     // that explicit so present's chains[index] lands on the primary chain regardless.
-    *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(base) + 0xF0) = 0;
+    static_cast<RendDX9Base*>(base)->swapChainIndex = 0;
 }
 
 } // anonymous namespace
@@ -1605,7 +1605,7 @@ bool rendererRenderProbe(void* renderer, const char* vertexShader, const char* p
     // the source is the Renderer's back-buffer reference, also read
     // through dword_1023D098 (the Renderer's reset listener fills +0x76C with GetBackBuffer).
     IDirect3DSurface9* const backBuffer = *reinterpret_cast<IDirect3DSurface9**>(
-        reinterpret_cast<unsigned char*>(g_Renderer) + 0x76C);
+        ::dice::hfe::dx9rend::rendererRetailBytes(0x76C));
     b->device->StretchRect(backBuffer, 0, target, 0, D3DTEXF_NONE);     // +0x88
 
     D3DSURFACE_DESC desc;                                               // [ebp-4Ch]

@@ -20,10 +20,10 @@ void flushRenderTargetsSeam();  // StateManager.cpp - sub_10026240, run before a
 
 namespace {
 
-inline unsigned char* base() { return static_cast<unsigned char*>(g_rendererBase); }
+inline RendDX9Base* base() { return static_cast<RendDX9Base*>(g_rendererBase); }
 inline IDirect3DDevice9* device()
 {
-    return *reinterpret_cast<IDirect3DDevice9**>(base() + 0x0C);
+    return base()->device;
 }
 
 
@@ -38,7 +38,7 @@ void statsAccumulate(unsigned int* dst, const unsigned int* src)
 // the totals, publish it as last-frame, and clear the working rows.
 void statsBeginFrame()
 {
-    unsigned char* stats = base() + 0x108;
+    unsigned char* stats = base()->retailBlock(0x108);
     ++*reinterpret_cast<unsigned int*>(stats + 24);
     unsigned int* current = reinterpret_cast<unsigned int*>(stats + 95 * 4);
     statsAccumulate(reinterpret_cast<unsigned int*>(stats + 13 * 4), current);
@@ -61,7 +61,7 @@ void rendererStatsBeginFrame()
 // AI overlay event with it so those draws stay out of the frame's counters.
 unsigned char statsSwapEnabled(unsigned char value)
 {
-    unsigned char* flag = base() + 0x108 + 644;
+    unsigned char* flag = base()->retailBlock(0x108 + 644);
     const unsigned char old = *flag;
     *flag = value;
     return old;
@@ -75,26 +75,26 @@ unsigned char statsSwapEnabled(unsigned char value)
 
 bool rendererPresent(unsigned int mode)
 {
-    unsigned char* b = base();
-    if (b[257])
+    RendDX9Base* b = base();
+    if (b->framePresented)
         return false;
     if (mode == 3)
     {
-        b[257] = 1;
+        b->framePresented = 1;
         return true;
     }
     if (mode == 2)
-        mode = b[940];
+        mode = b->presentAsync;
 
-    IDirect3DSwapChain9** chains = *reinterpret_cast<IDirect3DSwapChain9***>(b + 228);
-    IDirect3DSwapChain9* chain = chains[*reinterpret_cast<unsigned int*>(b + 240)];
+    IDirect3DSwapChain9** chains = reinterpret_cast<IDirect3DSwapChain9**>(b->swapChainFirst);
+    IDirect3DSwapChain9* chain = chains[b->swapChainIndex];
 
     HRESULT hr = chain->Present(0, 0, 0, 0, mode);
     while (hr)
     {
         if (hr == static_cast<HRESULT>(0x88760868))            // D3DERR_DEVICELOST
         {
-            b[256] = 0;                                         // 0x10005C55, then falls through
+            b->inScene = 0;                                         // 0x10005C55, then falls through
             handleLostDevice(b);                                // result discarded
             return false;
         }
@@ -105,7 +105,7 @@ bool rendererPresent(unsigned int mode)
         }
         if (hr == static_cast<HRESULT>(0x8876021C))            // D3DERR_WASSTILLDRAWING
         {
-            if (!b[941])
+            if (!b->presentSpinIfBusy)
                 return false;
         }
         else if (hr != static_cast<HRESULT>(0x8876086C)        // D3DERR_INVALIDCALL
@@ -115,14 +115,14 @@ bool rendererPresent(unsigned int mode)
             ::renddx9abi::logf("RendDX9Draw.cpp:200 Present returned unknown error.  hr=0x%08X",
                                static_cast<unsigned int>(hr));
         }
-        chains = *reinterpret_cast<IDirect3DSwapChain9***>(b + 228);
-        chain  = chains[*reinterpret_cast<unsigned int*>(b + 240)];
+        chains = reinterpret_cast<IDirect3DSwapChain9**>(b->swapChainFirst);
+        chain  = chains[b->swapChainIndex];
         hr = chain->Present(0, 0, 0, 0, mode);
         if (!hr)
             break;
     }
 
-    b[257] = 1;
+    b->framePresented = 1;
     return true;
 }
 
@@ -132,12 +132,12 @@ bool rendererPresent(unsigned int mode)
 
 bool rendererBeginScene(const unsigned int* clearRgb, bool doClear)
 {
-    unsigned char* b = base();
-    if (!b[257])
+    RendDX9Base* b = base();
+    if (!b->framePresented)
     {
         if (!rendererPresent(2))
             return false;
-        b[257] = 1;
+        b->framePresented = 1;
     }
 
     statsBeginFrame();
@@ -147,7 +147,7 @@ bool rendererBeginScene(const unsigned int* clearRgb, bool doClear)
         ::renddx9abi::logf("RendDX9Draw.cpp:86 Failed to begin scene");
         return false;
     }
-    ++*reinterpret_cast<unsigned int*>(b + 260);
+    ++*reinterpret_cast<unsigned int*>(b->retailBlock(0x104));
 
     if (doClear)
     {
@@ -157,14 +157,14 @@ bool rendererBeginScene(const unsigned int* clearRgb, bool doClear)
                    | ((clearRgb[1] & 0xFF) << 8)
                    | ((clearRgb[0] & 0xFF) << 16);
         else
-            colour = (*reinterpret_cast<unsigned int*>(b + 920) & 0xFF)
-                   | (static_cast<unsigned int>(b[916]) << 8)
-                   | (static_cast<unsigned int>(b[912]) << 16);
+            colour = (*reinterpret_cast<unsigned int*>(b->retailBlock(920)) & 0xFF)
+                   | (static_cast<unsigned int>(*b->retailBlock(916)) << 8)
+                   | (static_cast<unsigned int>(*b->retailBlock(912)) << 16);
         flushRenderTargetsSeam();
         device()->Clear(0, 0, 7, colour, 1.0f, 0);
     }
 
-    b[256] = 1;
+    b->inScene = 1;
     return true;
 }
 
@@ -176,8 +176,8 @@ void* g_endSceneOverlayHook = 0;
 
 bool rendererEndScene()
 {
-    unsigned char* b = base();
-    if (!b[256])
+    RendDX9Base* b = base();
+    if (!b->inScene)
         return false;
 
     if (g_endSceneOverlayHook)
@@ -190,20 +190,20 @@ bool rendererEndScene()
     if (device()->EndScene() < 0)
     {
         ::renddx9abi::logf("RendDX9Draw.cpp:130 Failed to end scene: FrameInProgress %u",
-                           static_cast<unsigned int>(b[256]));
+                           static_cast<unsigned int>(b->inScene));
         return false;
     }
 
-    const bool wantReset = b[1000] != 0;
-    b[257] = 0;
-    b[256] = 0;
+    const bool wantReset = b->opaque3AE[0x3E8 - 0x3AE] != 0;
+    b->framePresented = 0;
+    b->inScene = 0;
     if (wantReset)
     {
         // sub_10005200 - the screenshot capture (see the corrected note above). Unwritten; only a
         // screenshot request (0x10004F89) sets base+0x3E8.
         RD9_FRONTIER_AT("dice::hfe::dx9rend::RendDX9 - the screenshot capture "
                         "(sub_10005200)", b, 0xCC);
-        b[1000] = 0;
+        b->opaque3AE[0x3E8 - 0x3AE] = 0;
     }
     return true;
 }

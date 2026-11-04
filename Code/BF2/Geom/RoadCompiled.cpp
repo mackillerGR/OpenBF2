@@ -81,12 +81,12 @@ static_assert(sizeof(RoadCompiledVertex) == 32, "loadMesh creates the buffer wit
 // same image, read at its shipped offset (the XpLightManager.cpp precedent for renderer fields).
 bool rendererDrawRoads()
 {
-    return static_cast<unsigned char*>(static_cast<void*>(dx9rend::g_Renderer))[0x6A4] != 0;
+    return (*::dice::hfe::dx9rend::rendererRetailBytes(0x6A4)) != 0;
 }
 
 RoadCompiled* fromGeometry(void* subobject)
 {
-    return reinterpret_cast<RoadCompiled*>(static_cast<unsigned char*>(subobject) - 4);
+    return reinterpret_cast<RoadCompiled*>(static_cast<unsigned char*>(subobject) - sizeof(void*));
 }
 
 

@@ -1796,7 +1796,7 @@ void Terrain::setupWater()
             // material's DiffuseMap holder. [UNRESOLVED] both the global and the renderer field.
             holderSetTexture(static_cast<unsigned char*>(m_materialParameters) + 0xB8,
                              *reinterpret_cast<dx9rend::EngineTexture**>(
-                                 static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x7B4));
+                                 ::dice::hfe::dx9rend::rendererRetailBytes(0x7B4)));
         }
     }
 }

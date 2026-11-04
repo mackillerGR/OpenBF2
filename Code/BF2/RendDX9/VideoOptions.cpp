@@ -84,6 +84,7 @@ static HostDynamicOptionList    s_nativeOptionList[2];
 // The globals apply reaches. Each is defined where its class lives; declared here rather than
 // pulled in through a header because these are image globals, not an interface.
 extern IBase* g_Renderer;                    // BF2Render.cpp,   0x1023B96C
+void* textureManagerMipClassRecords();
 extern void*  g_textureManager;              // TextureManager.cpp, dword_1023B974
 namespace Ra { extern void* g_effectManager; }   // dword_1023D954
 
@@ -173,17 +174,23 @@ inline int clampMinusOne(int v)
 // The Renderer fields apply writes. They live inside BF2Render.cpp's opaque tail rather than being
 // named members, so they are reached by documented raw offset - the same treatment RendDX9Init.cpp
 // gives the base object.
+// These writers also reach other objects by their own offsets; only the Renderer is mapped.
+inline unsigned char* rendererBytes(void* object, unsigned offset)
+{
+    return object == g_rendererBase ? rendererRetailBytes(offset)
+                                    : static_cast<unsigned char*>(object) + offset;
+}
 inline void writeRendererInt(void* renderer, unsigned offset, int value)
 {
-    *reinterpret_cast<int*>(static_cast<unsigned char*>(renderer) + offset) = value;
+    *reinterpret_cast<int*>(rendererBytes(renderer, offset)) = value;
 }
 inline void writeRendererFloat(void* renderer, unsigned offset, float value)
 {
-    *reinterpret_cast<float*>(static_cast<unsigned char*>(renderer) + offset) = value;
+    *reinterpret_cast<float*>(rendererBytes(renderer, offset)) = value;
 }
 inline void writeRendererByte(void* renderer, unsigned offset, unsigned char value)
 {
-    *(static_cast<unsigned char*>(renderer) + offset) = value;
+    *rendererBytes(renderer, offset) = value;
 }
 
 // sub_100278A0: `this->vslot_0xC4()`, which is a one-line forward to
@@ -402,7 +409,9 @@ void __fastcall videoOptions_apply(void* self BF2_EDX_PARAM)
     // The fourteen mip-class records. The original reloads the TextureManager pointer and
     // reassigns its scratch on every iteration; both are no-ops because the two values are always
     // equal by this point, and the loop is written here as what it does.
-    unsigned char* const tm = static_cast<unsigned char*>(::dice::hfe::dx9rend::g_textureManager);
+    // Offsets below are retail, counted from the manager; its records start at +40 there.
+    unsigned char* const records = static_cast<unsigned char*>(textureManagerMipClassRecords());
+    unsigned char* const tm = records ? records - 40 : 0;
     if (tm)
     {
         for (int i = 0; i < 112; i += 8)
@@ -1255,7 +1264,7 @@ void* const kVideoOptionsEventVtable[1] =
 void videoOptionsConstruct(void* base)
 {
     VideoOptions* vo = reinterpret_cast<VideoOptions*>(
-        static_cast<unsigned char*>(base) + 0x3F8);
+        static_cast<RendDX9Base*>(base)->videoOptions);
     vo->vptr = const_cast<void**>(kVideoOptionsVtable);
     vo->vptrEventHandler = const_cast<void**>(kVideoOptionsEventVtable);
     vo->aaList.first = nullptr;
@@ -1289,7 +1298,7 @@ void videoOptionsInitialize(void* base)
 {
     RendDX9Base* b = static_cast<RendDX9Base*>(base);
     VideoOptions* vo = reinterpret_cast<VideoOptions*>(
-        reinterpret_cast<unsigned char*>(b) + 1016);
+        static_cast<RendDX9Base*>(b)->videoOptions);
 
     // skipped (1 of 3): the ECCore event registration.
     // The original registers `this + 4` - the ECCoreEventHandler subobject - with the host's

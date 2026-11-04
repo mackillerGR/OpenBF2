@@ -57,7 +57,7 @@ int  __fastcall skm_getBool(void* self BF2_EDX_PARAM)        { return static_cas
 // object+0x04, so the object is `self - 4` and the render-path back-pointer is object+0x08.
 inline SkinnedMeshRenderer* objOfListener(void* self)
 {
-    return reinterpret_cast<SkinnedMeshRenderer*>(reinterpret_cast<char*>(self) - 4);
+    return reinterpret_cast<SkinnedMeshRenderer*>(reinterpret_cast<char*>(self) - sizeof(void*));
 }
 void  __fastcall skm_setRenderPath(void* self BF2_EDX_PARAM, void* path) { objOfListener(self)->m_renderPath = path; }
 void* __fastcall skm_getRenderPath(void* self BF2_EDX_PARAM)             { return objOfListener(self)->m_renderPath; }

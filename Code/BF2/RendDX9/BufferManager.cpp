@@ -175,7 +175,7 @@ static_assert(sizeof(VertexBuffer) == 0x2C, "createVertexBuffer allocates 0x2C -
 
 // Both buffer wrappers share this +4 reference-count getter.
 int   __fastcall vb_getRef(void* self BF2_EDX_PARAM)
-{ return *reinterpret_cast<int*>(static_cast<unsigned char*>(self) + 4); }
+{ return *reinterpret_cast<int*>(static_cast<unsigned char*>(self) + sizeof(void*)); }
 void  __fastcall vb_nullsub(void* BF2_EDX_PARAM) { }
 void  __fastcall vb_addRef(void* s BF2_EDX_PARAM) { ++static_cast<VertexBuffer*>(s)->refCount; }
 
@@ -192,7 +192,7 @@ void bumpRendererCounter(unsigned int dwordIndex, int delta)
 {
     if (!g_Renderer)
         return;
-    unsigned char* sub = reinterpret_cast<unsigned char*>(g_Renderer) + 264;
+    unsigned char* sub = ::dice::hfe::dx9rend::rendererRetailBytes(264);
     *reinterpret_cast<int*>(sub + dwordIndex * 4) += delta;
 }
 

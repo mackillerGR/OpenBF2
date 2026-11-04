@@ -423,7 +423,7 @@ void EffectManager::rebuildShaderDefines()
 
     // base[435] - byte 1740, the same field updateShaderDefines prints as rapath.
     const unsigned int raPath =
-        base ? *reinterpret_cast<const unsigned int*>(reinterpret_cast<const unsigned char*>(base) + 1740) : 0u;
+        base ? *reinterpret_cast<const unsigned int*>(rendererRetailBytes(1740)) : 0u;
     ::sprintf_s(line, "#define RAPATH %i \n", raPath);
     m_shaderDefines += line;
 
@@ -435,7 +435,7 @@ void EffectManager::rebuildShaderDefines()
         const bool multisampleOk =
             base->multiSampleFirst && ((base->multiSampleLast - base->multiSampleFirst) >= 2)
                 ? (*base->multiSampleFirst > 0) : false;
-        a2m = (rawBase[1300] || (!rawBase[1301] && multisampleOk)) && rawBase[1302];
+        a2m = (*rendererRetailBytes(1300) || (!*rendererRetailBytes(1301) && multisampleOk)) && *rendererRetailBytes(1302);
     }
     ::sprintf_s(line, "#define HASALPHA2MASK %i \n", a2m ? 1 : 0);
     m_shaderDefines += line;
@@ -458,7 +458,7 @@ void EffectManager::rebuildShaderDefines()
     if (base)
     {
         const unsigned int* videoOptions =
-            reinterpret_cast<const unsigned int*>(rawBase + 1016);
+            reinterpret_cast<const unsigned int*>(static_cast<const RendDX9Base*>(base)->videoOptions);
         filterQuality = videoOptions[7 + 10];
     }
 
@@ -643,7 +643,7 @@ namespace {
 
 void __fastcall em_onDeviceLost(void* listener BF2_EDX_PARAM)
 {
-    reinterpret_cast<EffectManager*>(static_cast<unsigned char*>(listener) - 4)->resetEffects();
+    reinterpret_cast<EffectManager*>(static_cast<unsigned char*>(listener) - sizeof(void*))->resetEffects();
 }
 
 void __fastcall em_listenerNullsub(void* BF2_EDX_PARAM)

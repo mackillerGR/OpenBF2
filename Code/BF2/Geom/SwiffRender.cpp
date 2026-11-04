@@ -2469,11 +2469,11 @@ int __fastcall sr_shutdown(void* self BF2_EDX_PARAM)
 
 SwiffRender* ownerFromDevLost(void* sub)
 {
-    return reinterpret_cast<SwiffRender*>(static_cast<unsigned char*>(sub) - 4);
+    return reinterpret_cast<SwiffRender*>(static_cast<unsigned char*>(sub) - sizeof(void*));
 }
 SwiffRender* ownerFromEcCore(void* sub)
 {
-    return reinterpret_cast<SwiffRender*>(static_cast<unsigned char*>(sub) - 8);
+    return reinterpret_cast<SwiffRender*>(static_cast<unsigned char*>(sub) - 2 * sizeof(void*));
 }
 
 // Marks device loss, stops host rendering, and unlocks the ring buffer before the lower

@@ -459,6 +459,30 @@ public: // [CHOSEN, not recovered] offsetof needs these on portable targets.
     char         m_tail2b[0x8E0 - 0x8B0];// +0x8B0 .. +0x8DF   [FRONTIER] unread
 };
 
+unsigned char* rendererRetailBytes(unsigned int offset)
+{
+    unsigned char* const object = static_cast<unsigned char*>(g_rendererBase);
+#if defined(_M_IX86) || defined(__i386__)
+    return object + offset;
+#else
+    RendDX9Base* const base = static_cast<RendDX9Base*>(g_rendererBase);
+    Renderer* const renderer = static_cast<Renderer*>(g_rendererBase);
+    if (offset >= 0x10 && offset < 0x24) return base->opaque010 + (offset - 0x10);
+    if (offset >= 0x100 && offset < 0x39C) return base->retailBlock(offset);
+    if (offset >= 0x3AE && offset < 0x3F8) return base->opaque3AE + (offset - 0x3AE);
+    if (offset >= 0x514 && offset < 0x538) return &base->forceMultisample + (offset - 0x514);
+    if (offset >= 0x54C && offset < 0x5A0)
+        return reinterpret_cast<unsigned char*>(renderer->m_viewMatrix) + (offset - 0x54C);
+    if (offset >= 0x5B8 && offset < 0x5BC) return reinterpret_cast<unsigned char*>(&renderer->m_renderAheadLimit);
+    if (offset >= 0x600 && offset < 0x608) return reinterpret_cast<unsigned char*>(&renderer->m_frameRate);
+    if (offset == 0x774) return reinterpret_cast<unsigned char*>(&renderer->m_hemiScratchTexture);
+    if (offset >= 0x8A0 && offset < 0x8B0)
+        return reinterpret_cast<unsigned char*>(&renderer->m_frameStartTime) + (offset - 0x8A0);
+    static unsigned char cells[0x1000 * sizeof(void*) / 4];
+    return cells + offset * sizeof(void*) / 4;
+#endif
+}
+
 static_assert(sizeof(Renderer) == 0x8E0,
               "RefFactory_dx9rend_Renderer allocates 0x8E0 - see 0x10051940");
 
@@ -493,16 +517,9 @@ unsigned char g_transparencyAARenderBracketsEnabled = 1;
 namespace {
 
 template <typename T>
-inline T& rendererField(void* base, unsigned int offset)
+inline T& rendererField(void* /*base*/, unsigned int offset)
 {
-#if !defined(_M_IX86)
-    // [CHOSEN, not recovered] Retail byte offsets do not exist in a 64-bit Renderer. Each named
-    // offset owns a pointer-wide cell in side storage, which only rendererField reaches.
-    static unsigned char storage[0x1000 * sizeof(void*) / 4];
-    (void)base;
-    return *reinterpret_cast<T*>(storage + offset * sizeof(void*) / 4);
-#endif
-    return *reinterpret_cast<T*>(static_cast<unsigned char*>(base) + offset);
+    return *reinterpret_cast<T*>(rendererRetailBytes(offset));
 }
 
 
@@ -750,7 +767,7 @@ void __fastcall renderer_renderPathNull(void* BF2_EDX_PARAM) {}
 void __fastcall renderer_renderPathNullWithPath(void* BF2_EDX_PARAM, int) {}
 int __fastcall renderer_getCurrentRenderPath(void* listener BF2_EDX_PARAM)
 {
-    return *reinterpret_cast<int*>(static_cast<unsigned char*>(listener) + 4);
+    return *reinterpret_cast<int*>(static_cast<unsigned char*>(listener) + sizeof(void*));
 }
 void* __fastcall renderer_getRenderPathName(void* BF2_EDX_PARAM, void* out)
 {
@@ -1261,7 +1278,7 @@ bool Renderer::initialize()
 
     // Create the five event queries used as the frame-latency fence ring.
     {
-        void** slot = reinterpret_cast<void**>(reinterpret_cast<char*>(this) + 0x5A4);
+        void** slot = reinterpret_cast<void**>(rendererRetailBytes(0x5A4));
         for (int i = 0; i < 5; ++i)
             slot[i] = queryManagerCreateQuery(D3DQUERYTYPE_EVENT);
 
@@ -1930,7 +1947,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
 
     // base+0x3F4 - the EnvMapManager, withheld: one iteration, no capture arms.
     const unsigned int envMgr =
-        *reinterpret_cast<unsigned int*>(static_cast<unsigned char*>(g_rendererBase) + 0x3F4);
+        *reinterpret_cast<unsigned int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x3F4));
     const int iterations = 1;
     (void)envMgr;
 
@@ -2627,7 +2644,7 @@ void rendererSetHemiScratchTexture(EngineTexture* texture)
 
 int rendererGetHemiRenderMode()
 {
-    return *reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 0x20);
+    return *reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x20));
 }
 
 void rendererSetHemiRenderMode(int mode)
@@ -2635,13 +2652,13 @@ void rendererSetHemiRenderMode(int mode)
     if (static_cast<unsigned int>(mode) <= 5u)
     {
         stateManagerSetRenderState(8u, (mode == 2 || mode == 3) ? 2u : 3u);
-        *reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 0x20) = mode;
+        *reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x20)) = mode;
     }
 }
 
 void rendererSetHemiRoadPass(bool enabled)
 {
-    static_cast<unsigned char*>(g_rendererBase)[1700] = enabled ? 1u : 0u;
+    (*::dice::hfe::dx9rend::rendererRetailBytes(1700)) = enabled ? 1u : 0u;
 }
 
 void rendererRenderHemiFrame()
@@ -2799,42 +2816,42 @@ void rendererSetLods(int lod, unsigned int classId)
 // 0x100595FB), whose GET arms read the stored dword back.
 void rendererSetStaticMeshLod(int lod)
 {
-    *reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 2008) = lod;
+    *reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(2008)) = lod;
     rendererSetLods(lod, kStaticMeshTemplateClassId);
 }
 
 void rendererSetSkinnedMeshLod(int lod)
 {
-    *reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 2012) = lod;
+    *reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(2012)) = lod;
     rendererSetLods(lod, kSkinnedMeshTemplateClassId);
 }
 
 void rendererSetBundledMeshLod(int lod)
 {
-    *reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 2016) = lod;
+    *reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(2016)) = lod;
     rendererSetLods(lod, kBundledMeshTemplateClassId);
 }
 
 int rendererGetSkinnedMeshLod()
 {
-    return *reinterpret_cast<const int*>(static_cast<unsigned char*>(g_rendererBase) + 2012);
+    return *reinterpret_cast<const int*>(::dice::hfe::dx9rend::rendererRetailBytes(2012));
 }
 
 int rendererGetBundledMeshLod()
 {
-    return *reinterpret_cast<const int*>(static_cast<unsigned char*>(g_rendererBase) + 2016);
+    return *reinterpret_cast<const int*>(::dice::hfe::dx9rend::rendererRetailBytes(2016));
 }
 
 // renderer.drawHud (ctor 0x1005CB70, arms 0x1005CCC0): the byte the HudManager paint call and
 // hudManagerFramePrep's hudSetPaint read; the SET arm stores the parsed bool unchanged.
 bool rendererGetDrawHud()
 {
-    return static_cast<const unsigned char*>(g_rendererBase)[1713] != 0;
+    return (*::dice::hfe::dx9rend::rendererRetailBytes(1713)) != 0;
 }
 
 void rendererSetDrawHud(bool on)
 {
-    static_cast<unsigned char*>(g_rendererBase)[1713] = on;
+    (*::dice::hfe::dx9rend::rendererRetailBytes(1713)) = on;
 }
 
 void rendererCaptureHemiState(HemiRenderState& state)
@@ -3092,7 +3109,7 @@ void rendererRenderOrthoTopDown(IDirect3DSurface9* target, IDirect3DSurface9* de
         stateManagerSetRenderState(195u, geom::roadCompiledRendererDepthBiasBits());   // depthbias
         stateManagerSetRenderState(175u, geom::roadCompiledRendererSlopeScaleDepthBiasBits());
         // `mov edx, g_Renderer; cmp byte ptr [edx+6A4h], 0` - the same object, reached as the global.
-        if (static_cast<unsigned char*>(static_cast<void*>(g_Renderer))[1700] &&
+        if ((*::dice::hfe::dx9rend::rendererRetailBytes(1700)) &&
             geom::g_RoadEditableRenderer)
         {
             static_cast<geom::IRoadEditableRenderer*>(geom::g_RoadEditableRenderer)->drawAll();   // +0x18
@@ -3491,7 +3508,7 @@ RD9_RENDERER_FRONTIER(slot_0x40,   0x40)
 unsigned int Renderer::getFrameOrdinal()
 {
     return *reinterpret_cast<unsigned int*>(
-        reinterpret_cast<unsigned char*>(this) + 0x104);
+        reinterpret_cast<RendDX9Base*>(this)->retailBlock(0x104));
 }
 
 
@@ -3620,7 +3637,7 @@ RD9_RENDERER_FRONTIER(slot_0x68,   0x68)
 // per-category draw counters through this slot when an entry is added to a queue.
 void* Renderer::getRenderStats()
 {
-    return reinterpret_cast<unsigned char*>(this) + 0x108;
+    return reinterpret_cast<RendDX9Base*>(this)->retailBlock(0x108);
 }
 RD9_RENDERER_FRONTIER(slot_0x70,   0x70)
 // one instruction: `return this + 1016`. The embedded VideoOptions getter, identical to

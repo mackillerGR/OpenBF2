@@ -75,7 +75,7 @@ char __fastcall od_event00(void* self BF2_EDX_PARAM, int category, int id, void*
 
     // &m_eventVptr sits at +0x04, so the object starts four bytes back.
     ObjectDrawer* const drawer =
-        reinterpret_cast<ObjectDrawer*>(static_cast<unsigned char*>(self) - 4);
+        reinterpret_cast<ObjectDrawer*>(static_cast<unsigned char*>(self) - sizeof(void*));
 
     const unsigned int* const probe =
         *reinterpret_cast<unsigned int* const*>(static_cast<unsigned char*>(data) + 0x2C);

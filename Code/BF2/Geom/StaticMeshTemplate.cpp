@@ -77,7 +77,7 @@ int rendererField(unsigned int byteOffset)
     if (!::dice::hfe::dx9rend::g_Renderer)
         return 0;
     return *reinterpret_cast<int*>(
-        reinterpret_cast<unsigned char*>(::dice::hfe::dx9rend::g_Renderer) + byteOffset);
+        ::dice::hfe::dx9rend::rendererRetailBytes(byteOffset));
 }
 
 // readLods: g_Renderer + 2020 (0x7E4) and + 2028 (0x7EC) - the renderer-level lod-skip settings.

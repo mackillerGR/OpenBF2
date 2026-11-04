@@ -214,7 +214,7 @@ void MeshParticleMesh::queueDraw(void*, void*, int)
 {
     if (!m_template->m_loaded)                             // [eax+4Ch]
         return;
-    if (!reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer)[0x69F])   // particles switch
+    if (!(*::dice::hfe::dx9rend::rendererRetailBytes(0x69F)))   // particles switch
         return;
     meshParticlesRendererQueueMesh(
         reinterpret_cast<unsigned char*>(g_ParticleSystemManager) + 0x5F30, this);

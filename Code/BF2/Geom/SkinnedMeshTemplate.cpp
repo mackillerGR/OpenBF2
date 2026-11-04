@@ -253,7 +253,7 @@ void materialMapCopy(vc71::map_layout& destination, const vc71::map_layout& sour
 int skinnedMeshLodSkipBase()
 {
     return *reinterpret_cast<const int*>(
-        reinterpret_cast<const unsigned char*>(dx9rend::g_Renderer) + 2020);
+        ::dice::hfe::dx9rend::rendererRetailBytes(2020));
 }
 
 // Forward declaration: vectorResizeRaw is defined further down this file.
@@ -781,8 +781,7 @@ void SkinnedMeshTemplate::readMaterials(::renddx9abi::HostNonlinearStream* strea
 
                     // Skip bump maps at nonzero shader quality, and skip all textures for omitted LODs.
                     const unsigned int shaderQuality = *reinterpret_cast<const unsigned int*>(
-                        reinterpret_cast<const unsigned char*>(::dice::hfe::dx9rend::g_Renderer)
-                        + 0x6CC);
+                        ::dice::hfe::dx9rend::rendererRetailBytes(0x6CC));
                     const bool isBumpName = std::strstr(name.c_str(), "_b.dds") != 0
                                          || std::strstr(name.c_str(), "_b_os.dds") != 0;
                     if (lodsToSkip <= 0 && (!shaderQuality || !isBumpName))

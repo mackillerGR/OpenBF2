@@ -139,7 +139,7 @@ unsigned int& terrainRendererStat(unsigned int byteOffset)
 {
     // Renderer vslot +0x6C (`return this + 264`), then the counter.
     return *reinterpret_cast<unsigned int*>(
-        static_cast<unsigned char*>(dx9rend::g_rendererBase) + 264 + byteOffset);
+        ::dice::hfe::dx9rend::rendererRetailBytes(264 + byteOffset));
 }
 
 vc71::vector_layout& terrainShadowRecords()
@@ -778,7 +778,7 @@ void Terrain::drawMain()
         IDirect3DSurface9* const surface = dx9rend::textureGetLevelSurface(
             dx9rend::rendererGetHemiScratchTexture(), 0, 0x7FFFFFFFu);
         IDirect3DSurface9* const backBuffer = *reinterpret_cast<IDirect3DSurface9**>(
-            static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x76C);
+            ::dice::hfe::dx9rend::rendererRetailBytes(0x76C));
         dx9rend::Ra::raRendererDevice()->StretchRect(backBuffer, 0, surface, 0, D3DTEXF_NONE);   // device +0x88
         surface->Release();
         dx9rend::stateManagerClear(1u, 0u, 0.0f, 0u);

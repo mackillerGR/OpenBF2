@@ -55,7 +55,7 @@ void bumpTextureCount(int delta)
 {
     if (!g_rendererBase)
         return;
-    int* counter = reinterpret_cast<int*>(static_cast<unsigned char*>(g_rendererBase) + 0x108 + 0x2C);
+    int* counter = reinterpret_cast<int*>(::dice::hfe::dx9rend::rendererRetailBytes(0x108 + 0x2C));
     *counter += delta;
 }
 

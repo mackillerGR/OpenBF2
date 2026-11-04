@@ -730,7 +730,7 @@ void setLightManagerDepthStencil(IDirect3DSurface9* surface)
     // handing a literal null to StateManager +0x64.
     if (!surface)
         surface = *reinterpret_cast<IDirect3DSurface9**>(
-            static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x770);
+            ::dice::hfe::dx9rend::rendererRetailBytes(0x770));
     dx9rend::stateManagerSetDepthStencilSurface(surface);
 }
 
@@ -740,7 +740,7 @@ void restoreRendererTarget0()
     // the generic 0x10005920 back-buffer fallback used by setRenderTargetTexture(0, 0).
     dx9rend::EngineTexture* const texture =
         *reinterpret_cast<dx9rend::EngineTexture**>(
-            static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x7D4);
+            ::dice::hfe::dx9rend::rendererRetailBytes(0x7D4));
     setRenderTargetTexture(0, texture);
 }
 

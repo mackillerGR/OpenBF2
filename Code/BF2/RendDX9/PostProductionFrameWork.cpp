@@ -383,7 +383,7 @@ void* postProductionFrameWorkOwnerCtor(void* mem)
     // `lea eax, [esi+4]` ... 0x1005080E `mov ecx, dword_1023B970; push eax; call sub_10009D60`:
     // RendDX9_registerDeviceLostResetListener(owner + 4, 3). DX9RendModule::init constructs this
     // after the Renderer (pass two of initDll), so the list at dword_1023B970+0x5C exists.
-    registerDeviceLostResetListener(static_cast<char*>(mem) + 4, 3);
+    registerDeviceLostResetListener(static_cast<char*>(mem) + sizeof(void*), 3);
 
     ::renddx9abi::logf("PostProductionFrameWork constructed at owner 0x%08X (singleton owner+8) - "
                        "vtables live, state defaulted, device-lost listener registered (priority "
@@ -400,7 +400,7 @@ void postProductionFrameWorkOwnerDetach(void* owner)
     U(owner, 0) = ::renddx9abi::addr(kOwnerVtable);
     U(owner, 4) = ::renddx9abi::addr(kDeviceLostVtable);
     U(owner, 8) = ::renddx9abi::addr(kPostProdVtable);
-    unregisterDeviceLostResetListener(static_cast<char*>(owner) + 4);
+    unregisterDeviceLostResetListener(static_cast<char*>(owner) + sizeof(void*));
 }
 
 // Stores 0..255 RGB as normalized fog colour. Requires the post-production owner.

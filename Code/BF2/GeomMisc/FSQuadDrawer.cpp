@@ -502,7 +502,7 @@ void FSQuadDrawer::drawHemiMap(dx9rend::EngineTexture* source,
     if (multisampleActive())
     {
         IDirect3DSurface9* const rendererDepth = *reinterpret_cast<IDirect3DSurface9**>(
-            static_cast<unsigned char*>(dx9rend::g_rendererBase) + 0x770);
+            ::dice::hfe::dx9rend::rendererRetailBytes(0x770));
         dx9rend::stateManagerSetDepthStencilSurface(rendererDepth);
     }
 

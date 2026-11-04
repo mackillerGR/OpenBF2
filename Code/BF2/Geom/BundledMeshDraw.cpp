@@ -51,7 +51,9 @@ using dx9rend::Ra::RaLightRecord;
 using dx9rend::Ra::RaLightingParameters;
 
 template<class T> T& field(void* p,unsigned int offset)
-{ return *reinterpret_cast<T*>(static_cast<unsigned char*>(p)+offset); }
+{
+    if(p==static_cast<void*>(dx9rend::g_Renderer))
+        return *reinterpret_cast<T*>(dx9rend::rendererRetailBytes(offset)); return *reinterpret_cast<T*>(static_cast<unsigned char*>(p)+offset); }
 template<class R> R slot(void* p,unsigned int offset)
 {
     typedef R(__thiscall* Fn)(void*);
