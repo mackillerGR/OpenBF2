@@ -125,7 +125,7 @@ void clampInputCoordinate(float& value, float origin, float extent)
 #else
     {
         x87::Cpu c;
-        c.edx = x87::toReg(value);
+        c.edx = x87::toReg(&value);
         c.push(x87::f32(c.edx));
         c.compare(c.s(0), origin); c.pop();
         c.eax = (c.eax & ~uintptr_t(0xFFFF)) | c.sw;

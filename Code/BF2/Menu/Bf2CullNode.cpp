@@ -63,7 +63,7 @@ void decreaseCullFade(float& current, float delta, float duration)
 #else
     {
         x87::Cpu c;
-        c.ecx = x87::toReg(current);
+        c.ecx = x87::toReg(&current);
         c.push(delta);
         c.s(0) /= duration;
         c.s(0) = x87::f32(c.ecx) - c.s(0);
@@ -97,7 +97,7 @@ void increaseCullFade(float& current, float delta, float duration)
 #else
     {
         x87::Cpu c;
-        c.ecx = x87::toReg(current);
+        c.ecx = x87::toReg(&current);
         c.push(delta);
         c.s(0) /= duration;
         c.s(0) += x87::f32(c.ecx);

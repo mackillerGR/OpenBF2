@@ -66,7 +66,7 @@ bool subtractTimer(float& timer, float delta, bool inclusive)
 #else
     {
         x87::Cpu c;
-        c.ecx = x87::toReg(timer);
+        c.ecx = x87::toReg(&timer);
         c.push(x87::f32(c.ecx));
         c.s(0) -= delta;
         x87::f32(c.ecx) = float(c.s(0));
@@ -104,7 +104,7 @@ bool addDemoTimer(float& timer, float delta)
 #else
     {
         x87::Cpu c;
-        c.ecx = x87::toReg(timer);
+        c.ecx = x87::toReg(&timer);
         c.push(delta);
         c.s(0) += x87::f32(c.ecx);
         x87::f32(c.ecx) = float(c.s(0));

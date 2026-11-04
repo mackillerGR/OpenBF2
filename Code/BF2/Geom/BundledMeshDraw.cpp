@@ -255,25 +255,40 @@ float worldHeight(const MeshBounds& bounds,const Mat4& world)
     }
     return maximum.y-minimum.y;
 }
+// [CHOSEN, not recovered] Retail offsets into the material, with the Ra block starting at +0x10;
+// the block's fields move on hosts with wider pointers.
+template<class T> T& materialField(BundledMeshMaterial* material,unsigned int retail)
+{
+    return *reinterpret_cast<T*>(dx9rend::Ra::raMaterialFieldBytes(material->m_parameters,retail-0x10));
+}
+// Retail keeps the shader pointer in the block's last word, which holds no pointer on 64-bit.
+dx9rend::Ra::RaShader*& boundShader(BundledMeshMaterial* material)
+{
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    return material->m_boundShader;
+#else
+    return field<dx9rend::Ra::RaShader*>(material,0x15C);
+#endif
+}
 void configureAlpha(BundledMeshMaterial* material,unsigned int mask)
 {
     if(material->m_kind==2)
     {
-        field<unsigned char>(material,0x2C)=1;
+        materialField<unsigned char>(material,0x2C)=1;
         if(material->m_state->m_alphaTest)
         {
-            if(mask&0x400)field<int>(material,0xB4)=15;
-            else field<unsigned char>(material,0x2C)=0;
+            if(mask&0x400)materialField<int>(material,0xB4)=15;
+            else materialField<unsigned char>(material,0x2C)=0;
         }
-        else field<int>(material,0xB4)=127;
+        else materialField<int>(material,0xB4)=127;
     }
     else if(material->m_kind==1)
     {
-        field<unsigned char>(material,0x2C)=1;
-        field<int>(material,0xB4)=0;
-        field<unsigned char>(material,0x1C)=1;
-        field<int>(material,0xAC)=1;
-        field<unsigned char>(material,0x24)=0;
+        materialField<unsigned char>(material,0x2C)=1;
+        materialField<int>(material,0xB4)=0;
+        materialField<unsigned char>(material,0x1C)=1;
+        materialField<int>(material,0xAC)=1;
+        materialField<unsigned char>(material,0x24)=0;
     }
 }
 void setEntry(RenderQueueEntry* entry,BundledMeshMaterial* material,void* object,
@@ -477,13 +492,13 @@ void BundledMesh::draw(void*,void*,void*)
             }
         }
         configureAlpha(material,mask);
-        field<dx9rend::Ra::RaShader*>(material,0x15C)=bundledMeshShaderForBits(mask);
-        field<float>(material,0x94)=static_cast<float>(m_template->getMaterialValue100(
+        boundShader(material)=bundledMeshShaderForBits(mask);
+        materialField<float>(material,0x94)=static_cast<float>(m_template->getMaterialValue100(
             m_geomIndex,m_lodIndex,static_cast<unsigned char>(index)));
         if(state->m_envMap)
         {
             dx9rend::EngineTexture* const texture=bundledMeshEnvironmentTexture();
-            dx9rend::EngineTexture*& old=field<dx9rend::EngineTexture*>(material,0x130);
+            dx9rend::EngineTexture*& old=materialField<dx9rend::EngineTexture*>(material,0x130);
             if(old!=texture)
             {
                 if(old && --old->refCount==0)
@@ -493,15 +508,15 @@ void BundledMesh::draw(void*,void*,void*)
             }
             const int lod=getLodIndex();
             const int geom=getGeomIndex();
-            field<float>(material,0xA4)=m_template->slot_0x44(geom,lod,index);
+            materialField<float>(material,0xA4)=m_template->slot_0x44(geom,lod,index);
         }
         if(state->m_feature39)
-            field<float>(material,0x104)=m_template->getSpecularStaticGloss(
+            materialField<float>(material,0x104)=m_template->getSpecularStaticGloss(
                 m_geomIndex,m_lodIndex,static_cast<unsigned char>(index));
         unsigned int currentFovBits;std::memcpy(&currentFovBits,&m_fov,4);
         void* const projectionView=slot<void*>(dx9rend::g_rendererBase,
                                                 currentFovBits==0xBF800000u?0x50:0xD4);
-        m_parameters.geomBones.a=reinterpret_cast<unsigned int>(m_partTransforms);
+        m_parameters.geomBones.a=reinterpret_cast<std::uintptr_t>(m_partTransforms);
         m_parameters.geomBones.b=m_lodRecord->partCount;
         std::memcpy(&m_parameters.viewProjection.value,
                     &slot<const Mat4&>(projectionView,0x84),sizeof(Mat4));
@@ -531,8 +546,8 @@ void BundledMesh::draw(void*,void*,void*)
         }
         else copy3(m_parameters.hemiMapSkyColor.value,g_LightManager->getSkyColor());
         configureAlpha(material,mask);                    // repeated in the shipped draw
-        field<float>(material,0x114)=heightScale;
-        setEntry(entry,material,&m_parameters,field<dx9rend::Ra::RaShader*>(material,0x15C));
+        materialField<float>(material,0x114)=heightScale;
+        setEntry(entry,material,&m_parameters,boundShader(material));
         if(material->m_kind==1)
         {
             if(m_template->m_primitiveType==4)entry->lighting.tail10C=3*animation*material->m_primitiveCount;
@@ -565,7 +580,7 @@ void BundledMesh::draw(void*,void*,void*)
             const Vec3 direction=subtract(position(*getGeometryTransformation()),origin);
             void* hitObject=0;
             const bool hit=bundledMeshTraceAdditive(this,origin,direction,hitObject);
-            float& fade=field<float>(this,0x2A0);
+            float& fade=*reinterpret_cast<float*>(&m_dword2A0);
             if(!hit || hitObject==refreshRootObject())fade=1.0f;
             else if(fade>epsilon)
             {
@@ -594,7 +609,7 @@ void BundledMesh::draw(void*,void*,void*)
                 vertical.y=right.x*forward.z-forward.x*right.z;
                 vertical.z=forward.x*right.y-right.x*forward.y;
                 copy3(m_inverseTransform->m+12,position(root));
-                m_parameters.geomBones.a=reinterpret_cast<unsigned int>(&m_inverseTransform);
+                m_parameters.geomBones.a=reinterpret_cast<std::uintptr_t>(&m_inverseTransform);
                 m_parameters.geomBones.b=1;
                 entry->shader=dx9rend::Ra::getShader(
                     static_cast<dx9rend::Ra::RaShaderTable*>(dx9rend::g_renderQueues),vc71::string("BMadditive"),false);

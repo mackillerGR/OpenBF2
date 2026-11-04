@@ -178,7 +178,7 @@ void BundledMesh::allocatePartTransforms()
 {
     if (!m_partTransforms)
     {
-        m_partTransforms=static_cast<const Mat4**>(::renddx9abi::engineAlloc(4*m_template->m_maxPartCount));
+        m_partTransforms=static_cast<const Mat4**>(::renddx9abi::engineAlloc(sizeof(const Mat4*)*m_template->m_maxPartCount));
         for (unsigned int i=0;i<m_template->m_maxPartCount;++i)
             m_partTransforms[i]=&bundledMeshZeroMatrix();
     }
@@ -211,12 +211,12 @@ unsigned int BundledMesh::getPartCount() const { return m_lodRecord ? m_lodRecor
 void BundledMesh::setGeomIndex(int geom)
 {
     if (!m_template->m_loaded || !m_template->m_geoms.first) return;
-    const unsigned int count=static_cast<unsigned int>((m_template->m_geoms.last-m_template->m_geoms.first)/32);
+    const unsigned int count=static_cast<unsigned int>((m_template->m_geoms.last-m_template->m_geoms.first)/sizeof(BundledMeshGeom));
     if (static_cast<unsigned int>(geom)>=count || geom<0) return;
     if (m_geomIndex!=static_cast<unsigned int>(geom)) { m_lodIndex=0; m_lodExplicit=0; }
     m_geomIndex=geom;
     vc71::vector_layout& materials=reinterpret_cast<vc71::vector_layout*>(m_template->m_materials.first)[geom];
-    const unsigned int lods=materials.first ? static_cast<unsigned int>((materials.last-materials.first)/16) : 0;
+    const unsigned int lods=materials.first ? static_cast<unsigned int>((materials.last-materials.first)/sizeof(vc71::vector_layout)) : 0;
     if (m_lodIndex>=lods-1) m_lodIndex=lods-1;
     m_lodMaterials=reinterpret_cast<vc71::vector_layout*>(materials.first)+m_lodIndex;
     m_lodRecord=reinterpret_cast<BundledMeshLod*>(
@@ -224,7 +224,7 @@ void BundledMesh::setGeomIndex(int geom)
 }
 int BundledMesh::getGeomIndex() const { return static_cast<int>(m_geomIndex); }
 int BundledMesh::getGeomCount() const
-{ return m_template->m_geoms.first ? static_cast<int>((m_template->m_geoms.last-m_template->m_geoms.first)/32) : 0; }
+{ return m_template->m_geoms.first ? static_cast<int>((m_template->m_geoms.last-m_template->m_geoms.first)/sizeof(BundledMeshGeom)) : 0; }
 void BundledMesh::setLodIndex(int lod)
 {
     if (lod==-1) { m_lodExplicit=0; m_lodIndex=0; }
@@ -298,7 +298,7 @@ void* BundledMesh::getNextGeometry() const { return m_nextGeometry; }
 void BundledMesh::setTransparency(float value) { m_parameters.transparency.value=value; }
 void BundledMesh::initializeFromTemplate()
 {
-    if (m_template->m_geoms.first && static_cast<unsigned int>((m_template->m_geoms.last-m_template->m_geoms.first)/32)>=2)
+    if (m_template->m_geoms.first && static_cast<unsigned int>((m_template->m_geoms.last-m_template->m_geoms.first)/sizeof(BundledMeshGeom))>=2)
         m_geomIndex=1;
     dispatch<void>(this,0x6C,static_cast<int>(m_geomIndex));
     if (m_template->m_maxPartCount==1 && m_ownerObject)

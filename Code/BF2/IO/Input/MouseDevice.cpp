@@ -242,7 +242,8 @@ void MouseDevice::updateSamples(float deltaTime)
         m_samples.pop_front();
     }
     for (int i = 0; i < 4; ++i)
-        m_axes[i] = map->getAxisScale(static_cast<InputDeviceAxes>(i)) * m_axes[i];
+                // [CHOSEN, not recovered] A direct start has no profile, so no control map yet.
+        m_axes[i] = map ? map->getAxisScale(static_cast<InputDeviceAxes>(i)) * m_axes[i] : 0.0f;
 }
 
 void MouseDevice::update(float deltaTime)

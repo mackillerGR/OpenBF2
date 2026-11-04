@@ -54,7 +54,7 @@ bool hasAbilityPosition(const Vec2& position)
 #else
     {
         x87::Cpu c;
-        c.ecx = x87::toReg(position);
+        c.ecx = x87::toReg(&position);
         c.push(x87::f32(c.ecx + 4));
         c.s(0) -= sentinel;
         c.s(0) = std::fabs(c.s(0));
@@ -93,14 +93,14 @@ void beginSupplyCooldown(double now, const float& duration, float& remaining,
     {
         x87::Cpu c;
         c.push(now);
-        c.eax = x87::toReg(duration);
+        c.eax = x87::toReg(&duration);
         c.s(0) += x87::f32(c.eax);
         c.ecx = x87::u32(c.eax);
-        c.edx = x87::toReg(remaining);
+        c.edx = x87::toReg(&remaining);
         x87::u32(c.edx) = uint32_t(c.ecx);
-        c.eax = x87::toReg(reloading);
+        c.eax = x87::toReg(&reloading);
         x87::u8(c.eax) = uint8_t(uintptr_t(1));
-        c.ecx = x87::toReg(deadline);
+        c.ecx = x87::toReg(&deadline);
         x87::f32(c.ecx) = float(c.s(0)); c.pop();
     }
 #endif
@@ -126,14 +126,14 @@ void beginVehicleCooldown(double now, const float& duration, float& remaining,
     {
         x87::Cpu c;
         c.push(now);
-        c.eax = x87::toReg(duration);
+        c.eax = x87::toReg(&duration);
         c.s(0) += x87::f32(c.eax);
         c.ecx = x87::u32(c.eax);
-        c.edx = x87::toReg(remaining);
+        c.edx = x87::toReg(&remaining);
         x87::u32(c.edx) = uint32_t(c.ecx);
-        c.eax = x87::toReg(deadline);
+        c.eax = x87::toReg(&deadline);
         x87::f32(c.eax) = float(c.s(0)); c.pop();
-        c.ecx = x87::toReg(reloading);
+        c.ecx = x87::toReg(&reloading);
         x87::u8(c.ecx) = uint8_t(uintptr_t(1));
     }
 #endif

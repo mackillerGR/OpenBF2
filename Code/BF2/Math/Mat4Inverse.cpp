@@ -76,7 +76,7 @@ void cofactor(float& output, double a0, double b0, double a1, double b1,
 #else
     {
         x87::Cpu c;
-        c.edx = x87::toReg(output);
+        c.edx = x87::toReg(&output);
         c.push(a0);
         c.s(0) *= b0;
         c.push(a1);
@@ -134,7 +134,7 @@ void divideByDeterminant(const float* input, float* output)
     {
         x87::Cpu c;
         c.ecx = x87::toReg(input);
-        c.edx = x87::toReg(output);
+        c.edx = x87::toReg(&output);
         c.push(x87::f32(c.ecx + 16));
         c.s(0) *= x87::f32(c.edx + 4);
         c.push(x87::f32(c.ecx));

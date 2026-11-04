@@ -212,6 +212,12 @@ bool VoipServerConnection::GetVoipServerSettings(IGameServerSettings* value)
 // enabled voice builds the channel (and the in-process server) through InitEnabledVoip.
 bool VoipServerConnection::Init()
 {
+#if !DEDICATED && !defined(_WIN32)
+    // [CHOSEN, not recovered] The voice stack has no port yet, so a direct start hosts without it.
+    // [RETIRE-WHEN: portable-voip] Remove once CBF2VoipServer::Initialize exists on this host.
+    if (getenv("BF2_PORT_DIRECT_START"))
+        return true;
+#endif
     // Both binaries discard this exact call's return. ELF: classManager ds:0x8AC85A0, vslot
     // +0x4C at 0x8126C86; PE: ds:0x892D58, vslot +0x48 at 0x54B160. The one-slot difference is
     // the MSVC/Itanium destructor-pair ABI split. The global serverSettings below is a separate

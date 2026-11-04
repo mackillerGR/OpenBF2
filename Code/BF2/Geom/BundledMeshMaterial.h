@@ -6,7 +6,10 @@
 #include "../../RendDX9Abi/Vc71Vector.h"
 #include "../../RendDX9Abi/Vc71Map.h"
 #include <cstddef>
-namespace dice { namespace hfe { namespace geom {
+#include <cstdint>
+namespace dice { namespace hfe {
+namespace dx9rend { namespace Ra { struct RaShader; } }
+namespace geom {
 class BundledMeshTemplate;
 class BundledMeshState;
 // The 24-byte unsigned-key node shared by this material's declaration map and the
@@ -14,13 +17,13 @@ class BundledMeshState;
 struct BundledMeshMapNode
 {
     BundledMeshMapNode *left, *parent, *right;
-    unsigned int key, value;
+    unsigned int key; std::uintptr_t value;
     unsigned char color, isNil, pad[2];
 };
 static_assert(sizeof(BundledMeshMapNode)==24, "Bundled map node");
 void bundledMeshMapConstruct(vc71::map_layout& map);
 BundledMeshMapNode* bundledMeshMapFind(const vc71::map_layout& map, unsigned int key);
-unsigned int& bundledMeshMapAt(vc71::map_layout& map, unsigned int key);
+std::uintptr_t& bundledMeshMapAt(vc71::map_layout& map, unsigned int key);
 void bundledMeshMapDestroy(vc71::map_layout& map);
 BundledMeshMapNode* bundledMeshMapNext(BundledMeshMapNode* node);
 class BundledMeshMaterial
@@ -52,6 +55,9 @@ public:
     void* m_indexBuffer;                                    // +180 native D3D handle
     vc71::vector_layout m_elements;                         // +184 RaVertexElementDesc*
     vc71::map_layout m_declarations;                        // +194 shader build serial -> declaration
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    dx9rend::Ra::RaShader* m_boundShader;                   // retail keeps this in the block at +15C
+#endif
 };
 static_assert(sizeof(BundledMeshMaterial)==0x1A0, "material allocation");
 static_assert(offsetof(BundledMeshMaterial,m_parameters)==0x10, "material parameters");

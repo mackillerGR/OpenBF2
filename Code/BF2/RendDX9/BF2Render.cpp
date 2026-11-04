@@ -144,7 +144,7 @@ void objectManagerQueryFrustum(void* frustum488, unsigned int* resultVectorAt469
     // is the object's start, which is what the raw dispatch assumed too.
     reinterpret_cast<world::ObjectManager*>(objectManager)->getObjectsFromGridNoCullConst(
         *static_cast<const Frustum*>(frustum488),
-        *reinterpret_cast<std::vector<world::IObject*>*>(resultVectorAt469 + 1), 0, false, 0.0f,
+        *reinterpret_cast<std::vector<world::IObject*>*>(reinterpret_cast<void**>(resultVectorAt469) + 1), 0, false, 0.0f,
         0.0f);
 #else
     void* om = objectManager;
@@ -482,6 +482,19 @@ unsigned char* rendererRetailBytes(unsigned int offset)
     return cells + offset * sizeof(void*) / 4;
 #endif
 }
+
+// [CHOSEN, not recovered] The recovered bodies index this object as retail bytes, dwords and
+// doubles. These views send every index through rendererRetailBytes, so they agree with the other
+// images' raw reads on hosts where the native object is laid out differently.
+template <typename T> struct RetailView
+{
+    T& operator[](unsigned int index) const
+    { return *reinterpret_cast<T*>(rendererRetailBytes(index * sizeof(T))); }
+};
+
+// A dword of the retail object that holds a pointer.
+inline void*& retailPointer(unsigned int dwordIndex)
+{ return *reinterpret_cast<void**>(rendererRetailBytes(dwordIndex * 4)); }
 
 static_assert(sizeof(Renderer) == 0x8E0,
               "RefFactory_dx9rend_Renderer allocates 0x8E0 - see 0x10051940");
@@ -906,9 +919,9 @@ Renderer::Renderer()
 
     // Initialize per-frame subsystem enable flags and state.
     {
-        unsigned char* self = reinterpret_cast<unsigned char*>(this);
-        unsigned int*  dw   = reinterpret_cast<unsigned int*>(this);
-        float*         fl   = reinterpret_cast<float*>(this);
+        RetailView<unsigned char> self;
+        RetailView<unsigned int> dw;
+        RetailView<float> fl;
 
         self[1440] = 1;              // clear the frame at the world pass's end (flags 2, z-only)
         self[1441] = 1;              // post-production requires its active() query
@@ -931,7 +944,7 @@ Renderer::Renderer()
                 ::QueryPerformanceCounter(&now);
                 *reinterpret_cast<LONGLONG*>(timer + 8) = now.QuadPart;
             }
-            dw[375] = reinterpret_cast<unsigned int>(timer);
+            retailPointer(375) = timer;
         }
 
         self[1693] = 1;              // fog block
@@ -954,7 +967,13 @@ Renderer::Renderer()
         self[1714] = 1;              // sky
         self[1715] = 1;
         self[1716] = 1;              // the console query
+#if defined(BF2_PORTABLE_CLIENT)
+        // [CHOSEN, not recovered] [RETIRE-WHEN: portable-postproduction] The owner's retail fields
+        // and sub_1004F210/sub_1004FCD0 are not ported, so the bloom/tint pass stays off here.
+        self[1717] = 0;
+#else
         self[1717] = 1;              // post-production
+#endif
         self[1756] = 1;
         self[1757] = 0;
 
@@ -1712,11 +1731,12 @@ bool cameraIsUnderWater()
 
 void Renderer::update(double time)
 {
-    unsigned char* self = reinterpret_cast<unsigned char*>(this);
-    unsigned int*  dw   = reinterpret_cast<unsigned int*>(this);
+    RetailView<unsigned char> self;
+    RetailView<unsigned int> dw;
+    RetailView<double> dbl;
 
     ++dw[65];
-    *reinterpret_cast<double*>(self + 1512) = time;
+    dbl[189] = time;
     const float timeF = static_cast<float>(time);
 
     {
@@ -1774,7 +1794,7 @@ void Renderer::update(double time)
 
 void Renderer::hudManagerFramePrep(float timeF)
 {
-    unsigned char* self = reinterpret_cast<unsigned char*>(this);
+    RetailView<unsigned char> self;
     void* hud = m_hudManager;
     if (!hud)
         return;
@@ -1849,16 +1869,16 @@ void Renderer::roadQueuePass()
 
 void Renderer::geometryStreamTick()
 {
-    unsigned char* self = reinterpret_cast<unsigned char*>(this);
-    unsigned int*  dw   = reinterpret_cast<unsigned int*>(this);
-    float*         fl   = reinterpret_cast<float*>(this);
+    RetailView<unsigned char> self;
+    RetailView<unsigned int> dw;
+    RetailView<float> fl;
 
     if (fl[465] <= 0.00000011920929f)
         return;
 
     dw[467] = 0;
     dw[468] = 0;
-    dw[471] = dw[470];                       // resize the result vector to zero (first == last)
+    retailPointer(471) = retailPointer(470); // resize the result vector to zero (first == last)
 
     void* view = getRenderViewDup();
     unsigned char* vf = static_cast<unsigned char*>(viewGetFrustumPtr(view));
@@ -1886,10 +1906,10 @@ void Renderer::geometryStreamTick()
     // host ObjectManager vslot +0x5C: query(frustum, &resultVector, 0, 0, 0, 0). The vector
     // fields live at dwords 469..471 of this object; the host fills them through the engine heap.
     // Typed in the native flavour with the vector correctly overlaid - see hostCalls (RW-266).
-    hostCalls::objectManagerQueryFrustum(scan, dw + 469);                              // +0x5C
+    hostCalls::objectManagerQueryFrustum(scan, &dw[469]);                              // +0x5C
 
-    unsigned int first = dw[470];
-    unsigned int last  = dw[471];
+    void* first = retailPointer(470);
+    void* last  = retailPointer(471);
     if (first != last)
     {
         RD9_FRONTIER_AT("dice::hfe::dx9rend::Renderer::geometryStreamTick (the host query "
@@ -1907,10 +1927,10 @@ void Renderer::geometryStreamTick()
 
 bool Renderer::renderFrame(double time, float deltaTime)
 {
-    unsigned char* self = reinterpret_cast<unsigned char*>(this);
-    unsigned int*  dw   = reinterpret_cast<unsigned int*>(this);
-    float*         fl   = reinterpret_cast<float*>(this);
-    double*        dbl  = reinterpret_cast<double*>(this);
+    RetailView<unsigned char> self;
+    RetailView<unsigned int> dw;
+    RetailView<float> fl;
+    RetailView<double> dbl;
     const float    timeF = static_cast<float>(time);
 
     // BF2Render.cpp:991 - the state-manager sanity check.
@@ -1947,7 +1967,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
             static_cast<unsigned char*>(g_raShaderConstants) + 96);
         cam[0] = src[12]; cam[1] = src[13]; cam[2] = src[14];
     }
-    frameTimerTick(reinterpret_cast<void*>(dw[375]));
+    frameTimerTick(retailPointer(375));
 
     const double presentGate = time;
 
@@ -2381,9 +2401,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
             {
                 typedef void (__fastcall* SampleFn)(void* BF2_EDX_PARAM, float);
                 typedef void (__fastcall* FlagFn)(void* BF2_EDX_PARAM, unsigned char);
-                void* gRender = reinterpret_cast<void*>(dw[550]);
-                void* gFps    = reinterpret_cast<void*>(dw[549]);
-                void* gDraw   = reinterpret_cast<void*>(dw[551]);
+                void* gRender = m_debugGraphs[1];
+                void* gFps    = m_debugGraphs[0];
+                void* gDraw   = m_debugGraphs[2];
                 if (gRender)
                     reinterpret_cast<SampleFn>((*static_cast<void***>(gRender))[16])(
                         gRender, static_cast<float>(m_frameWallTime * 1000.0));
@@ -2503,9 +2523,9 @@ bool Renderer::renderFrame(double time, float deltaTime)
         const unsigned int count = dw[366];
         if (count)
         {
-            queryIssueEnd(reinterpret_cast<void*>(dw[dw[367] % count + 361]));
+            queryIssueEnd(retailPointer(dw[367] % count + 361));
             const unsigned int cursor = ++dw[367];
-            queryWaitDone(reinterpret_cast<void*>(dw[(cursor - count) % count + 361]));
+            queryWaitDone(retailPointer((cursor - count) % count + 361));
         }
     }
 

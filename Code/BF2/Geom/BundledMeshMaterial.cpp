@@ -50,7 +50,7 @@ void* __fastcall destroyedMaterialDestroy(void* self BF2_EDX_PARAM, unsigned cha
 // 24-byte ABI. Tree balancing is the existing RW-74 chosen-container policy.
 void bundledMeshMapConstruct(vc71::map_layout& map)
 {
-    BundledMeshMapNode* n = static_cast<BundledMeshMapNode*>(::renddx9abi::engineAlloc(24));
+    BundledMeshMapNode* n = static_cast<BundledMeshMapNode*>(::renddx9abi::engineAlloc(sizeof(BundledMeshMapNode)));
     if (n) n->left = 0;
     if (reinterpret_cast<unsigned int>(n) != 0xFFFFFFFCu) n->parent = 0;
     if (reinterpret_cast<unsigned int>(n) != 0xFFFFFFF8u) n->right = 0;
@@ -72,7 +72,7 @@ BundledMeshMapNode* bundledMeshMapFind(const vc71::map_layout& map, unsigned int
     }
     return best == head || key < best->key ? head : best;
 }
-unsigned int& bundledMeshMapAt(vc71::map_layout& map, unsigned int key)
+std::uintptr_t& bundledMeshMapAt(vc71::map_layout& map, unsigned int key)
 {
     BundledMeshMapNode* const head = reinterpret_cast<BundledMeshMapNode*>(map.head);
     BundledMeshMapNode* found = bundledMeshMapFind(map, key);
@@ -86,7 +86,7 @@ unsigned int& bundledMeshMapAt(vc71::map_layout& map, unsigned int key)
         left = key < cursor->key;
         cursor = left ? cursor->left : cursor->right;
     }
-    BundledMeshMapNode* n = static_cast<BundledMeshMapNode*>(::renddx9abi::engineAlloc(24));
+    BundledMeshMapNode* n = static_cast<BundledMeshMapNode*>(::renddx9abi::engineAlloc(sizeof(BundledMeshMapNode)));
     n->left = n->right = head;
     n->parent = parent;
     n->key = key;
@@ -205,7 +205,7 @@ bool BundledMeshMaterial::applyStreams(void* shaderState)
             Ra::raStreamRequirementsDestroy(required);
             return false;
         }
-        bundledMeshMapAt(m_declarations, key) = reinterpret_cast<unsigned int>(
+        bundledMeshMapAt(m_declarations, key) = reinterpret_cast<std::uintptr_t>(
             Ra::raVertexDeclarationCached(Ra::raDeclarationBuilderFinish(builder), Ra::raRendererDevice()));
         node = bundledMeshMapFind(m_declarations, key);
         Ra::raDeclarationBuilderDestroy(builder);

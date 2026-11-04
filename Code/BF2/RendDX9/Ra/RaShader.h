@@ -36,7 +36,7 @@ struct RaParamInt    { void* vptr; int   value; };
 struct RaParamRef    { void* vptr; void* value; };
 struct RaParamVec3   { void* vptr; float value[3]; };
 struct RaParamVec4   { void* vptr; float value[4]; };
-struct RaParamPair   { void* vptr; unsigned int a; unsigned int b; };
+struct RaParamPair   { void* vptr; std::uintptr_t a; unsigned int b; };
 struct RaParamMat4   { void* vptr; float value[16]; };
 struct RaParamVector { void* vptr; vc71::vector_layout value; };
 
