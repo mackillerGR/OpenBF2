@@ -48,6 +48,16 @@ bool OStream::streamWideString(wchar_t** value, const char*)
 {
     int length = *value ? static_cast<int>(std::wcslen(*value)) : 0;
     if (!streamInt(&length, "Int")) return false;
+    if (*value && sizeof(wchar_t) != 2)
+    {
+        // The wire format is UTF-16 whatever this host's wchar_t is.
+        for (int i = 0; i < length; ++i)
+        {
+            const unsigned short unit = static_cast<unsigned short>((*value)[i]);
+            if (write(&unit, 2) != 2) return false;
+        }
+        return true;
+    }
     if (*value && write(*value, 2 * length) != 2 * length) return false;
     return true;
 }

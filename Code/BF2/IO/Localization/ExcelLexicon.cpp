@@ -67,6 +67,15 @@ void* ExcelLexicon::queryInterface(unsigned int iid) const
 // Loads ESC-delimited localization pairs. Empty values are skipped and the first key insertion wins.
 // Failures retain earlier entries. The BOM is two bytes; later units use native wchar_t width.
 // A final nonspace character at EOF is consumed by trailing-whitespace handling.
+
+// [CHOSEN, not recovered] Lexicons are UTF-16 files, so the rebuilt client reads two-byte units
+// on hosts with a wider wchar_t. Other images keep the shipped sizeof(wchar_t).
+#if !DEDICATED && !defined(_WIN32)
+typedef unsigned short LexiconUnit;
+#else
+typedef wchar_t LexiconUnit;
+#endif
+
 bool ExcelLexicon::load(const std::string& filename)
 {
     File file;
@@ -89,9 +98,9 @@ bool ExcelLexicon::load(const std::string& filename)
     {
         std::wstring wideKey, value;
         if (!file.read(wideKey, wchar_t(27)) || wideKey.empty()
-            || !file.seek(static_cast<SeekOrigin>(1), sizeof(wchar_t))
+            || !file.seek(static_cast<SeekOrigin>(1), sizeof(LexiconUnit))
             || !file.read(value, wchar_t(27))
-            || !file.seek(static_cast<SeekOrigin>(1), sizeof(wchar_t)))
+            || !file.seek(static_cast<SeekOrigin>(1), sizeof(LexiconUnit)))
             return false;
         std::string key = makeNarrow(wideKey);
         const std::string::size_type space = key.find(' ');
@@ -106,12 +115,12 @@ bool ExcelLexicon::load(const std::string& filename)
             if (!m_strings.exists(upper, bucket))
                 m_strings.insert(upper, value, bucket);
         }
-        wchar_t character;
-        while (file.read(&character, sizeof(wchar_t))
+        LexiconUnit character;
+        while (file.read(&character, sizeof(LexiconUnit))
                && (character == L'\n' || character == L'\r' || character == L' ' || character == L'\t'))
         {}
         if (file.getAvailableBytes())
-            file.seek(static_cast<SeekOrigin>(1), -static_cast<int>(sizeof(wchar_t)));
+            file.seek(static_cast<SeekOrigin>(1), -static_cast<int>(sizeof(LexiconUnit)));
     }
     return true;
 }

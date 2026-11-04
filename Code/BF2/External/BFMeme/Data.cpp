@@ -323,7 +323,7 @@ namespace {
 // the wide-character allocation, widening copy and
 // clone the wide reference class uses. Names [INFERRED].
 wchar_t* allocateWide(unsigned int characters)
-{ return static_cast<wchar_t*>(::operator new(characters * 2)); }
+{ return static_cast<wchar_t*>(::operator new(characters * sizeof(wchar_t))); }
 void widenInto(wchar_t* output, const char* text)
 {
     while (*text) *output++ = static_cast<unsigned char>(*text++);

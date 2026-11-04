@@ -101,11 +101,20 @@ bool File::read(bool& v)           { return read(&v, sizeof(v)) == sizeof(v); }
 // Embedded NUL truncates out. Input must fit the unchecked 4096-character buffer.
 bool File::read(std::wstring& out, wchar_t delimiter)
 {
+#if !DEDICATED && !defined(_WIN32)
+    // [CHOSEN, not recovered] Text files are UTF-16 whatever this host's wchar_t is.
+    wchar_t buffer[4096];
+    unsigned int count = 0;
+    unsigned short unit = 0;
+    while (m_file->read(&unit, sizeof(unit)) == sizeof(unit) && unit != delimiter)
+        buffer[count++] = unit;
+#else
     wchar_t buffer[4096];
     unsigned int count = 0;
     while (m_file->read(buffer + count, sizeof(wchar_t)) == sizeof(wchar_t)
            && buffer[count] != delimiter)
         ++count;
+#endif
     buffer[count] = 0;
     out = buffer;
     return true;

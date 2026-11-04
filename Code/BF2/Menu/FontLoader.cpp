@@ -55,6 +55,26 @@ bool skipLine(meme::IStream* stream)
 Font* loadFontFile(const char* name)
 {
     std::string path(name);
+#if !defined(_WIN32)
+    // [CHOSEN, not recovered] Fonts_client.zip keeps localized fonts under <language>/ and
+    // <language>/800/, and the retail route to them is unread. The English copy stands in here.
+    // [RETIRE-WHEN: font-language-path] Replace with the recovered lookup from BF2.exe.
+    std::string localized;
+    if (!io::fileManager->fileExists(path) && path.size() > 6 && path.compare(0, 5, "Fonts") == 0)
+    {
+        const std::string file = path.substr(6);
+        for (const char* folder : {"Fonts/English/800/", "Fonts/English/", "Fonts/800/"})
+        {
+            localized = std::string(folder) + file;
+            if (io::fileManager->fileExists(localized))
+            {
+                path = localized;
+                name = localized.c_str();
+                break;
+            }
+        }
+    }
+#endif
     if (!io::fileManager->fileExists(path))
     {
         path = name;

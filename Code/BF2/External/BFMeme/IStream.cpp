@@ -64,8 +64,14 @@ bool IStream::streamWideString(wchar_t** value, const char*)
     int length;
     if (!getSource()->streamInt(&length, "Int")) return false;
     if (length) {
-        *value = static_cast<wchar_t*>(::operator new((static_cast<unsigned int>(length) + 1) * 2));
+        *value = static_cast<wchar_t*>(::operator new((static_cast<unsigned int>(length) + 1) * sizeof(wchar_t)));
+        // The wire format is UTF-16; widen in place, from the end, where wchar_t is larger.
         if (getSource()->read(*value, 2 * length) != 2 * length) return false;
+        if (sizeof(wchar_t) != 2)
+        {
+            const unsigned short* const units = reinterpret_cast<const unsigned short*>(*value);
+            for (int i = length; i-- > 0;) (*value)[i] = units[i];
+        }
         (*value)[length] = 0;
     }
     return true;
