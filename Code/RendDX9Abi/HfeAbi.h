@@ -97,6 +97,10 @@ public:
     // "virtual ~IClassManager()", because we must never call it and a real destructor declaration
     // would let "delete" compile. The slot must exist or every entry below shifts up by four.
     virtual void  reserved_vectorDeletingDestructor() = 0;                  // +0x10  ELF +0x10/+0x14
+#if !defined(_MSC_VER)
+    // [PLATFORM] The Itanium ABI emits complete and deleting destructor entries.
+    virtual void  reserved_deletingDestructor() = 0;
+#endif
 
     virtual void  registerServer(IClassServer* server) = 0;                 // +0x14  read 0x100741BD
     virtual void  unregisterServer(IClassServer* server) = 0;               // +0x18  read 0x100742BD
