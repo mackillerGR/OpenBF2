@@ -219,6 +219,12 @@ void staticMeshRendererSetHemiEnabled(unsigned char enabled)
     static_cast<StaticMeshRenderer*>(static_cast<void*>(g_StaticMeshRenderer))->setEnabled(enabled);
 }
 
+// Renderer::renderFrame clears the per-material cull counter at +0x5C each frame.
+void staticMeshRendererResetCulledCount()
+{
+    static_cast<StaticMeshRenderer*>(static_cast<void*>(g_StaticMeshRenderer))->m_culledMaterials = 0;
+}
+
 // geom_StaticMeshRenderer_ctor, 0x101220F0.  This recovers the shadow-load-bearing slice exactly:
 // five declarations; StaticMesh and first-use BundledMesh effects; LightManager registration;
 // technique choice; and retained parameters.  Cache/event/lightmap construction remains deferred.

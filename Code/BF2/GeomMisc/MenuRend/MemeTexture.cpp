@@ -30,6 +30,7 @@ void quadDrawerSubmit(void* drawer, void* memeTexture, void* request,
 // The primary interface has 31 slots; the secondary interface listens for device resets.
 // [UNRESOLVED] The word at +0x0C is not initialized by the constructor.
 
+void* memeTextureEngineTexture(class MemeTexture* texture);
 class MemeTexture
 {
 public:
@@ -73,6 +74,7 @@ public:
     float         getUvHeight() const    { return m_uvHeight; }                  // +0x58
 
 private:
+    friend void* memeTextureEngineTexture(MemeTexture* texture);
     void*         m_vptr;         // +0x00
     void*         m_listenerVptr; // +0x04
     int           m_refCount;     // +0x08
@@ -812,6 +814,8 @@ IBase* __fastcall createMemeTexture(unsigned int iid, IBase* outer)
         self->release();
     return static_cast<IBase*>(itf);
 }
+
+void* memeTextureEngineTexture(MemeTexture* texture) { return texture->m_texture; }
 
 } // namespace geom
 } // namespace hfe

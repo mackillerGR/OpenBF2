@@ -15,6 +15,8 @@
 #include <string.h>
 #include <new>
 
+#include <cstdint>
+void* bf2MemeHandlePointer(int handle); // the host image, Ref2System.cpp
 namespace dice {
 namespace hfe {
 namespace dx9rend {
@@ -75,12 +77,23 @@ struct QuadDrawRequest
     unsigned int  stateDw14;    // +0x14  (default -1)
     unsigned char stateByte18;  // +0x18  cached-state key
     unsigned char pad19[3];
-    MemeTexture*  texture2;     // +0x1C  the second texture layer, or null
+    int           texture2;     // +0x1C  the second layer's meme::System handle, or 0
     unsigned char pad20[0x40 - 0x20];
     QuadCorner    corner[4];    // +0x40 / +0x60 / +0x80 / +0xA0
 };
 
 static_assert(sizeof(QuadDrawRequest) == 0xC0, "the corners end at +0xC0; submit reads none beyond");
+
+void* memeTextureEngineTexture(MemeTexture* texture);   // MemeTexture.cpp
+
+inline MemeTexture* quadTexture2(const QuadDrawRequest* request)
+{
+#if UINTPTR_MAX > 0xFFFFFFFFu
+    return static_cast<MemeTexture*>(::bf2MemeHandlePointer(request->texture2));
+#else
+    return reinterpret_cast<MemeTexture*>(request->texture2);
+#endif
+}
 
 // One batch vertex - 44 bytes, 11 dwords, read from the immediate-mode append:
 struct QuadVertex
@@ -464,7 +477,7 @@ void cacheHalfTexels(QuadDrawer* self, MemeTexture* tex, MemeTexture* tex2,
 void QuadDrawer::cacheState(MemeTexture* tex, QuadDrawRequest* req)
 {
     m_cachedTexture  = tex;
-    m_cachedTexture2 = static_cast<MemeTexture*>(req->texture2);
+    m_cachedTexture2 = quadTexture2(req);
     m_cachedBlend    = req->blendByte;
     m_cachedDw08     = req->stateDw08;
     m_cachedDw0C     = req->stateDw0C;
@@ -498,16 +511,16 @@ void QuadDrawer::submit(MemeTexture* tex, QuadDrawRequest* req,
         bool texChanged;
         if (m_cachedTexture)
             texChanged = !tex
-                || *reinterpret_cast<void**>(reinterpret_cast<char*>(tex) + 0x2C)
-                   != *reinterpret_cast<void**>(reinterpret_cast<char*>(m_cachedTexture) + 0x2C);
+                || memeTextureEngineTexture(tex)
+                   != memeTextureEngineTexture(m_cachedTexture);
         else
             texChanged = tex != 0;
 
         bool tex2Changed;
-        MemeTexture* rt2 = static_cast<MemeTexture*>(req->texture2);
+        MemeTexture* rt2 = quadTexture2(req);
         if (rt2 && m_cachedTexture2)
-            tex2Changed = *reinterpret_cast<void**>(reinterpret_cast<char*>(rt2) + 0x2C)
-                       != *reinterpret_cast<void**>(reinterpret_cast<char*>(m_cachedTexture2) + 0x2C);
+            tex2Changed = memeTextureEngineTexture(rt2)
+                       != memeTextureEngineTexture(m_cachedTexture2);
         else
             tex2Changed = (rt2 != 0) != (m_cachedTexture2 != 0);
 
@@ -658,7 +671,7 @@ void QuadDrawer::submit(MemeTexture* tex, QuadDrawRequest* req,
     // uv getters (+0x4C uOffset, +0x50 vOffset, +0x54 uvWidth, +0x58 uvHeight)
     if (req->texture2)
     {
-        MemeTexture* t2 = static_cast<MemeTexture*>(req->texture2);
+        MemeTexture* t2 = quadTexture2(req);
         void** vtbl = *reinterpret_cast<void***>(t2);
         typedef float (__fastcall* GetF)(void* BF2_EDX_PARAM);
         const float uOff = reinterpret_cast<GetF>(vtbl[0x4C / 4])(t2);
@@ -751,16 +764,14 @@ void QuadDrawer::uploadStateParams()
 {
     void* engineTex = 0;
     if (m_cachedTexture)
-        engineTex = *reinterpret_cast<void**>(
-            reinterpret_cast<unsigned char*>(m_cachedTexture) + 0x2C);
+        engineTex = memeTextureEngineTexture(m_cachedTexture);
 
     if (m_cachedTexture && engineTex)
     {
         paramSetValue(m_params[12], engineTex, 0);                      // TEXLAYER0
         if (m_cachedTexture2)
         {
-            paramSetValue(m_params[13], *reinterpret_cast<void**>(
-                reinterpret_cast<unsigned char*>(m_cachedTexture2) + 0x2C), 0);   // TEXLAYER1
+            paramSetValue(m_params[13], memeTextureEngineTexture(m_cachedTexture2), 0);   // TEXLAYER1
             m_passIndex = 2;
         }
         else

@@ -1,5 +1,8 @@
 // Path [INFERRED], class descriptor at BF2.exe 0x935348 attests
 // dice::hfe::menu::Ref2System. Client-PE recovery; no dedicated ELF counterpart.
+#include <cstdint>
+#include <unordered_map>
+#include <vector>
 #include "Ref2System.h"
 #if !DEDICATED
 #include "../Math/Mat4.h"
@@ -18,6 +21,35 @@
 #include <cstdlib>
 #include <cstring>
 #include <new>
+
+// [CHOSEN, not recovered] meme::System hands textures and fonts around as int. Retail stores the
+// pointer; wider hosts keep a stable index per object instead.
+namespace {
+#if UINTPTR_MAX > 0xFFFFFFFFu
+std::vector<void*>& memeHandleTable()
+{
+    static std::vector<void*> table(1, nullptr);
+    return table;
+}
+int memeHandle(void* object)
+{
+    if (!object) return 0;
+    static std::unordered_map<void*, int> handles;
+    const auto found = handles.find(object);
+    if (found != handles.end()) return found->second;
+    const int handle = static_cast<int>(memeHandleTable().size());
+    memeHandleTable().push_back(object);
+    handles[object] = handle;
+    return handle;
+}
+inline void* memePointer(int handle) { return memeHandleTable()[handle]; }
+#else
+inline int memeHandle(void* object) { return reinterpret_cast<int>(object); }
+inline void* memePointer(int handle) { return reinterpret_cast<void*>(handle); }
+#endif
+}
+
+void* bf2MemeHandlePointer(int handle) { return memePointer(handle); }
 
 namespace dice { namespace hfe {
 extern ClassManager* classManager;
@@ -250,7 +282,7 @@ meme::OStream* Ref2System::createOutputStream(const char* name)
 
 bool Ref2System::drawCharacter(int character, int handle, meme::Quad* quad)
 {
-    Font* font = reinterpret_cast<Font*>(handle);
+    Font* font = static_cast<Font*>(memePointer(handle));
     if (!font) {
         if (m_fonts.empty()) return false;
         font = m_fonts.begin()->second;
@@ -259,29 +291,29 @@ bool Ref2System::drawCharacter(int character, int handle, meme::Quad* quad)
 }
 bool Ref2System::getGlyphMetrics(int character, int handle, meme::GlyphMetrics* out)
 {
-    Font* font = reinterpret_cast<Font*>(handle);
+    Font* font = static_cast<Font*>(memePointer(handle));
     if (!font) font = m_fonts.begin()->second; // Shipped missing empty-map guard.
     return font->getGlyphMetrics(character, out);
 }
 float Ref2System::getKerning(int previous, int current, int handle)
 {
-    Font* font = reinterpret_cast<Font*>(handle);
+    Font* font = static_cast<Font*>(memePointer(handle));
     if (!font) font = m_fonts.begin()->second;
     return font->getKerning(previous, current);
 }
 float Ref2System::getFontHeight(int handle)
 {
-    Font* font = reinterpret_cast<Font*>(handle);
+    Font* font = static_cast<Font*>(memePointer(handle));
     if (!font) font = m_fonts.begin()->second;
     return font->getHeight();
 }
 const char* Ref2System::getFontName(int handle)
-{ return handle ? reinterpret_cast<Font*>(handle)->getName() : nullptr; }
+{ return handle ? static_cast<Font*>(memePointer(handle))->getName() : nullptr; }
 
 int Ref2System::loadFont(const char* name)
 {
     const auto own = m_fonts.find(std::string(name));
-    if (own != m_fonts.end()) return reinterpret_cast<int>(own->second);
+    if (own != m_fonts.end()) return memeHandle(own->second);
     const auto shared = sharedFonts.find(std::string(name));
     Font* font;
     if (shared != sharedFonts.end()) {
@@ -303,17 +335,17 @@ int Ref2System::loadFont(const char* name)
         sharedFonts.insert(std::make_pair(std::string(name), font));
     }
     ++font->referenceCount();
-    return reinterpret_cast<int>(font);
+    return memeHandle(font);
 }
 
 bool Ref2System::drawTexture(int texture, meme::Quad* request)
 {
     if (texture) {
-        geom::IMemeTexture* object = reinterpret_cast<geom::IMemeTexture*>(texture);
+        geom::IMemeTexture* object = static_cast<geom::IMemeTexture*>(memePointer(texture));
         return object->drawOther(object, request);
     }
     if (m_field054) {
-        geom::IMemeTexture* object = reinterpret_cast<geom::IMemeTexture*>(m_field054);
+        geom::IMemeTexture* object = static_cast<geom::IMemeTexture*>(memePointer(m_field054));
         return object->drawOther(object, request);
     }
     return m_blankTexture->drawOther(nullptr, request);
@@ -332,12 +364,12 @@ int Ref2System::loadTexture(const char* name, bool menuPath)
         texture->setUserObject(m_textureList);
         m_textureList = texture;
     }
-    return reinterpret_cast<int>(texture);
+    return memeHandle(texture);
 }
 void Ref2System::releaseTexture(int handle)
 {
     if (!handle) return;
-    geom::IMemeTexture* texture = reinterpret_cast<geom::IMemeTexture*>(handle);
+    geom::IMemeTexture* texture = static_cast<geom::IMemeTexture*>(memePointer(handle));
     geom::IMemeTexture* previous = nullptr;
     geom::IMemeTexture* current = m_textureList;
     while (current && current != texture) {
@@ -353,15 +385,15 @@ void Ref2System::releaseTexture(int handle)
 }
 const char* Ref2System::getTextureName(int handle)
 {
-    return handle ? reinterpret_cast<geom::IMemeTexture*>(handle)->getName() : nullptr;
+    return handle ? static_cast<geom::IMemeTexture*>(memePointer(handle))->getName() : nullptr;
 }
 float Ref2System::getTextureWidth(int handle) // 7AD330, signed integer conversion
 {
-    return handle ? static_cast<float>(reinterpret_cast<geom::IMemeTexture*>(handle)->getPixelWidth()) : 0.0f;
+    return handle ? static_cast<float>(static_cast<geom::IMemeTexture*>(memePointer(handle))->getPixelWidth()) : 0.0f;
 }
 float Ref2System::getTextureHeight(int handle)
 {
-    return handle ? static_cast<float>(reinterpret_cast<geom::IMemeTexture*>(handle)->getPixelHeight()) : 0.0f;
+    return handle ? static_cast<float>(static_cast<geom::IMemeTexture*>(memePointer(handle))->getPixelHeight()) : 0.0f;
 }
 
 // repeated object reads/calls and fixed 800x600 size are intentional.

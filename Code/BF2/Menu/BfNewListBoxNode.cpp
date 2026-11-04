@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+void* bf2MemeHandlePointer(int handle); // Ref2System.cpp
 namespace dice { namespace hfe { namespace io {
 extern IBase* inputDeviceManager;
 } } }
@@ -404,7 +405,7 @@ void BfNewListBoxNode::paintSelf(System* system, const NodeState*, const Rect* b
     const int selectedRow = m_data->m_row;
 
     hfe::menu::Font* const firstFont =
-        reinterpret_cast<hfe::menu::Font*>(m_fonts[0]);
+        static_cast<hfe::menu::Font*>(::bf2MemeHandlePointer(m_fonts[0]));
     const std::string firstFontName(firstFont->getName()); // retail has no null guard
     float fontScale = 1.0f;
     if (firstFontName.find(".dif", 0, 4) != std::string::npos)

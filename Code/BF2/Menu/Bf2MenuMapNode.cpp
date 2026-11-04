@@ -69,6 +69,7 @@
 #include <limits>
 #include <new>
 #include <stdexcept>   // the Minimap paint rows' out_of_range (retail bitset _Xran, 78F590)
+void* bf2MemeHandlePointer(int handle); // Ref2System.cpp
 namespace dice { namespace hfe { extern IGameLogic* gameLogic; extern IBase* squadManager; extern hud::BF2HudManager* hudManager; extern ClassManager* classManager; }
 // update()'s gas/blinding-light arm reads this; its header is not included here, so it is
 // declared the same way the line above declares the other engine globals. ds:0x9FDC3C.
@@ -1769,8 +1770,8 @@ hfe::geom::IMemeTexture* Bf2MenuMapNode::combatAreaTexture() const
 {
     // System::loadTexture's historical interface spells every renderer handle
     // `int`; this particular handle is proven to be an IMemeTexture object.
-    return reinterpret_cast<hfe::geom::IMemeTexture*>(
-        static_cast<std::uintptr_t>(static_cast<unsigned int>(m_field93c[2])));
+    return static_cast<hfe::geom::IMemeTexture*>(
+        ::bf2MemeHandlePointer(static_cast<int>(m_field93c[2])));
 }
 
 // 774A60. [INFERRED] void return; the caller discards the incidental draw result.

@@ -210,7 +210,7 @@ namespace {
 
 RoadCompiledRenderer* fromListener(void* listener)
 {
-    return reinterpret_cast<RoadCompiledRenderer*>(static_cast<unsigned char*>(listener) - 0x24);
+    return reinterpret_cast<RoadCompiledRenderer*>(static_cast<unsigned char*>(listener) - offsetof(RoadCompiledRenderer, m_listenerVptr));
 }
 
 

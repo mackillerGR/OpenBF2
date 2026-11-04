@@ -14,6 +14,7 @@
 #include <cstring>
 #include <new>
 
+void* bf2MemeHandlePointer(int handle); // Ref2System.cpp
 namespace dice { namespace meme {
 namespace {
 char* cloneStyleName(const char* name)               // shared helper0x737DC0
@@ -58,7 +59,7 @@ bool Style::streamProperties(System* system, Stream* stream)
 }
 void Style::prepareFont()
 {
-    hfe::menu::Font* font = reinterpret_cast<hfe::menu::Font*>(m_font);
+    hfe::menu::Font* font = static_cast<hfe::menu::Font*>(::bf2MemeHandlePointer(m_font));
     std::string name(font->getName());               // no null-font guard in retail
     if (name.find(".dif", 0, 4) != std::string::npos)
         m_scale = static_cast<hfe::menu::DifFont*>(font)->getMetadata()->getScale();

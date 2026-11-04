@@ -189,6 +189,7 @@ extern IBase* g_NametagManager;
 extern IBase* g_StaticMeshRenderer;
 extern IBase* g_SkinnedMeshRenderer;
 extern IBase* g_RoadCompiledRenderer;
+void staticMeshRendererResetCulledCount();
 extern IBase* g_RoadEditableRenderer;
 extern IBase* g_GeometryTemplateManager;
 extern IBase* g_Terrain;
@@ -1941,8 +1942,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
     }
 
     if (geom::g_StaticMeshRenderer)
-        *reinterpret_cast<unsigned int*>(
-            reinterpret_cast<unsigned char*>(geom::g_StaticMeshRenderer) + 92) = 0;
+        geom::staticMeshRendererResetCulledCount();
 
     // host System vslot +0x28: frame begin - storeAndTurnOffFPUExceptions (typed, RW-266).
     hostCalls::systemFrameBegin();
@@ -2251,7 +2251,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
                 if (geom::g_RoadCompiledRenderer)
                 {
                     unsigned char* roadListener = reinterpret_cast<unsigned char*>(
-                        geom::g_RoadCompiledRenderer) + 36;
+                        geom::g_RoadCompiledRenderer) + sizeof(void*) * 2 + sizeof(vc71::string);
                     typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
                     reinterpret_cast<Fn>((*reinterpret_cast<void***>(roadListener))[3])(
                         roadListener, 0);
@@ -2268,7 +2268,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
             {
                 if (geom::g_SkyDome)
                 {
-                    unsigned char* skySub = reinterpret_cast<unsigned char*>(geom::g_SkyDome) + 4;
+                    unsigned char* skySub = reinterpret_cast<unsigned char*>(geom::g_SkyDome) + sizeof(void*);
                     typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
                     reinterpret_cast<Fn>((*reinterpret_cast<void***>(skySub))[3])(skySub, 0);
                     if (self[1715])
@@ -2295,7 +2295,7 @@ bool Renderer::renderFrame(double time, float deltaTime)
             if (self[1696] && geom::g_DecalManager)
             {
                 unsigned char* decalSub = reinterpret_cast<unsigned char*>(
-                    geom::g_DecalManager) + 4;
+                    geom::g_DecalManager) + sizeof(void*);
                 typedef void (__fastcall* Fn)(void* BF2_EDX_PARAM, int);
                 reinterpret_cast<Fn>((*reinterpret_cast<void***>(decalSub))[3])(decalSub, 0);
             }
