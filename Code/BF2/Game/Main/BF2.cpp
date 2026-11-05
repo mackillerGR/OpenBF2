@@ -784,6 +784,7 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
+    setenv("TU_DEBUG", "sysmem", 1);    // Tile rendering loses the terrain's lighting pass.
     setenv("MESA_LOG", "file", 1);
     installAndroidCrashReport();
     if (driver == "turnip" && !libraryDir.empty())

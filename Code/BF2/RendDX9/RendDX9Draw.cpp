@@ -3,6 +3,7 @@
 #ifdef BF2_IMAGE_RENDDX9
 
 #include <cstdio>
+#include <time.h>
 #include "../../RendDX9Abi/HfeAbi.h"
 #include "../../RendDX9Abi/ModuleCommon.h"
 #include "../../RendDX9Abi/BfMemory.h"
@@ -95,8 +96,16 @@ bool rendererPresent(unsigned int mode)
     {
         // A phone has no debugger attached: the exported log has to show the loop is alive.
         static unsigned int frames = 0;
+        static timespec last;
         if (++frames <= 5 || frames % 300 == 0 || hr)
-            std::fprintf(stderr, "[present] frame %u hr=0x%08X\n", frames, static_cast<unsigned int>(hr));
+        {
+            timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            const double seconds = (now.tv_sec - last.tv_sec) + (now.tv_nsec - last.tv_nsec) * 1e-9;
+            std::fprintf(stderr, "[present] frame %u hr=0x%08X %.1f fps\n", frames,
+                         static_cast<unsigned int>(hr), frames % 300 == 0 ? 300.0 / seconds : 0.0);
+            last = now;
+        }
     }
 #endif
     while (hr)
