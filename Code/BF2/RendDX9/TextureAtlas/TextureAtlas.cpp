@@ -514,7 +514,7 @@ bool textureAtlasGenerate(TextureAtlas* atlas, const vc71::string& atlasName,
 
 #endif // BF2_IMAGE_RENDDX9
 
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) && defined(BF2_IMAGE_RENDDX9)
 // [TEMP] [CHOSEN, not recovered] The atlas builder is a separate image on the desktop ports. Android
 // resolves every import at load, so these two need bodies even though no direct-start path reaches them.
 // [RETIRE-WHEN: portable-texture-atlas-builder] the builder compiles into the Android renderer.

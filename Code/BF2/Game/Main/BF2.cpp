@@ -686,9 +686,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 #if defined(__ANDROID__)
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_system.h>
+#include <dlfcn.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
+extern "C" void* adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, const char* tmpLibDir,
+    const char* hookLibDir, const char* customDriverDir, const char* customDriverName,
+    const char* fileRedirectDir, void** userMappingHandle);
 #endif
 // [CHOSEN, not recovered] The portable client's entry: the WinMain chain without the
 // Windows working-set, desktop and SEH handling. SDL_main.h renames this on Android.
@@ -697,7 +702,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 // working directory, a writable home, the log file and the engine's own command line.
 static std::string androidCommandLine(int argc, char** argv)
 {
-    std::string mod, width = "1280", height = "720", name, level, server;
+    std::string mod, width = "1280", height = "720", name, level, server, libraryDir, driver;
     bool hosted = false;
     for (int i = 1; i < argc; ++i)
     {
@@ -711,6 +716,8 @@ static std::string androidCommandLine(int argc, char** argv)
         else if (option == "--name") name = value;
         else if (option == "--level") level = value;
         else if (option == "--connect") server = value;
+        else if (option == "--libdir") libraryDir = value;
+        else if (option == "--driver") driver = value;
     }
     const char* const files = SDL_GetAndroidExternalStoragePath();
     if (files)
@@ -725,6 +732,23 @@ static std::string androidCommandLine(int argc, char** argv)
     }
     setenv("BF2_PORT_DIRECT_START", "1", 1);
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
+    if (driver == "turnip" && !libraryDir.empty())
+    {
+        // DXVK needs features the stock Adreno driver does not expose. On failure the system
+        // driver stays in use, and DXVK's own log says which feature stopped it.
+        const std::string directory = libraryDir + "/";
+        void* const loader = adrenotools_open_libvulkan(RTLD_NOW, 1, 0, directory.c_str(),
+            directory.c_str(), "libvulkan_freedreno.so", 0, 0);
+        std::fprintf(stderr, "Vulkan: bundled Turnip %s\n", loader ? "loaded" : "failed to load");
+        if (loader)
+        {
+            char text[32];
+            std::snprintf(text, sizeof(text), "%llx", (unsigned long long)(uintptr_t)loader);
+            setenv("BF2_VULKAN_LIBRARY", text, 1);
+        }
+    }
+    if (files)
+        setenv("MESA_SHADER_CACHE_DIR", files, 1);
     std::string root = mod;                         // <game root>/mods/bf2
     for (int up = 0; up < 2 && !root.empty(); ++up)
     {

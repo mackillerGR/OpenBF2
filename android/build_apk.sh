@@ -15,6 +15,8 @@ javac -nowarn -encoding UTF-8 -XDstringConcat=inline -source 8 -target 8 -bootcl
 "$BT/d8" --release --min-api 29 --lib "$JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$NATIVE/libmain.so" "$NATIVE/bin_portable/libRendDX9.so" "$NATIVE/bin_linux/libdice_py.so" \
    "$NATIVE/deps/libdxvk_d3d9.so" "$NATIVE/deps/libvkd3d-shader.so" "$SDLLIB" \
+   "$NATIVE"/drv/at-build/src/hook/lib*_hook.so "$NATIVE/drv/at-build/src/hook/libhook_impl.so" \
+   "$NATIVE/drv/libvulkan_freedreno.so" \
    "$LLVM/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" "$OUT/lib/arm64-v8a/"
 "$LLVM/bin/llvm-strip" --strip-unneeded "$OUT"/lib/arm64-v8a/*.so
 (cd "$OUT/dex" && zip -q ../base.apk classes.dex)

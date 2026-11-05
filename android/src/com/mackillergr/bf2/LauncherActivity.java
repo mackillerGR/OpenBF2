@@ -34,7 +34,7 @@ public class LauncherActivity extends Activity {
     private TextView status;
     private Spinner levels, resolution;
     private EditText server, name;
-    private CheckBox touch;
+    private CheckBox touch, turnip;
 
     private Button button(LinearLayout parent, String label, View.OnClickListener action) {
         Button b = new Button(this);
@@ -75,6 +75,8 @@ public class LauncherActivity extends Activity {
         resolution.setSelection(prefs.getInt("resolution", 0)); root.addView(resolution);
         touch = new CheckBox(this); touch.setText("Χειριστήρια αφής"); touch.setTextColor(Color.WHITE);
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);
+        turnip = new CheckBox(this); turnip.setText("Ενσωματωμένος driver Turnip (προτείνεται)"); turnip.setTextColor(Color.WHITE);
+        turnip.setChecked(prefs.getBoolean("turnip", true)); root.addView(turnip);
         button(root, "Έναρξη", new View.OnClickListener() { @Override public void onClick(View v) { start(); } });
         button(root, "Εξαγωγή log", new View.OnClickListener() { @Override public void onClick(View v) { exportLog(); } });
         setContentView(scroll);
@@ -149,13 +151,16 @@ public class LauncherActivity extends Activity {
         }
         String[] size = resolution.getSelectedItem().toString().split("x");
         ArrayList<String> args = new ArrayList<>(Arrays.asList("--mod", mod.getPath(),
-            "--width", size[0], "--height", size[1], "--name", name.getText().toString().trim()));
+            "--width", size[0], "--height", size[1], "--name", name.getText().toString().trim(),
+            "--libdir", getApplicationInfo().nativeLibraryDir,
+            "--driver", turnip.isChecked() ? "turnip" : "system"));
         if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
         else args.addAll(Arrays.asList("--connect", host));
         prefs.edit().putString("server", host).putString("name", name.getText().toString().trim())
             .putString("level", level == null ? "" : level.toString())
             .putInt("resolution", resolution.getSelectedItemPosition())
-            .putBoolean("touch", touch.isChecked()).apply();
+            .putBoolean("touch", touch.isChecked())
+            .putBoolean("turnip", turnip.isChecked()).apply();
         Intent i = new Intent(this, GameActivity.class);
         i.putExtra("args", args.toArray(new String[0]));
         i.putExtra("touch", touch.isChecked());
