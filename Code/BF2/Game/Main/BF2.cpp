@@ -812,7 +812,7 @@ static std::string androidCommandLine(int argc, char** argv)
     }
     if (chdir(root.c_str()) != 0)
         std::fprintf(stderr, "chdir %s failed\n", root.c_str());
-    std::string line = "+modPath mods/bf2 +fullscreen 0 +multi 1 +noSound 1 +szx " + width
+    std::string line = "+modPath mods/bf2 +fullscreen 0 +multi 1 +szx " + width
         + " +szy " + height + " +playerName " + name;
     if (hosted)
     {
