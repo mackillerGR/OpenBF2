@@ -708,8 +708,8 @@ RenderQueue* renderQueueConstruct(void* storage, const char* queueName)
 {
     RenderQueue* q = static_cast<RenderQueue*>(storage);
     q->vptr = kRenderQueueVtable;
-    *reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(q) + 0x08) = 0;
-    *reinterpret_cast<unsigned int*>(reinterpret_cast<unsigned char*>(q) + 0x0C) = 1;
+    q->drawMode = 0;
+    *reinterpret_cast<unsigned int*>(q->profiler) = 1;      // sortMode
     // sub_10047F20(name) - the profiler stat registration; stat-only scaffolding, not reproduced.
     q->entriesFirst = 0;
     q->entriesLast  = 0;
