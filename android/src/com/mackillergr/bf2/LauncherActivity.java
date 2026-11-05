@@ -33,7 +33,7 @@ public class LauncherActivity extends Activity {
     private SharedPreferences prefs;
     private TextView status;
     private Spinner levels, resolution;
-    private EditText server, name;
+    private EditText server, name, cdKey;
     private CheckBox touch, turnip;
 
     private Button button(LinearLayout parent, String label, View.OnClickListener action) {
@@ -68,6 +68,9 @@ public class LauncherActivity extends Activity {
         label(root, "Όνομα παίκτη");
         name = new EditText(this); name.setTextColor(Color.WHITE); name.setSingleLine();
         name.setText(prefs.getString("name", "mackillerGR")); root.addView(name);
+        label(root, "CD Key (για σύνδεση σε server)");
+        cdKey = new EditText(this); cdKey.setTextColor(Color.WHITE); cdKey.setSingleLine();
+        cdKey.setText(prefs.getString("cdkey", "")); root.addView(cdKey);
         label(root, "Ρυθμίσεις: ανάλυση");
         resolution = new Spinner(this);
         resolution.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
@@ -160,14 +163,16 @@ public class LauncherActivity extends Activity {
         ArrayList<String> args = new ArrayList<>(Arrays.asList("--mod", mod.getPath(),
             "--width", size[0], "--height", size[1], "--name", name.getText().toString().trim(),
             "--libdir", getApplicationInfo().nativeLibraryDir,
-            "--driver", turnip.isChecked() ? "turnip" : "system"));
+            "--driver", turnip.isChecked() ? "turnip" : "system",
+            "--cdkey", cdKey.getText().toString().trim()));
         if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
         else args.addAll(Arrays.asList("--connect", host));
         prefs.edit().putString("server", host).putString("name", name.getText().toString().trim())
             .putString("level", level == null ? "" : level.toString())
             .putInt("resolution", resolution.getSelectedItemPosition())
             .putBoolean("touch", touch.isChecked())
-            .putBoolean("turnip", turnip.isChecked()).apply();
+            .putBoolean("turnip", turnip.isChecked())
+            .putString("cdkey", cdKey.getText().toString().trim()).apply();
         Intent i = new Intent(this, GameActivity.class);
         i.putExtra("args", args.toArray(new String[0]));
         i.putExtra("touch", touch.isChecked());

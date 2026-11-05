@@ -2177,7 +2177,7 @@ void GameClient::handleEvent(EventCategory category, unsigned int id, EventNode*
         // Rewind the id allocator before comparing the highest used network id with the
         // server's watermark. The rewind result is discarded; the separate query can return -1.
         io::networkManager->regressNetworkableIds();                    // discarded
-        const int theirs = **reinterpret_cast<int**>(reinterpret_cast<char*>(node) + 0x2C);
+        const int theirs = *static_cast<int*>(data);
         const int ours   = io::networkManager->getHighestUsedNetID();
         if (theirs != ours)
             Debug(DEBUGTYPE_7, GAMECLIENT_FILE, 1404, "")
@@ -2194,7 +2194,7 @@ void GameClient::handleEvent(EventCategory category, unsigned int id, EventNode*
         break;
     case 9:
     {
-        const int playerId = **reinterpret_cast<int**>(reinterpret_cast<char*>(node) + 0x2C);
+        const int playerId = *static_cast<int*>(data);
         if (world::IPlayer* player = world::playerManager->getPlayerFromId(playerId))
         {
             player->setIsAlive(true);                // PE +0x64
@@ -2204,7 +2204,7 @@ void GameClient::handleEvent(EventCategory category, unsigned int id, EventNode*
     }
     case 10:
     {
-        const char* const payload = *reinterpret_cast<const char**>(reinterpret_cast<char*>(node) + 0x2C);
+        const char* const payload = static_cast<const char*>(data);
         const int  playerId = *reinterpret_cast<const int*>(payload);
         const bool flag     = payload[4] != 0;
         world::IPlayer* const player = world::playerManager->getPlayerFromId(playerId);

@@ -1722,13 +1722,11 @@ bool GhostManager::readData(io::BitStream& stream)
                 io::INetworkableObject* const objEntry = networkable->m_networkableObject;
                 bool disable = true;
 
-                if (objEntry && *reinterpret_cast<const short*>(
-                        reinterpret_cast<const char*>(objEntry) + 4) >= 0)
+                if (objEntry && static_cast<short>(objEntry->m_ownerId) >= 0)
                 {
                     // the object belongs to a player - only disable it if that player is gone
                     //   or local, and only if it is not parented to something else.
-                    const short playerId = *reinterpret_cast<const short*>(
-                        reinterpret_cast<const char*>(objEntry) + 4);
+                    const short playerId = static_cast<short>(objEntry->m_ownerId);
                     world::IPlayer* const player = world::playerManager->getPlayerFromId(playerId);
                     if (!player || !player->getIsRemote() || object->getParent())
                         disable = false;
@@ -1782,10 +1780,8 @@ bool GhostManager::readData(io::BitStream& stream)
         io::INetworkable* const n = desc ? desc->properties[0].networkables[0] : 0;
         if (n && n->m_networkableObject)
         {
-            const unsigned char* const info =
-                *reinterpret_cast<unsigned char* const*>(
-                    reinterpret_cast<const char*>(n->m_networkableObject) + 8);
-            if (info && (info[4] & 0x20))
+            world::IObject* const object = n->m_networkableObject->m_object;
+            if (object && (object->getFlags() & 0x20))
                 desc = 0;                                // treat it as unknown: skip the payload
         }
     }

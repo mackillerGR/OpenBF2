@@ -147,6 +147,11 @@ void ProtectedData::writeHex(std::ostream& stream)
 // An empty product name selects Battlefield 2.
 std::string getRegistryCdKey(std::string productName)
 {
+#if defined(BF2_PORTABLE_CLIENT)
+    // [CHOSEN, not recovered] No registry or dpapi here: the player's own key comes from the launcher.
+    const char* const portableKey = std::getenv("BF2_PORT_CDKEY");
+    return std::string(portableKey ? portableKey : "");
+#endif
     std::string key("");
     key = registry->getString(RegKeyLocalMachine, std::string("ergc"), std::string(""), productName);
     return key;
@@ -157,6 +162,9 @@ std::string getRegistryCdKey(std::string productName)
 // the existing null-blob dereference path before challenge handling can reject it.
 std::string translateCdKey(const std::string& storedKey)
 {
+#if defined(BF2_PORTABLE_CLIENT)
+    return storedKey;
+#endif
     std::string result("");
 
     bool marked;

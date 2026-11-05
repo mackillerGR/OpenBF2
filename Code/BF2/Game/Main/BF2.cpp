@@ -768,6 +768,7 @@ static std::string androidCommandLine(int argc, char** argv)
         else if (option == "--connect") server = value;
         else if (option == "--libdir") libraryDir = value;
         else if (option == "--driver") driver = value;
+        else if (option == "--cdkey") setenv("BF2_PORT_CDKEY", value, 1);
     }
     const char* const files = SDL_GetAndroidExternalStoragePath();
     if (files)
