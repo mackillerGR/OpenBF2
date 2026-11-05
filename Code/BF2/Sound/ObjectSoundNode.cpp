@@ -17,7 +17,7 @@ const Mat4& ObjectSoundNode::getTransform()
 
     // [CHOSEN, not recovered] Retail forms a reference through null on this impossible owner-less
     // path. Preserve a stable reference without manufacturing motion or another engine object.
-    static const Mat4 s_zero;
+    static const Mat4 s_zero = Mat4();
     return s_zero;
 }
 

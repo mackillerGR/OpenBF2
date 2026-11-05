@@ -494,7 +494,7 @@ bool Bf2HudBuilder::setNodeShowVariable(std::string name)
             meme::Bf2CullNode* cull = createVisibilityNode(m_field050, value);
             cull->setChild(0, node->getChild(1));
             node->setChild(1, cull);
-            return m_system->registerObject(cull, nullptr) != false;
+            return m_system->registerObject(cull, nullptr) != nullptr;
         }
     }
     Debug(DebugTypeError, builderSource, 1875, "")
@@ -629,7 +629,7 @@ bool Bf2HudBuilder::setNodeLogicShowVariable(std::string operation, std::string 
         if (operation != "AND") {
             cull->setChild(0, node->getChild(1));
             node->setChild(1, cull);
-            return m_system->registerObject(cull, nullptr) != false;
+            return m_system->registerObject(cull, nullptr) != nullptr;
         }
     }
 failed:
@@ -818,7 +818,7 @@ bool Bf2HudBuilder::setNodeColor(float r, float g, float b, float a)
                 }
                 carrier->setChild(0, node->getChild(1));
                 node->setChild(1, carrier);
-                return m_system->registerObject(carrier, nullptr) != false;
+                return m_system->registerObject(carrier, nullptr) != nullptr;
             }
         }
     }
@@ -843,7 +843,7 @@ bool Bf2HudBuilder::setNodeInTime(float seconds)
                 cull->setChild(0, node->getChild(1));
                 node->setChild(1, cull);
                 cull->setInTimeForHud(seconds);
-                return m_system->registerObject(cull, nullptr) != false;
+                return m_system->registerObject(cull, nullptr) != nullptr;
             }
         }
     }
@@ -867,7 +867,7 @@ bool Bf2HudBuilder::setNodeOutTime(float seconds)
                 cull->setChild(0, node->getChild(1));
                 node->setChild(1, cull);
                 cull->setOutTimeForHud(seconds);
-                return m_system->registerObject(cull, nullptr) != false;
+                return m_system->registerObject(cull, nullptr) != nullptr;
             }
         }
     }

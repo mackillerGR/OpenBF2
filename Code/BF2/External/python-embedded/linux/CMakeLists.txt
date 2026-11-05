@@ -28,13 +28,13 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(dice_py LANGUAGES C CXX)
 endif()
 
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Android)$")
     message(FATAL_ERROR
         "dice_py/linux: this directory builds libdice_py.so for Linux only (this is "
         "${CMAKE_SYSTEM_NAME}). The Windows dice_py.dll is built by "
         "Code/Build/python/build_python.cmd.")
 endif()
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|aarch64)$")
     message(FATAL_ERROR
         "dice_py/linux: pyconfig.h here is configure's output for Linux x86-64 (LP64, little-endian, "
         "16-byte fpos_t); this is ${CMAKE_SYSTEM_PROCESSOR} with ${CMAKE_SIZEOF_VOID_P}-byte "

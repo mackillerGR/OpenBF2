@@ -1761,11 +1761,11 @@ void StaticMesh::postLoad()
 
         // Count this geometry's LOD switch distances.
         const StaticMeshGeom& geomRecord = reinterpret_cast<const StaticMeshGeom*>(table32)[g];
-        unsigned char* const distancesFirst = geomRecord.lodDistances.first;
+        unsigned char* const distancesFirst = reinterpret_cast<unsigned char*>(geomRecord.lodDistances.first);
         unsigned int distanceCount = 0;
         if (distancesFirst)
         {
-            unsigned char* const distancesLast = geomRecord.lodDistances.last;
+            unsigned char* const distancesLast = reinterpret_cast<unsigned char*>(geomRecord.lodDistances.last);
             distanceCount = static_cast<unsigned int>(distancesLast - distancesFirst) >> 2;
         }
         if (m_geomLodDistanceCounts.first)
@@ -1886,12 +1886,12 @@ int StaticMesh::getLodCount() const
         + sizeof(StaticMeshGeom) * m_dword314;
 
     const unsigned char* const first =
-        reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.first;
+        reinterpret_cast<const unsigned char*>(reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.first);
     if (!first)
         return 0;
 
     const unsigned char* const last =
-        reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.last;
+        reinterpret_cast<const unsigned char*>(reinterpret_cast<const StaticMeshGeom*>(geomRecord)->lods.last);
     return static_cast<int>((last - first) / sizeof(StaticMeshLod));
 }
 

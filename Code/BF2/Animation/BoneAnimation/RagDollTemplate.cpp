@@ -49,7 +49,11 @@ inline unsigned long long rdtsc()
     return __rdtsc();
 #else
     unsigned int lo, hi;
+    #if defined(__aarch64__)
+    { unsigned long long ticks; __asm__ __volatile__("mrs %0, cntvct_el0" : "=r"(ticks)); lo = (unsigned int)ticks; hi = (unsigned int)(ticks >> 32); }
+#else
     __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
+#endif
     return ((unsigned long long)hi << 32) | lo;
 #endif
 }

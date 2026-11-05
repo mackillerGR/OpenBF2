@@ -760,7 +760,11 @@
 #define SIZEOF_FLOAT 4
 
 /* The size of a `fpos_t', as computed by sizeof. */
+#if defined(__ANDROID__)
+#define SIZEOF_FPOS_T 8
+#else
 #define SIZEOF_FPOS_T 16
+#endif
 
 /* The size of a `int', as computed by sizeof. */
 #define SIZEOF_INT 4
@@ -809,7 +813,9 @@
 /* #undef USE_TOOLBOX_OBJECT_GLUE */
 
 /* Define if a va_list is an array of some kind */
+#if defined(__x86_64__)
 #define VA_LIST_IS_ARRAY 1
+#endif
 
 /* Define if you want SIGFPE handled (see Include/pyfpe.h). */
 /* #undef WANT_SIGFPE_HANDLER */
@@ -962,3 +968,13 @@
 
 #endif /*Py_PYCONFIG_H*/
 
+
+/* [CHOSEN, not recovered] Bionic omissions on Android. */
+#if defined(__ANDROID__)
+#undef HAVE_FTIME
+#undef HAVE_LIBINTL_H
+#undef WITH_LIBINTL
+#undef HAVE_REALPATH
+#undef HAVE_TMPNAM_R
+#undef HAVE_CONFSTR
+#endif

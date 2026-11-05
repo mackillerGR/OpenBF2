@@ -206,3 +206,13 @@ extern "C" long D3DXCreateBox(IDirect3DDevice9* device, float width, float heigh
     *mesh = new ShapeMesh(device, vertices, indices);
     return S_OK;
 }
+
+// [TEMP] [CHOSEN, not recovered] Android resolves every import at load, so the terrain's editor-only
+// mesh entry needs a body. [RETIRE-WHEN: portable-d3dx]
+extern "C" long __stdcall D3DXCreateMesh(unsigned long, unsigned long, unsigned long, const void*,
+                                         void*, void**)
+{
+    std::fprintf(stderr, "[FRONTIER] D3DXCreateMesh reached\n");
+    std::fflush(stderr);
+    std::abort();
+}

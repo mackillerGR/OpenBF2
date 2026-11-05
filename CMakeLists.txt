@@ -23,7 +23,7 @@ project(BF2Rebuilt LANGUAGES C CXX)
 set(BF2_BUILD_LINUX OFF)
 if(MSVC)
     # The two Windows configurations, selected by pointer width below.
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+elseif(CMAKE_SYSTEM_NAME MATCHES "^(Linux|Android)$" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     set(BF2_BUILD_LINUX ON)
 else()
     message(FATAL_ERROR
@@ -616,7 +616,13 @@ if(BF2_BUILD_LINUX)
     # same functions in both.
     set(CURSES_NEED_NCURSES TRUE)
     set(CURSES_NEED_WIDE TRUE)
-    find_package(Curses REQUIRED)
+    if(ANDROID)
+        # [CHOSEN, not recovered] No terminal exists on Android; PortShim/android/curses.h is inert.
+        set(CURSES_INCLUDE_DIRS "${BF2_ROOT}/PortShim/android")
+        set(CURSES_LIBRARIES "")
+    else()
+        find_package(Curses REQUIRED)
+    endif()
 endif()
 
 add_library(bf2_engine_objects OBJECT
@@ -669,6 +675,7 @@ if(BF2_BUILD_LINUX)
         -include "${BF2_ROOT}/Core/PortableClient.h")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim")
     target_include_directories(bf2_client_objects PRIVATE "${BF2_SDL3_INCLUDE}")
+    target_include_directories(bf2_client_objects PRIVATE ${CURSES_INCLUDE_DIRS})
 endif()
 target_compile_definitions(bf2_client_objects PRIVATE
     BF2_PLUGIN_ABI_NATIVE=1
@@ -2033,7 +2040,14 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     target_include_directories(bf2_renddx9_portable PRIVATE
         "${BF2_DXVK_ROOT}/include/native/directx" "${BF2_DXVK_ROOT}/include/native/windows"
         "${BF2_ROOT}" "${BF2_ROOT}/PortShim" "${BF2_SDL3_INCLUDE}" "${BF2_VKD3D_INCLUDE}")
-    target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" "${BF2_VKD3D_SHADER}" dl pthread)
+    if(ANDROID)
+        # The host image is libmain.so, and the plugin takes the engine's symbols from it.
+        target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" "${BF2_VKD3D_SHADER}"
+            "${CMAKE_BINARY_DIR}/libmain.so" SDL3 dl log)
+        target_link_directories(bf2_renddx9_portable PRIVATE "${BF2_SDL3_LIBDIR}")
+    else()
+        target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" "${BF2_VKD3D_SHADER}" dl pthread)
+    endif()
     target_compile_options(bf2_renddx9_portable PRIVATE -std=gnu++14 -fms-extensions -fpermissive -w
         -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks
         "-include${BF2_ROOT}/Core/BuildConfig.h" "-include${BF2_ROOT}/Core/PlatformCompat.h"

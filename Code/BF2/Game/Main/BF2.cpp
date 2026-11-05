@@ -683,14 +683,84 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 }
 
 #else
+#if defined(__ANDROID__)
+#include <SDL3/SDL_main.h>
+#include <SDL3/SDL_system.h>
+#include <unistd.h>
+#include <cstdio>
+#include <cstdlib>
+#endif
 // [CHOSEN, not recovered] The portable client's entry: the WinMain chain without the
 // Windows working-set, desktop and SEH handling. SDL_main.h renames this on Android.
+#if defined(__ANDROID__)
+// [CHOSEN, not recovered] The launcher's arguments, mapped onto what a desktop start sets up: the
+// working directory, a writable home, the log file and the engine's own command line.
+static std::string androidCommandLine(int argc, char** argv)
+{
+    std::string mod, width = "1280", height = "720", name, level, server;
+    bool hosted = false;
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string option(argv[i]);
+        if (option == "--hosted") { hosted = true; continue; }
+        if (i + 1 >= argc) break;
+        const char* const value = argv[++i];
+        if (option == "--mod") mod = value;
+        else if (option == "--width") width = value;
+        else if (option == "--height") height = value;
+        else if (option == "--name") name = value;
+        else if (option == "--level") level = value;
+        else if (option == "--connect") server = value;
+    }
+    const char* const files = SDL_GetAndroidExternalStoragePath();
+    if (files)
+    {
+        const std::string log = std::string(files) + "/openbf2.log";
+        std::freopen(log.c_str(), "w", stderr);
+        std::freopen(log.c_str(), "a", stdout);
+        std::setvbuf(stderr, 0, _IOLBF, 0);
+        std::setvbuf(stdout, 0, _IOLBF, 0);
+        setenv("HOME", files, 1);
+        setenv("DXVK_LOG_PATH", files, 1);
+    }
+    setenv("BF2_PORT_DIRECT_START", "1", 1);
+    setenv("DXVK_WSI_DRIVER", "SDL3", 1);
+    std::string root = mod;                         // <game root>/mods/bf2
+    for (int up = 0; up < 2 && !root.empty(); ++up)
+    {
+        const std::string::size_type slash = root.rfind('/');
+        root = slash == std::string::npos ? std::string() : root.substr(0, slash);
+    }
+    if (chdir(root.c_str()) != 0)
+        std::fprintf(stderr, "chdir %s failed\n", root.c_str());
+    std::string line = "+modPath mods/bf2 +fullscreen 1 +multi 1 +noSound 1 +szx " + width
+        + " +szy " + height + " +playerName " + name;
+    if (hosted)
+        line += " +hostServer 1 +port 17567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16";
+    else
+    {
+        const std::string::size_type colon = server.find(':');
+        line += " +joinServer " + server.substr(0, colon);
+        if (colon != std::string::npos)
+            line += " +port " + server.substr(colon + 1);
+    }
+    return line;
+}
+#endif
+
 int main(int argc, char** argv)
 {
+#if defined(__ANDROID__)
+    const std::string androidLine = androidCommandLine(argc, argv);
+#endif
     dice::hfe::g_system = new dice::hfe::System();
     std::string commandLine;
+#if defined(__ANDROID__)
+    commandLine = androidLine;
+#else
     for (int i = 1; i < argc; ++i)
         appendCommandLineArg(commandLine, argv[i], i == 1);
+#endif
     const int result = dice::hfe::bf2Main(0, 0, const_cast<char*>(commandLine.c_str()));
     if (dice::hfe::g_system)
         delete dice::hfe::g_system;

@@ -513,3 +513,25 @@ bool textureAtlasGenerate(TextureAtlas* atlas, const vc71::string& atlasName,
 } // namespace dice
 
 #endif // BF2_IMAGE_RENDDX9
+
+#if defined(__ANDROID__)
+// [TEMP] [CHOSEN, not recovered] The atlas builder is a separate image on the desktop ports. Android
+// resolves every import at load, so these two need bodies even though no direct-start path reaches them.
+// [RETIRE-WHEN: portable-texture-atlas-builder] the builder compiles into the Android renderer.
+#include <cstdio>
+#include <cstdlib>
+namespace textureatlas {
+ITextureAtlasConfiguration* __fastcall ITextureAtlasConfiguration::create()
+{
+    std::fprintf(stderr, "[FRONTIER] textureatlas::ITextureAtlasConfiguration::create reached\n");
+    std::fflush(stderr);
+    std::abort();
+}
+ITextureAtlas* __fastcall ITextureAtlas::create(IDirect3DDevice9*)
+{
+    std::fprintf(stderr, "[FRONTIER] textureatlas::ITextureAtlas::create reached\n");
+    std::fflush(stderr);
+    std::abort();
+}
+}
+#endif

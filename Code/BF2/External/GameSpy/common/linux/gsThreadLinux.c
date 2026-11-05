@@ -54,7 +54,12 @@ void gsiCancelThread(GSIThreadID id)
 	//should i destroy the attributes here?
 	pthread_attr_destroy(&id.attr);
 
+#if defined(__ANDROID__)
+	/* [CHOSEN, not recovered] Bionic has no pthread_cancel; the thread is left to finish. */
+	if (pthread_detach(id.thread) != PTHREAD_NO_ERROR) {
+#else
 	if (pthread_cancel(id.thread) != PTHREAD_NO_ERROR) {
+#endif
 		//there was an error - how should we handle these? or should we?
 		gsDebugFormat(GSIDebugCat_Common, GSIDebugType_Misc, GSIDebugLevel_WarmError,
 			"Failed to cancel thread\r\n");
