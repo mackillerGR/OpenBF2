@@ -475,7 +475,8 @@ void DecalManager::collectDecals(dx9rend::IRenderView& view)
     union
     {
         double        alignment;
-        unsigned char bytes[1072];                                         // [ebp-430h]
+        // Retail reserves 1072 bytes; the portable RenderView is larger.
+        unsigned char bytes[sizeof(void*) == 8 ? 8192 : 1072];             // [ebp-430h]
     } storage;
     dx9rend::IRenderView* const copy = Rend::renderViewCopyConstruct(storage.bytes, view);
     m_renderer.collect(*copy, m_activeInstances);

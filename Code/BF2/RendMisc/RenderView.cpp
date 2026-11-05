@@ -726,3 +726,10 @@ dx9rend::IRenderView* renderViewCopyConstruct(void* storage, const dx9rend::IRen
 } // namespace dice
 
 #endif // BF2_IMAGE_RENDDX9
+
+#if defined(BF2_PORTABLE_CLIENT)
+// DecalManager::collectDecals copies a view into this much stack.
+namespace dice { namespace hfe { namespace Rend { namespace {
+struct RenderViewFitsDecalStack { char check[sizeof(RenderView) <= 8192 ? 1 : -1]; };
+} } } }
+#endif
