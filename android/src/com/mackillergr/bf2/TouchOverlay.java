@@ -27,23 +27,67 @@ public class TouchOverlay extends View {
         new Button("ΧΡΗΣΗ", KeyEvent.KEYCODE_E, 0.70f, 0.66f),
         new Button("ΣΚΟΡ", KeyEvent.KEYCODE_TAB, 0.95f, 0.10f),
         new Button("ΟΚ", KeyEvent.KEYCODE_ENTER, 0.86f, 0.10f),
+        new Button("ΜΕΝΟΥ", KeyEvent.KEYCODE_ESCAPE, 0.05f, 0.10f),
     };
     private final HashMap<Integer, float[]> look = new HashMap<>();
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int stickPointer = -1;
     private float stickX, stickY, knobX, knobY;
     private boolean w, a, s, d;
+    private boolean menu;
+    private static native boolean menuShown();
+    private static native void toggleKeyboard();
+    private final Runnable watch = new Runnable() {
+        @Override public void run() {
+            boolean now = menu;
+            try { now = menuShown(); } catch (UnsatisfiedLinkError notLoaded) { }
+            if (now != menu) { releaseAll(); menu = now; invalidate(); }
+            postDelayed(this, 250);
+        }
+    };
 
     public TouchOverlay(Context context) {
         super(context);
         text.setColor(Color.WHITE); text.setTextAlign(Paint.Align.CENTER); text.setFakeBoldText(true);
+        post(watch);
     }
+    private void releaseAll() {
+        for (Button b : buttons) if (b.pointer >= 0) { b.pointer = -1; press(b, false); }
+        stickPointer = -1; setMove(0, 0); look.clear();
+    }
+    private float keyboardX() { return getWidth() * 0.04f; }
+    private float keyboardY() { return getHeight() * 0.92f; }
+    private void menuTouch(MotionEvent e) {
+        float x = e.getX(e.getActionIndex()), y = e.getY(e.getActionIndex());
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                if (Math.hypot(x - keyboardX(), y - keyboardY()) < radius() * 1.1f) { toggleKeyboard(); return; }
+                SDLActivity.onNativeMouse(0, MOUSE_MOVE, x, y, false);
+                SDLActivity.onNativeMouse(LEFT_BUTTON, MOUSE_DOWN, x, y, false);
+                menuPressed = true; break;
+            case MotionEvent.ACTION_MOVE:
+                if (menuPressed) SDLActivity.onNativeMouse(LEFT_BUTTON, MOUSE_MOVE, x, y, false);
+                break;
+            case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
+                if (menuPressed) SDLActivity.onNativeMouse(0, MOUSE_UP, x, y, false);
+                menuPressed = false; break;
+            default: break;
+        }
+    }
+    private boolean menuPressed;
     private float radius() { return getHeight() * 0.075f; }
     private float stickRadius() { return getHeight() * 0.16f; }
     private float baseX() { return getWidth() * 0.14f; }
     private float baseY() { return getHeight() * 0.72f; }
 
     @Override protected void onDraw(Canvas c) {
+        if (menu) {
+            fill.setColor(Color.argb(80, 255, 255, 255));
+            c.drawCircle(keyboardX(), keyboardY(), radius(), fill);
+            text.setTextSize(radius() * 0.42f);
+            c.drawText("ABC", keyboardX(), keyboardY() + radius() * 0.15f, text);
+            return;
+        }
         fill.setColor(Color.argb(60, 255, 255, 255));
         c.drawCircle(baseX(), baseY(), stickRadius(), fill);
         fill.setColor(Color.argb(110, 255, 255, 255));
@@ -111,6 +155,7 @@ public class TouchOverlay extends View {
         }
     }
     @Override public boolean onTouchEvent(MotionEvent e) {
+        if (menu) { menuTouch(e); return true; }
         int action = e.getActionMasked(), index = e.getActionIndex();
         switch (action) {
             case MotionEvent.ACTION_DOWN: case MotionEvent.ACTION_POINTER_DOWN:

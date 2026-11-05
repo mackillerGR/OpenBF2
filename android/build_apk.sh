@@ -14,6 +14,7 @@ javac -nowarn -encoding UTF-8 -XDstringConcat=inline -source 8 -target 8 -bootcl
   $(find "$HERE/src" "$SDL/android-project/app/src/main/java" -name '*.java')
 "$BT/d8" --release --min-api 29 --lib "$JAR" --output "$OUT/dex" $(find "$OUT/classes" -name '*.class')
 cp "$NATIVE/libmain.so" "$NATIVE/bin_portable/libRendDX9.so" "$NATIVE/bin_portable/libBF2Audio.so" \
+   "$NATIVE/bin_portable/libSwiffPlayer.so" \
    "$NATIVE/openal-build/libopenal.so" "$NATIVE/bin_linux/libdice_py.so" \
    "$NATIVE/deps/libdxvk_d3d9.so" "$NATIVE/deps/libvkd3d-shader.so" "$SDLLIB" \
    "$NATIVE"/drv/at-build/src/hook/lib*_hook.so "$NATIVE/drv/at-build/src/hook/libhook_impl.so" \

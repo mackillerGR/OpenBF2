@@ -684,6 +684,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 #else
 #if defined(__ANDROID__)
+#include <jni.h>
+#endif
+#if defined(__ANDROID__)
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_system.h>
 #include <dlfcn.h>
@@ -753,11 +756,12 @@ void installAndroidCrashReport()
 static std::string androidCommandLine(int argc, char** argv)
 {
     std::string mod, width = "1280", height = "720", name, level, server, libraryDir, driver;
-    bool hosted = false;
+    bool hosted = false, menu = false;
     for (int i = 1; i < argc; ++i)
     {
         const std::string option(argv[i]);
         if (option == "--hosted") { hosted = true; continue; }
+        if (option == "--menu") { menu = true; continue; }
         if (i + 1 >= argc) break;
         const char* const value = argv[++i];
         if (option == "--mod") mod = value;
@@ -781,7 +785,8 @@ static std::string androidCommandLine(int argc, char** argv)
         setenv("HOME", files, 1);
         setenv("DXVK_LOG_PATH", files, 1);
     }
-    setenv("BF2_PORT_DIRECT_START", "1", 1);
+    if (!menu)
+        setenv("BF2_PORT_DIRECT_START", "1", 1);
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
@@ -813,8 +818,10 @@ static std::string androidCommandLine(int argc, char** argv)
     }
     if (chdir(root.c_str()) != 0)
         std::fprintf(stderr, "chdir %s failed\n", root.c_str());
-    std::string line = "+modPath mods/bf2 +fullscreen 0 +multi 1 +szx " + width
-        + " +szy " + height + " +playerName " + name;
+    std::string line = "+modPath mods/bf2 +fullscreen 0 +multi 1 +szx " + width + " +szy " + height;
+    if (menu)
+        return line;
+    line += " +playerName " + name;
     if (hosted)
     {
         // The install's own settings describe a dedicated server; this game is the launcher's.
@@ -841,6 +848,20 @@ static std::string androidCommandLine(int argc, char** argv)
             line += " +port " + server.substr(colon + 1);
     }
     return line;
+}
+#endif
+
+#if defined(__ANDROID__)
+extern "C" void portableToggleKeyboard();
+
+// The touch overlay stands aside while the Flash menu is up, and asks for the keyboard there.
+extern "C" JNIEXPORT jboolean JNICALL Java_com_mackillergr_bf2_TouchOverlay_menuShown(JNIEnv*, jclass)
+{
+    return dice::hfe::menuLogic != 0;
+}
+extern "C" JNIEXPORT void JNICALL Java_com_mackillergr_bf2_TouchOverlay_toggleKeyboard(JNIEnv*, jclass)
+{
+    portableToggleKeyboard();
 }
 #endif
 

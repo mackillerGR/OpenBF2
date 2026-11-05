@@ -622,6 +622,16 @@ void as_logic_getFrameLabel(const gameswf::fn_call& fn)
     fn.result->set_tu_string(tu_string(out.c_str()));
 }
 
+// PE 0x1004D5B0, Logic.getDefaultLevel: the host's startup map, published whatever the host answers.
+void as_logic_getDefaultLevel(const gameswf::fn_call& fn)
+{
+    SWF_AS_TRACE("as_logic_getDefaultLevel");
+    ISwiffHost* h = g_swiffPlayerInstance->getSwiffHost();
+    renddx9abi::HostString out;
+    (void)h->getSpStartupMap(out);
+    fn.result->set_tu_string(tu_string(out.c_str()));
+}
+
 // Reads mod version into a constructed output string and publishes it regardless of the
 // host Boolean result. This output is an assigned reference, not a hidden-return buffer.
 void as_logic_getModVersion(const gameswf::fn_call& fn)
@@ -9008,6 +9018,7 @@ static void registerAsMethods(SwiffAsNamespace* general, SwiffAsNamespace** ns,
             ns[i]->registerNativeCompatibleMethod<as_logic_getActivateReason>("getActivateReason");
             ns[i]->registerNativeCompatibleMethod<as_logic_getFrameLabel>("getFrameLabel");
             ns[i]->registerNativeCompatibleMethod<as_logic_getModVersion>("getModVersion");
+            ns[i]->registerNativeCompatibleMethod<as_logic_getDefaultLevel>("getDefaultLevel");
             ns[i]->registerNativeCompatibleMethod<as_logic_setDecimals>("setDecimals"); // no host call
             ns[i]->registerNativeCompatibleMethod<as_logic_getCommandLine>("getCommandLine");
             ns[i]->registerNativeCompatibleMethod<as_logic_joinCommandlineServer>("joinCommandlineServer"); // the +joinServer launch

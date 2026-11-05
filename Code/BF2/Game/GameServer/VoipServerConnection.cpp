@@ -213,10 +213,9 @@ bool VoipServerConnection::GetVoipServerSettings(IGameServerSettings* value)
 bool VoipServerConnection::Init()
 {
 #if !DEDICATED && !defined(_WIN32)
-    // [CHOSEN, not recovered] The voice stack has no port yet, so a direct start hosts without it.
+    // [CHOSEN, not recovered] The voice stack has no port yet, so games host without it.
     // [RETIRE-WHEN: portable-voip] Remove once CBF2VoipServer::Initialize exists on this host.
-    if (getenv("BF2_PORT_DIRECT_START"))
-        return true;
+    return true;
 #endif
     // Both binaries discard this exact call's return. ELF: classManager ds:0x8AC85A0, vslot
     // +0x4C at 0x8126C86; PE: ds:0x892D58, vslot +0x48 at 0x54B160. The one-slot difference is

@@ -80,7 +80,8 @@ public class LauncherActivity extends Activity {
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);
         turnip = new CheckBox(this); turnip.setText("Ενσωματωμένος driver Turnip (προτείνεται)"); turnip.setTextColor(Color.WHITE);
         turnip.setChecked(prefs.getBoolean("turnip", true)); root.addView(turnip);
-        button(root, "Έναρξη", new View.OnClickListener() { @Override public void onClick(View v) { start(); } });
+        button(root, "Έναρξη", new View.OnClickListener() { @Override public void onClick(View v) { start(true); } });
+        button(root, "Απευθείας σε χάρτη / διακομιστή (χωρίς μενού)", new View.OnClickListener() { @Override public void onClick(View v) { start(false); } });
         button(root, "Εξαγωγή log", new View.OnClickListener() { @Override public void onClick(View v) { exportLog(); } });
         setContentView(scroll);
     }
@@ -157,12 +158,12 @@ public class LauncherActivity extends Activity {
             }
         }
     }
-    private void start() {
+    private void start(boolean menu) {
         File mod = modDir();
         if (mod == null) { pickFolder(); return; }
         String host = server.getText().toString().trim();
         Object level = levels.getSelectedItem();
-        if (host.isEmpty() && level == null) {
+        if (!menu && host.isEmpty() && level == null) {
             new AlertDialog.Builder(this).setMessage("Δεν βρέθηκαν χάρτες.").setPositiveButton("ΟΚ", null).show();
             return;
         }
@@ -179,7 +180,8 @@ public class LauncherActivity extends Activity {
             "--libdir", getApplicationInfo().nativeLibraryDir,
             "--driver", turnip.isChecked() ? "turnip" : "system",
             "--cdkey", cdKey.getText().toString().trim()));
-        if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
+        if (menu) args.add("--menu");
+        else if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
         else args.addAll(Arrays.asList("--connect", host));
         prefs.edit().putString("server", host).putString("name", name.getText().toString().trim())
             .putString("level", level == null ? "" : level.toString())

@@ -44,6 +44,17 @@ static void pushInput(std::deque<DIDEVICEOBJECTDATA>& q, DWORD ofs, DWORD data) 
 static void post(UINT m, WPARAM w, LPARAM l) { MSG msg{}; msg.hwnd = g_window; msg.message = m; msg.wParam = w; msg.lParam = l; g_messages.push_back(msg); }
 static float g_pointerX = 0.0f, g_pointerY = 0.0f;
 static bool g_pointerSeen = false;
+// The engine sees a window of the requested size; a phone's real window is larger. Menu positions
+// use the engine's size so they land on what the renderer drew.
+static int g_engineWidth = 0, g_engineHeight = 0;
+static void postMenuPointer(float x, float y) {
+    int width = 0, height = 0;
+    if (g_window && SDL_GetWindowSize(g_window, &width, &height) && width > 0 && height > 0 && g_engineWidth > 0) {
+        x = x * g_engineWidth / width;
+        y = y * g_engineHeight / height;
+    }
+    post(WM_MOUSEMOVE, 0, (LPARAM)(((int)x & 0xFFFF) | (((int)y & 0xFFFF) << 16)));
+}
 static void pumpSdl() {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -60,7 +71,7 @@ static void pumpSdl() {
                 break;
             case SDL_EVENT_MOUSE_MOTION:
                 g_pointerX = e.motion.x; g_pointerY = e.motion.y; g_pointerSeen = true;
-                post(WM_MOUSEMOVE, 0, (LPARAM)(((int)e.motion.x & 0xFFFF) | (((int)e.motion.y & 0xFFFF) << 16)));
+                postMenuPointer(e.motion.x, e.motion.y);
                 if (g_mouseAcquired) {
                     if (e.motion.xrel != 0) pushInput(g_mouseEvents, DIMOFS_X, (DWORD)(LONG)e.motion.xrel);
                     if (e.motion.yrel != 0) pushInput(g_mouseEvents, DIMOFS_Y, (DWORD)(LONG)e.motion.yrel);
@@ -87,6 +98,12 @@ HMODULE GetModuleHandleA(LPCSTR) { return (HMODULE)&g_window; }
 HMODULE LoadLibraryA(LPCSTR name) { return dlopen(name, RTLD_NOW); }
 FARPROC GetProcAddress(HMODULE m, LPCSTR n) { return (FARPROC)dlsym(m, n); }
 BOOL FreeLibrary(HMODULE m) { return m && dlclose(m) == 0; }
+// Toggles the on-screen keyboard; the menu's text fields have no other way to ask for one.
+extern "C" void portableToggleKeyboard() {
+    if (!g_window) return;
+    if (SDL_ScreenKeyboardShown(g_window)) SDL_StopTextInput(g_window);
+    else { SDL_StopTextInput(g_window); SDL_StartTextInput(g_window); }
+}
 // [CHOSEN, not recovered] The latest pointer position across the window, each axis 0..1. Touch
 // screens and test drivers report positions, which DirectInput's relative deltas cannot carry.
 bool portablePointerPosition(float* x, float* y) {
@@ -110,6 +127,7 @@ HWND CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD style, int, int, int w, 
 #if defined(__ANDROID__)
     flags |= SDL_WINDOW_FULLSCREEN;     // hides the system bars
 #endif
+    g_engineWidth = w; g_engineHeight = h;
     g_window = SDL_CreateWindow(title, w, h, flags);
     if (!g_window) std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
     else SDL_StartTextInput(g_window);
