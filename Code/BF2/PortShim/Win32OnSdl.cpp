@@ -60,6 +60,7 @@ static void pumpSdl() {
                 break;
             case SDL_EVENT_MOUSE_MOTION:
                 g_pointerX = e.motion.x; g_pointerY = e.motion.y; g_pointerSeen = true;
+                post(WM_MOUSEMOVE, 0, (LPARAM)(((int)e.motion.x & 0xFFFF) | (((int)e.motion.y & 0xFFFF) << 16)));
                 if (g_mouseAcquired) {
                     if (e.motion.xrel != 0) pushInput(g_mouseEvents, DIMOFS_X, (DWORD)(LONG)e.motion.xrel);
                     if (e.motion.yrel != 0) pushInput(g_mouseEvents, DIMOFS_Y, (DWORD)(LONG)e.motion.yrel);
@@ -69,6 +70,7 @@ static void pumpSdl() {
                 if (g_mouseAcquired) pushInput(g_mouseEvents, DIMOFS_Z, (DWORD)(LONG)(e.wheel.y * 120));
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN: case SDL_EVENT_MOUSE_BUTTON_UP: {
+                if (e.button.button == SDL_BUTTON_LEFT) post(e.button.down ? WM_LBUTTONDOWN : WM_LBUTTONUP, 0, 0);
                 static const int map[] = {0, 0, 2, 1, 3, 4};
                 if (g_mouseAcquired && e.button.button <= 5 && e.button.button > 0)
                     pushInput(g_mouseEvents, DIMOFS_BUTTON0 + map[e.button.button], e.button.down ? 0x80 : 0);

@@ -946,7 +946,9 @@ videoOptions_getDynamicOption(void* self BF2_EDX_PARAM, int index)
     const int sel = (index == 0) ? vo->minusOneD8 : vo->minusOneDC;
 #if BF2_PLUGIN_ABI_NATIVE
     const int slot = (index == 0) ? 0 : 1;
-    s_nativeOption[slot] = (begin + sel)->c_str();
+    // [CHOSEN, not recovered] Portable hosts skip the startup preset, so nothing has been selected
+    // yet when a new profile reads the options back.
+    s_nativeOption[slot] = (sel >= 0 && begin) ? (begin + sel)->c_str() : "";
     return s_nativeOption[slot];
 #else
     return begin[sel];
