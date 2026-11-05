@@ -20,6 +20,68 @@
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <windows.h>
+#elif defined(BF2_PORTABLE_CLIENT)
+// [CHOSEN, not recovered] The retail ELF is server-only, so this class has no attested POSIX arm.
+// These are the Win32 calls it makes, kept in that shape so the shipped flow reads the same.
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <time.h>
+#include <unistd.h>
+namespace netclient_posix {
+#undef INFINITE
+const unsigned int INFINITE = 0xFFFFFFFFu;
+inline long long monotonicMicroseconds()
+{
+    timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<long long>(now.tv_sec) * 1000000 + now.tv_nsec / 1000;
+}
+struct Counter { long long QuadPart; };
+inline void QueryPerformanceCounter(Counter* c) { c->QuadPart = monotonicMicroseconds(); }
+inline void QueryPerformanceFrequency(Counter* c) { c->QuadPart = 1000000; }
+inline void Sleep(unsigned int ms) { usleep(ms * 1000u); }
+struct Handle { pthread_mutex_t mutex; pthread_t thread; bool isThread; };
+inline void* CreateMutexA(void*, int, const char*)
+{
+    Handle* const h = new Handle;
+    h->isThread = false;
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&h->mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
+    return h;
+}
+inline void WaitForSingleObject(void* handle, unsigned int)
+{
+    Handle* const h = static_cast<Handle*>(handle);
+    if (h->isThread)
+        pthread_join(h->thread, 0);
+    else
+        pthread_mutex_lock(&h->mutex);
+}
+inline void ReleaseMutex(void* handle) { pthread_mutex_unlock(&static_cast<Handle*>(handle)->mutex); }
+inline void CloseHandle(void* handle)
+{
+    Handle* const h = static_cast<Handle*>(handle);
+    if (!h->isThread)
+        pthread_mutex_destroy(&h->mutex);
+    delete h;
+}
+}
+#define LARGE_INTEGER netclient_posix::Counter
+#define QueryPerformanceCounter netclient_posix::QueryPerformanceCounter
+#define QueryPerformanceFrequency netclient_posix::QueryPerformanceFrequency
+#define Sleep netclient_posix::Sleep
+#undef CreateMutexA
+#define CreateMutexA netclient_posix::CreateMutexA
+#define WaitForSingleObject netclient_posix::WaitForSingleObject
+#define ReleaseMutex netclient_posix::ReleaseMutex
+#define CloseHandle netclient_posix::CloseHandle
+#undef INFINITE
+#define INFINITE netclient_posix::INFINITE
 #endif
 
 namespace dice {
@@ -36,7 +98,7 @@ namespace {
     // and the matching ReleaseMutex. One helper per side keeps the eleven sites identical.
     inline void lockIf(bool threaded, void* mutex)
     {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
         if (threaded)
             ::WaitForSingleObject(mutex, INFINITE);
 #else
@@ -45,7 +107,7 @@ namespace {
     }
     inline void unlockIf(bool threaded, void* mutex)
     {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
         if (threaded)
             ::ReleaseMutex(mutex);
 #else
@@ -87,7 +149,7 @@ NetClient::NetClient()
     , m_disconnectText()                              // +0x13C
 {
     m_dataPacket.pvoid14 = 0;                         // +0x0DC - stored twice in the PE (6BE532, 6BE5A0)
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     LARGE_INTEGER counter;
     ::QueryPerformanceCounter(&counter);              // +0x0E8
     m_startCounter = counter.QuadPart;
@@ -187,12 +249,12 @@ int NetClient::closeConnection(unsigned int reason)
 {
     if (!m_socket)
         return 9;
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     ::WaitForSingleObject(m_mutex, INFINITE);
 #endif
     for (int i = 0; i < 3; ++i)
         sendDisconnect(reason);
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     ::ReleaseMutex(m_mutex);
 #endif
     return 0;
@@ -269,7 +331,7 @@ unsigned int NetClient::getVersion() const                         { return m_ve
 // the same plus m_timeBase (the PE computes `base - (elapsed * -1000.0)`; dbl_8AA9D0 is -1000.0).
 unsigned int NetClient::elapsedMs() const
 {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     LARGE_INTEGER now;
     ::QueryPerformanceCounter(&now);
     return static_cast<unsigned int>(static_cast<double>(now.QuadPart - m_startCounter)
@@ -359,7 +421,7 @@ int NetClient::joinServer(const std::string& address, int port, bool blocking,
             shutDown();                               // 6BEF6F: `call [vptr+0x18]`
             return 9;
         }
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
         ::Sleep(50);
 #endif
     }
@@ -388,7 +450,7 @@ int NetClient::connect(const std::string& address, int port, bool blocking, cons
                 return 4;
         }
         m_timeBase = 0;
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
         LARGE_INTEGER counter;
         ::QueryPerformanceCounter(&counter);
         m_startCounter = counter.QuadPart;
@@ -906,12 +968,18 @@ int NetClient::_update(int*)
 
 // Windows receive thread: waits for socket readability, then updates under the mutex until a terminal result.
 // Startup creates and registers the thread; shutdown signals, joins and closes its handles.
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
 namespace {
+#if defined(BF2_PORTABLE_CLIENT)
+    void* netClientThreadProc(void* parameter)
+    {
+        NetClient* const client = static_cast<NetClient*>(parameter);
+#else
     DWORD WINAPI netClientThreadProc(LPVOID parameter)
     {
         NetClient* const client = static_cast<NetClient*>(parameter);
         ::SetThreadPriority(::GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
         std::vector<ISocket*> sockets(1, static_cast<ISocket*>(client->m_socket));
         while (!client->m_stopRequested)
         {
@@ -932,8 +1000,20 @@ namespace {
 
 bool NetClient::startReceiveThread()
 {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     m_mutex = ::CreateMutexA(0, 0, 0);
+#if defined(BF2_PORTABLE_CLIENT)
+    {
+        netclient_posix::Handle* const handle = new netclient_posix::Handle;
+        handle->isThread = true;
+        if (pthread_create(&handle->thread, 0, &netClientThreadProc, this) == 0)
+        {
+            m_thread = handle;
+            return true;
+        }
+        delete handle;
+    }
+#else
     DWORD threadId = 0;
     m_thread = ::CreateThread(0, 0, &netClientThreadProc, this, 0, &threadId);
     if (m_thread)
@@ -943,13 +1023,14 @@ bool NetClient::startReceiveThread()
         return true;
     }
 #endif
+#endif
     Debug(DEBUGTYPE_6, NETCLIENT_FILE, 1416, "") << "clientReceiveThread was not created successfully";
     return false;
 }
 
 void NetClient::stopReceiveThread()
 {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     if (m_thread && m_mutex)
     {
         m_stopRequested = true;
@@ -968,7 +1049,7 @@ void NetClient::stopReceiveThread()
 // shipped; IGame::sendUDPPacket only reaches it while a NetClient exists.
 void NetClient::sendRawPacket(const char* address, unsigned short port, const void* data, int size)
 {
-#if defined(_WIN32)
+#if defined(_WIN32) || defined(BF2_PORTABLE_CLIENT)
     ::WaitForSingleObject(m_mutex, INFINITE);
     sockaddr_in sa;
     std::memset(&sa, 0, sizeof(sa));
