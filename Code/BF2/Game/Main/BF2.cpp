@@ -760,7 +760,23 @@ static std::string androidCommandLine(int argc, char** argv)
     std::string line = "+modPath mods/bf2 +fullscreen 1 +multi 1 +noSound 1 +szx " + width
         + " +szy " + height + " +playerName " + name;
     if (hosted)
-        line += " +hostServer 1 +port 17567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16";
+    {
+        // The install's own settings describe a dedicated server; this game is the launcher's.
+        const std::string directory(files ? files : ".");
+        const std::string mapList = directory + "/maplist.con", settings = directory + "/serversettings.con";
+        if (FILE* const out = std::fopen(mapList.c_str(), "w"))
+        {
+            std::fprintf(out, "mapList.append %s gpm_cq 16\n", level.c_str());
+            std::fclose(out);
+        }
+        if (FILE* const out = std::fopen(settings.c_str(), "w"))
+        {
+            std::fputs("sv.voipEnabled 0\nsv.serverPort 17567\nsv.numPlayersNeededToStart 1\n", out);
+            std::fclose(out);
+        }
+        line += " +hostServer 1 +port 17567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16"
+            + " +mapList " + mapList + " +config " + settings;
+    }
     else
     {
         const std::string::size_type colon = server.find(':');
