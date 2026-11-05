@@ -6,6 +6,9 @@
 #include <sstream>
 #include <cstdlib>
 #include <cstdio>
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 #if defined(_MSC_VER)
 #include <intrin.h>
 #endif
@@ -1191,7 +1194,20 @@ bool BfSoundModule::init()
     }
     BfSound* facade = new BfSound;
     g_bfSound = facade;
+#if defined(_WIN32)
     s_audioLibrary = LoadLibraryA("BF2Audio.dll");
+#else
+    s_audioLibrary = LoadLibraryA("libBF2Audio.so");
+    if (!s_audioLibrary)
+    {
+        // The sound engine is optional on a portable build: report it and carry on silent.
+        std::fprintf(stderr, "[FRONTIER] dice::hfe::BfSoundModule::init: libBF2Audio.so: %s\n", dlerror());
+        std::fflush(stderr);
+        delete facade;
+        g_bfSound = new BfSoundNull;
+        return true;
+    }
+#endif
     if (s_audioLibrary)
     {
         typedef ISoundEngine* (*GetSoundEngineFn)();
@@ -1203,6 +1219,15 @@ bool BfSoundModule::init()
             Debug(DebugTypeError, "Sound/BfSound.cpp", 1849, "")
                 << "Invalid " << "BF2Audio.dll" << ". Function getSoundEngine not found.";
         facade->init();
+#if !defined(_WIN32)
+        // [CHOSEN, not recovered] Direct start skips the profile login that applies AudioSettings.
+        // [RETIRE-WHEN: portable-swiff-player] Remove when the menu's login path runs on this host.
+        if (getenv("BF2_PORT_DIRECT_START"))
+        {
+            const int status = facade->initialize(1, std::string("System OpenAL"), 32);
+            std::fprintf(stderr, "Sound: System OpenAL initialize -> %d\n", status);
+        }
+#endif
     }
     else
     {

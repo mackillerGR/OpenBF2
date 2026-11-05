@@ -1893,6 +1893,39 @@ if(BUILD_TESTING AND MSVC)
     set_property(TARGET bf2_run_checks PROPERTY FOLDER "Checks")
 endif()
 
+# [CHOSEN, not recovered] The sound engine plugin for the portable client, over OpenAL Soft.
+if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
+    set(bf2_snd "${BF2_ROOT}/Sound/SoundEngine")
+    set(bf2_vorbis "${BF2_EXTERNAL_ROOT}/libvorbis-1.3.7")
+    set(bf2_ogg "${BF2_EXTERNAL_ROOT}/libogg-1.3.6")
+    add_library(bf2_audio_portable SHARED EXCLUDE_FROM_ALL
+        "${BF2_ROOT}/Sound/NullSound.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/BfMemory.cpp"
+        "${bf2_snd}/Ambient.cpp" "${bf2_snd}/BfOpenAL.cpp" "${bf2_snd}/BfSoundEngine.cpp"
+        "${bf2_snd}/Music.cpp" "${bf2_snd}/OpenALProvider.cpp" "${bf2_snd}/OpenALSample.cpp"
+        "${bf2_snd}/Reverb.cpp" "${bf2_snd}/Sample.cpp" "${bf2_snd}/Sound.cpp"
+        "${bf2_snd}/SoundDefaults.cpp" "${bf2_snd}/SoundEvaluator.cpp" "${bf2_snd}/SoundFile.cpp"
+        "${bf2_snd}/SoundTrigger.cpp" "${bf2_snd}/WavFileFormat.cpp" "${bf2_snd}/Win32System.cpp"
+        "${bf2_ogg}/src/bitwise.c" "${bf2_ogg}/src/framing.c"
+        "${bf2_vorbis}/lib/analysis.c" "${bf2_vorbis}/lib/bitrate.c" "${bf2_vorbis}/lib/block.c"
+        "${bf2_vorbis}/lib/codebook.c" "${bf2_vorbis}/lib/envelope.c" "${bf2_vorbis}/lib/floor0.c"
+        "${bf2_vorbis}/lib/floor1.c" "${bf2_vorbis}/lib/info.c" "${bf2_vorbis}/lib/lookup.c"
+        "${bf2_vorbis}/lib/lpc.c" "${bf2_vorbis}/lib/lsp.c" "${bf2_vorbis}/lib/mapping0.c"
+        "${bf2_vorbis}/lib/mdct.c" "${bf2_vorbis}/lib/psy.c" "${bf2_vorbis}/lib/registry.c"
+        "${bf2_vorbis}/lib/res0.c" "${bf2_vorbis}/lib/sharedbook.c" "${bf2_vorbis}/lib/smallft.c"
+        "${bf2_vorbis}/lib/synthesis.c" "${bf2_vorbis}/lib/vorbisfile.c" "${bf2_vorbis}/lib/window.c")
+    set_target_properties(bf2_audio_portable PROPERTIES OUTPUT_NAME BF2Audio
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin_portable")
+    target_compile_definitions(bf2_audio_portable PRIVATE BF2_IMAGE_BF2AUDIO=1 BF2_PORTABLE_AUDIO=1
+        BF2AUDIO_WITH_VORBIS=1 BF2_PLUGIN_ABI_NATIVE=1 DEDICATED=0 "BF2_EDX_PARAM=")
+    target_include_directories(bf2_audio_portable PRIVATE "${BF2_ROOT}" "${bf2_ogg}/include"
+        "${bf2_vorbis}/include" "${bf2_vorbis}/lib")
+    target_compile_options(bf2_audio_portable PRIVATE -w -fno-strict-aliasing
+        $<$<COMPILE_LANGUAGE:CXX>:-std=gnu++14 -fms-extensions -fpermissive
+        "SHELL:-include ${BF2_ROOT}/Core/BuildConfig.h" "SHELL:-include ${BF2_ROOT}/Core/PlatformCompat.h"
+        "SHELL:-include ${BF2_ROOT}/Core/PortableClient.h">)
+    target_link_libraries(bf2_audio_portable PRIVATE dl m)
+endif()
+
 # [CHOSEN, not recovered] The renderer plugin for the portable client, on DXVK's native D3D9.
 if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     add_library(bf2_renddx9_portable SHARED EXCLUDE_FROM_ALL

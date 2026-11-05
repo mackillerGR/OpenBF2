@@ -15,6 +15,72 @@
 
 
 #define WIN32_LEAN_AND_MEAN
+#if defined(BF2_PORTABLE_AUDIO)
+// [CHOSEN, not recovered] POSIX bodies for the same small system surface. OpenAL Soft reports its
+// own device state, so the DirectSound probe has no counterpart.
+#include <dlfcn.h>
+#include <pthread.h>
+#include <unistd.h>
+#include <cstdio>
+
+namespace dice {
+namespace hfe {
+namespace win32 {
+
+void* g_dllInstance = 0;
+
+void* loadLibrary(const char* fileName)              { return ::dlopen(fileName, RTLD_NOW); }
+void  freeLibrary(void* module)                      { if (module) ::dlclose(module); }
+void* getProcAddress(void* module, const char* name) { return module ? ::dlsym(module, name) : 0; }
+
+void  outputDebugString(const char* text)            { std::fputs(text, stderr); }
+void  sleep(unsigned int milliseconds)               { ::usleep(milliseconds * 1000u); }
+long  exchange(volatile long* target, long value)    { return __sync_lock_test_and_set(target, value); }
+
+namespace {
+
+void* threadStart(void* parameter)
+{
+    Thread* const t = static_cast<Thread*>(parameter);
+    t->entry(t);
+    return 0;
+}
+
+} // namespace
+
+Thread* createThread(void (__cdecl* entry)(Thread*), void* argument)
+{
+    Thread* t = new Thread;
+    t->entry = entry;
+    t->argument = argument;
+    t->stopRequested = 0;
+    pthread_t* const handle = new pthread_t;
+    t->handle = handle;
+    pthread_create(handle, 0, threadStart, t);
+    return t;
+}
+
+void joinAndDeleteThread(Thread* t)
+{
+    if (t)
+    {
+        __sync_add_and_fetch(&t->stopRequested, 1);
+        pthread_t* const handle = static_cast<pthread_t*>(t->handle);
+        pthread_join(*handle, 0);
+        delete handle;
+        delete t;
+    }
+}
+
+bool  threadShouldStop(const Thread* t) { return t->stopRequested != 0; }
+void* threadArgument(const Thread* t)   { return t->argument; }
+bool  hasSoundDevice()                  { return true; }
+
+} // namespace win32
+} // namespace hfe
+} // namespace dice
+
+#else
 #include <windows.h>
 #include <mmsystem.h>     // waveformatex, which dsound.h needs and WIN32_LEAN_AND_MEAN leaves out
 #include <dsound.h>
@@ -114,3 +180,5 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 }
 
 #endif // BF2_IMAGE_BF2AUDIO
+
+#endif // BF2_PORTABLE_AUDIO

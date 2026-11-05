@@ -81,8 +81,15 @@ int OpenALProvider::getProviderNames(std::vector<const char*>* out)
 
 // The device/context bring-up. Idempotent on the name; anything else closes
 // first. Every failure path closes again before answering its code.
+#if defined(BF2_PORTABLE_AUDIO)
+// [CHOSEN, not recovered] Saved settings name DirectSound providers these hosts do not have.
+int OpenALProvider::open(const std::string&)
+{
+    const std::string name("System OpenAL");
+#else
 int OpenALProvider::open(const std::string& name)
 {
+#endif
     if (m_device)
     {
         if (m_deviceName == name)
@@ -102,7 +109,15 @@ int OpenALProvider::open(const std::string& name)
     int flags;
     if (p.systemOpenAL)
     {
-        if (!loadOpenAL("OpenAL32.dll"))
+        if (!loadOpenAL(
+#if defined(__ANDROID__)
+                "libopenal.so"
+#elif defined(BF2_PORTABLE_AUDIO)
+                "libopenal.so.1"
+#else
+                "OpenAL32.dll"
+#endif
+                ))
         {
             g_soundTrace->warning(sndFormat("OpenAL error: Could not find OpenAL32.dll"), kFile, 90);
             close();
@@ -145,7 +160,12 @@ int OpenALProvider::open(const std::string& name)
     }
     // A system OpenAL is only accepted when the "allow-any-system-openal" property says so or it
     // exposes EAX 5.0 (i.e. it is Creative's own).
+#if defined(BF2_PORTABLE_AUDIO)
+    // [CHOSEN, not recovered] OpenAL Soft has no EAX, and it is the only provider on these hosts.
+    if (false)
+#else
     if ((getOpenALFlags() & 1) && g_soundProperties->get(SoundProperties::AllowAnySystemOpenAL) < 0.5f && !detectEax5())
+#endif
     {
         g_soundTrace->warning(sndFormat("OpenAL error: Could not use system OpenAL, since it does not support EAX5.0"), kFile, 144);
         close();
