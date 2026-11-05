@@ -71,7 +71,7 @@ public class LauncherActivity extends Activity {
         label(root, "Ρυθμίσεις: ανάλυση");
         resolution = new Spinner(this);
         resolution.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-            new String[] {"1280x720", "1920x1080"}));
+            new String[] {"720p", "1080p"}));
         resolution.setSelection(prefs.getInt("resolution", 0)); root.addView(resolution);
         touch = new CheckBox(this); touch.setText("Χειριστήρια αφής"); touch.setTextColor(Color.WHITE);
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);
@@ -149,7 +149,14 @@ public class LauncherActivity extends Activity {
             new AlertDialog.Builder(this).setMessage("Δεν βρέθηκαν χάρτες.").setPositiveButton("ΟΚ", null).show();
             return;
         }
-        String[] size = resolution.getSelectedItem().toString().split("x");
+        // The height is the player's choice; the width follows the screen's shape.
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+        int longSide = Math.max(metrics.widthPixels, metrics.heightPixels);
+        int shortSide = Math.min(metrics.widthPixels, metrics.heightPixels);
+        int height = resolution.getSelectedItemPosition() == 0 ? 720 : 1080;
+        int width = (height * longSide / shortSide) & ~1;
+        String[] size = {String.valueOf(width), String.valueOf(height)};
         ArrayList<String> args = new ArrayList<>(Arrays.asList("--mod", mod.getPath(),
             "--width", size[0], "--height", size[1], "--name", name.getText().toString().trim(),
             "--libdir", getApplicationInfo().nativeLibraryDir,

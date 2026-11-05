@@ -1,3 +1,35 @@
+diff --git a/src/dxvk/dxvk_presenter.cpp b/src/dxvk/dxvk_presenter.cpp
+index 0fbbbc9..784e2ae 100644
+--- a/src/dxvk/dxvk_presenter.cpp
++++ b/src/dxvk/dxvk_presenter.cpp
+@@ -109,6 +109,13 @@ namespace dxvk {
+         sync.acquire, VK_NULL_HANDLE, &m_imageIndex);
+     }
+ 
++#ifdef __ANDROID__
++    // Android reports suboptimal for any rotated display, on every frame. The compositor
++    // handles the rotation, so a new swapchain would change nothing.
++    if (m_acquireStatus == VK_SUBOPTIMAL_KHR)
++      m_acquireStatus = VK_SUCCESS;
++#endif
++
+     // This is a normal occurence, but may be useful for
+     // debugging purposes in case WSI goes wrong somehow.
+     if (m_acquireStatus != VK_SUCCESS && m_swapchain)
+@@ -332,6 +339,13 @@ namespace dxvk {
+         nextSync.acquire, VK_NULL_HANDLE, &m_imageIndex);
+     }
+ 
++#ifdef __ANDROID__
++    if (m_acquireStatus == VK_SUBOPTIMAL_KHR)
++      m_acquireStatus = VK_SUCCESS;
++    if (status == VK_SUBOPTIMAL_KHR)
++      status = VK_SUCCESS;
++#endif
++
+     // Recreate the swapchain on the next acquire, even if we get suboptimal.
+     // There is no guarantee that suboptimal state is returned by both functions.
+     std::lock_guard lock(m_surfaceMutex);
 diff --git a/src/vulkan/vulkan_loader.cpp b/src/vulkan/vulkan_loader.cpp
 index a9d8ffb..d9e28ae 100644
 --- a/src/vulkan/vulkan_loader.cpp

@@ -105,6 +105,9 @@ HWND CreateWindowExA(DWORD, LPCSTR, LPCSTR title, DWORD style, int, int, int w, 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) { std::fprintf(stderr, "SDL_Init: %s\n", SDL_GetError()); return 0; }
     SDL_WindowFlags flags = SDL_WINDOW_VULKAN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
     if (style & WS_POPUP) flags |= SDL_WINDOW_FULLSCREEN;
+#if defined(__ANDROID__)
+    flags |= SDL_WINDOW_FULLSCREEN;     // hides the system bars
+#endif
     g_window = SDL_CreateWindow(title, w, h, flags);
     if (!g_window) std::fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
     else SDL_StartTextInput(g_window);

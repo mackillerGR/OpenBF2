@@ -786,6 +786,12 @@ void buildPresentParameters(void* renderer)
         // Zero dimensions let D3D size the windowed back buffer from the window.
         b->pp.BackBufferFormat = backBufferFormat;
         b->pp.Windowed         = TRUE;
+#if defined(__ANDROID__)
+        // A phone's window is larger than the chosen resolution. The renderer's own targets follow
+        // the resolution, so the back buffer must too; DXVK scales the result to the window.
+        b->pp.BackBufferWidth  = b->modeWidth;
+        b->pp.BackBufferHeight = b->modeHeight;
+#endif
     }
     else
     {
