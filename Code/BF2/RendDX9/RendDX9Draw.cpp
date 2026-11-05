@@ -2,6 +2,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include <cstdio>
 #include "../../RendDX9Abi/HfeAbi.h"
 #include "../../RendDX9Abi/ModuleCommon.h"
 #include "../../RendDX9Abi/BfMemory.h"
@@ -90,6 +91,14 @@ bool rendererPresent(unsigned int mode)
     IDirect3DSwapChain9* chain = chains[b->swapChainIndex];
 
     HRESULT hr = chain->Present(0, 0, 0, 0, mode);
+#if defined(__ANDROID__)
+    {
+        // A phone has no debugger attached: the exported log has to show the loop is alive.
+        static unsigned int frames = 0;
+        if (++frames <= 5 || frames % 300 == 0 || hr)
+            std::fprintf(stderr, "[present] frame %u hr=0x%08X\n", frames, static_cast<unsigned int>(hr));
+    }
+#endif
     while (hr)
     {
         if (hr == static_cast<HRESULT>(0x88760868))            // D3DERR_DEVICELOST

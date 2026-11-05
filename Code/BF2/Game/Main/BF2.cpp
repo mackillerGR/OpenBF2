@@ -687,7 +687,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_system.h>
 #include <dlfcn.h>
+#include <signal.h>
 #include <stdint.h>
+#include <unwind.h>
+#include <cstring>
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
@@ -698,6 +701,53 @@ extern "C" void* adrenotools_open_libvulkan(int dlopenFlags, int featureFlags, c
 // [CHOSEN, not recovered] The portable client's entry: the WinMain chain without the
 // Windows working-set, desktop and SEH handling. SDL_main.h renames this on Android.
 #if defined(__ANDROID__)
+// [CHOSEN, not recovered] A native crash on a phone otherwise leaves nothing in the exported log.
+namespace {
+struct UnwindCursor { void* frames[48]; int count; };
+
+_Unwind_Reason_Code recordFrame(struct _Unwind_Context* context, void* argument)
+{
+    UnwindCursor* const cursor = static_cast<UnwindCursor*>(argument);
+    if (cursor->count >= 48)
+        return _URC_END_OF_STACK;
+    cursor->frames[cursor->count++] = reinterpret_cast<void*>(_Unwind_GetIP(context));
+    return _URC_NO_REASON;
+}
+
+void androidCrashHandler(int signal, siginfo_t* info, void*)
+{
+    std::fprintf(stderr, "[CRASH] signal %d at %p thread %d\n", signal, info->si_addr, gettid());
+    UnwindCursor cursor;
+    cursor.count = 0;
+    _Unwind_Backtrace(recordFrame, &cursor);
+    for (int i = 0; i < cursor.count; ++i)
+    {
+        Dl_info where;
+        if (dladdr(cursor.frames[i], &where) && where.dli_fname)
+            std::fprintf(stderr, "[CRASH] #%d %s+0x%lx %s\n", i, where.dli_fname,
+                (unsigned long)((char*)cursor.frames[i] - (char*)where.dli_fbase),
+                where.dli_sname ? where.dli_sname : "?");
+        else
+            std::fprintf(stderr, "[CRASH] #%d %p\n", i, cursor.frames[i]);
+    }
+    std::fflush(stderr);
+    ::signal(signal, SIG_DFL);
+    raise(signal);
+}
+
+void installAndroidCrashReport()
+{
+    struct sigaction action;
+    std::memset(&action, 0, sizeof(action));
+    action.sa_sigaction = androidCrashHandler;
+    action.sa_flags = SA_SIGINFO;
+    sigemptyset(&action.sa_mask);
+    const int signals[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT };
+    for (int i = 0; i < 5; ++i)
+        sigaction(signals[i], &action, 0);
+}
+}
+
 // [CHOSEN, not recovered] The launcher's arguments, mapped onto what a desktop start sets up: the
 // working directory, a writable home, the log file and the engine's own command line.
 static std::string androidCommandLine(int argc, char** argv)
@@ -733,6 +783,9 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("BF2_PORT_DIRECT_START", "1", 1);
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
+    setenv("DXVK_HUD", "fps,frametimes,memory", 1);
+    setenv("MESA_LOG", "file", 1);
+    installAndroidCrashReport();
     if (driver == "turnip" && !libraryDir.empty())
     {
         // DXVK needs features the stock Adreno driver does not expose. On failure the system
