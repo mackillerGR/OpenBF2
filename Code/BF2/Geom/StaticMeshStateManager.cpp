@@ -111,19 +111,19 @@ void staticMeshStateManagerRemoveFromCache(StaticMeshStateManager* self, const v
     char* cursor = self->m_cache.first;
     if (cursor == self->m_cache.last)
         return;
-    char* next = cursor + 4;
+    char* next = cursor + sizeof(void*);
     do
     {
         if (*reinterpret_cast<const void* const*>(cursor) == value)
         {
             ::memmove(cursor, next,
-                      4u * static_cast<unsigned int>((self->m_cache.last - next) >> 2));
-            self->m_cache.last -= 4;
+                      static_cast<size_t>(self->m_cache.last - next));
+            self->m_cache.last -= sizeof(void*);
         }
         else
         {
-            cursor += 4;
-            next   += 4;
+            cursor += sizeof(void*);
+            next   += sizeof(void*);
         }
     }
     while (cursor != self->m_cache.last);
@@ -241,9 +241,9 @@ void StaticMeshStateManager::destroyMembers()
     {
         do
         {
-            ::memmove(first, first + 4,
-                      4u * static_cast<unsigned int>((m_cache.last - (first + 4)) >> 2));
-            m_cache.last -= 4;
+            ::memmove(first, first + sizeof(void*),
+                      static_cast<size_t>(m_cache.last - (first + sizeof(void*))));
+            m_cache.last -= sizeof(void*);
         }
         while (first != m_cache.last);
     }
@@ -425,18 +425,18 @@ void staticMeshCachePush(vc71::vector_layout& cache, ShaderMaterial* value)
         if (grown < size + 1u)
             grown = size + 1u;
 
-        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * 4u));
+        char* const buffer = static_cast<char*>(::renddx9abi::engineAlloc(grown * (unsigned int)sizeof(void*)));
         if (size)
-            ::memcpy(buffer, cache.first, size * 4u);
+            ::memcpy(buffer, cache.first, size * sizeof(void*));
         if (cache.first)
             ::renddx9abi::engineFree(cache.first);
         cache.first = buffer;
-        cache.last  = buffer + size * 4u;
-        cache.end   = buffer + grown * 4u;
+        cache.last  = buffer + size * sizeof(void*);
+        cache.end   = buffer + grown * sizeof(void*);
     }
 
     *reinterpret_cast<ShaderMaterial**>(cache.last) = value;
-    cache.last += 4;
+    cache.last += sizeof(void*);
 }
 
 // The stack-resident ShaderMaterial createMaterial builds. Raw storage, so the record is destroyed

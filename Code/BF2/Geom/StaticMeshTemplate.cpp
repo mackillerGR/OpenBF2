@@ -1571,7 +1571,7 @@ void StaticMeshTemplate::releaseDeviceResources()
                     continue;
 
                 bool seen = false;
-                for (char* q = g_preloadTextures.first; q != g_preloadTextures.last; q += 4)
+                for (char* q = g_preloadTextures.first; q != g_preloadTextures.last; q += sizeof(void*))
                     if (*reinterpret_cast<void**>(q) == texture)
                     {
                         seen = true;
@@ -1580,26 +1580,26 @@ void StaticMeshTemplate::releaseDeviceResources()
                 if (seen)
                     continue;
 
-                const unsigned int used = vectorSizeBytes(g_preloadTextures) / 4;
-                if (g_preloadTextures.first && used < vectorCapacityBytes(g_preloadTextures) / 4)
+                const unsigned int used = vectorSizeBytes(g_preloadTextures) / (unsigned int)sizeof(void*);
+                if (g_preloadTextures.first && used < vectorCapacityBytes(g_preloadTextures) / (unsigned int)sizeof(void*))
                 {
                     *reinterpret_cast<void**>(g_preloadTextures.last) = texture;
-                    g_preloadTextures.last += 4;
+                    g_preloadTextures.last += sizeof(void*);
                 }
                 else
                 {
-                    vectorReserveRaw(g_preloadTextures, 4, used + 1);
+                    vectorReserveRaw(g_preloadTextures, (unsigned int)sizeof(void*), used + 1);
                     if (g_preloadTextures.first)
                     {
                         *reinterpret_cast<void**>(g_preloadTextures.last) = texture;
-                        g_preloadTextures.last += 4;
+                        g_preloadTextures.last += sizeof(void*);
                     }
                 }
             }
         }
     }
 
-    for (char* q = g_preloadTextures.first; q != g_preloadTextures.last; q += 4)
+    for (char* q = g_preloadTextures.first; q != g_preloadTextures.last; q += sizeof(void*))
         resourcePreload(*reinterpret_cast<void**>(q));
 
     m_dword08 = static_cast<int>(::dice::hfe::dx9rend::rendererFrameOrdinal());   // +0x08

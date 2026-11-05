@@ -14,11 +14,6 @@ FRONTIER(D3DXCreateMeshFVF) FRONTIER(D3DXCreateRenderToSurface)
   
  
 FRONTIER(D3DXSaveSurfaceToFileA) FRONTIER(D3DXSaveTextureToFileA)
-FRONTIER(BinkClose) FRONTIER(BinkCopyToBuffer) FRONTIER(BinkDoFrame) FRONTIER(BinkGetSummary)
-FRONTIER(BinkNextFrame) FRONTIER(BinkPause) FRONTIER(BinkWait)
-extern "C" void* BinkOpen(const char*, unsigned) { return nullptr; }  // No video codec: every movie fails to open.
-extern "C" void* BinkOpenDirectSound(unsigned long) { return nullptr; }
-extern "C" int BinkSetSoundSystem(void*, unsigned long) { return 0; }
 
 namespace { struct M { float m[4][4]; }; struct V { float x, y, z; };
 V sub(V a, V b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }

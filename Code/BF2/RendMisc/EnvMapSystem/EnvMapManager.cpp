@@ -144,7 +144,7 @@ void EnvMapManager::flushRemovals()
         if(found!=end)
         {
             *found=*(end-1);
-            if(begin && end!=begin)m_objects.last-=4;
+            if(begin && end!=begin)m_objects.last-=sizeof(void*);
             if(*item)delete *item;
         }
     }

@@ -135,8 +135,8 @@ BundledMeshStateManager::~BundledMeshStateManager()
     char* const first = m_cache.first;
     while (first != m_cache.last)
     {
-        std::memmove(first, first + 4, m_cache.last - (first + 4));
-        m_cache.last -= 4;
+        std::memmove(first, first + sizeof(void*), m_cache.last - (first + sizeof(void*)));
+        m_cache.last -= sizeof(void*);
     }
     m_texturePrefix.~string();
     if (m_cache.first)
@@ -194,18 +194,18 @@ void BundledMeshStateManager::remove(const BundledMeshState* state)
     char* cursor = m_cache.first;
     if (cursor == m_cache.last)
         return;
-    char* next = cursor + 4;
+    char* next = cursor + sizeof(void*);
     do
     {
         if (*reinterpret_cast<BundledMeshState**>(cursor) == state)
         {
             std::memmove(cursor, next, m_cache.last - next);
-            m_cache.last -= 4;
+            m_cache.last -= sizeof(void*);
         }
         else
         {
-            cursor += 4;
-            next += 4;
+            cursor += sizeof(void*);
+            next += sizeof(void*);
         }
     } while (cursor != m_cache.last);
 }

@@ -1929,6 +1929,10 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     else()
         target_link_libraries(bf2_swiff_portable PRIVATE dl pthread)
     endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # glibc never unloads a library holding unique symbols, and the player must reload cleanly.
+        target_compile_options(bf2_swiff_portable PRIVATE -fno-gnu-unique)
+    endif()
     target_compile_options(bf2_swiff_portable PRIVATE -std=gnu++14 -fms-extensions -fpermissive -w
         -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks
         "-include${BF2_ROOT}/Core/BuildConfig.h" "-include${BF2_ROOT}/Core/PlatformCompat.h"
@@ -2107,6 +2111,7 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     "${CMAKE_CURRENT_SOURCE_DIR}/Code/BF2/Geom/StaticMeshRendererConsole.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Code/BF2/Geom/HeightmapEventNode.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/BfMemory.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/BinkPortable.cpp"
     )
     set_target_properties(bf2_renddx9_portable PROPERTIES OUTPUT_NAME RendDX9
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin_portable" POSITION_INDEPENDENT_CODE ON)
@@ -2123,6 +2128,11 @@ if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     else()
         target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_DXVK_D3D9}" "${BF2_VKD3D_SHADER}" dl pthread)
     endif()
+    # FFmpeg, built for this host with only the Bink demuxer and decoders enabled.
+    set(BF2_FFMPEG_ROOT "" CACHE PATH "Install prefix of the Bink-only static FFmpeg")
+    target_include_directories(bf2_renddx9_portable PRIVATE "${BF2_FFMPEG_ROOT}/include")
+    target_link_libraries(bf2_renddx9_portable PRIVATE "${BF2_FFMPEG_ROOT}/lib/libavformat.a"
+        "${BF2_FFMPEG_ROOT}/lib/libavcodec.a" "${BF2_FFMPEG_ROOT}/lib/libavutil.a" -Wl,-Bsymbolic)
     target_compile_options(bf2_renddx9_portable PRIVATE -std=gnu++14 -fms-extensions -fpermissive -w
         -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks
         "-include${BF2_ROOT}/Core/BuildConfig.h" "-include${BF2_ROOT}/Core/PlatformCompat.h"

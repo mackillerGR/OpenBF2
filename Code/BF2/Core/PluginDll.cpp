@@ -116,6 +116,16 @@ bool FreeLibraryBf(void* handle, const char* diagnosticName)
     // : the bare wrapper call. No deinitDll lookup, no diagnostic, and the
     // second argument is never read.
     (void)diagnosticName;
+#if !DEDICATED
+    // [CHOSEN, not recovered] The portable client reloads the menu player, so it needs the Win32
+    // arm's deinitDll: the player's registrations must be gone before the next load.
+    if (handle)
+    {
+        typedef void (*DeinitDllFn)();
+        if (DeinitDllFn deinitDll = reinterpret_cast<DeinitDllFn>(::GetProcAddress(handle, "deinitDll")))
+            deinitDll();
+    }
+#endif
     return ::FreeLibrary(handle);
 #endif
 }
