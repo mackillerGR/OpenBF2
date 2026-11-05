@@ -1578,6 +1578,17 @@ void SwiffHost::setViewportSize(int width, int height)
 }
 void SwiffHost::getViewportSize(unsigned int* width, unsigned int* height)
 {
+#if !defined(_WIN32)
+    // [CHOSEN, not recovered] Nothing posts the resize event on portable hosts, where the window
+    // keeps the size asked for at startup, so the menu must not stay at the 800x600 default.
+    const int windowWidth = settings->intGet("GSWindowSizeX", 0);
+    const int windowHeight = settings->intGet("GSWindowSizeY", 0);
+    if (windowWidth > 0 && windowHeight > 0)
+    {
+        m_viewportWidth = windowWidth;
+        m_viewportHeight = windowHeight;
+    }
+#endif
     *width = static_cast<unsigned int>(m_viewportWidth);
     *height = static_cast<unsigned int>(m_viewportHeight);
 }

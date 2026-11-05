@@ -9,6 +9,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/intreadwrite.h>
 }
 #include <SDL3/SDL.h>
 
@@ -246,6 +247,9 @@ void BinkCopyToBuffer(renddx9abi::HBINK handle, void* destination, int pitch, un
     if (frame->format != AV_PIX_FMT_YUV420P && frame->format != AV_PIX_FMT_YUVA420P)
         return;
     const bool fullRange = frame->color_range == AVCOL_RANGE_JPEG;
+    // A grey movie (the menu background) has no chroma data: its planes stay zero, not neutral.
+    const bool grey = movie->video->extradata_size >= 4
+        && (AV_RL32(movie->video->extradata) & 0x00020000u) != 0;
     const unsigned int width = std::min((unsigned)frame->width, (unsigned)(pitch / 4));
     const unsigned int height = std::min((unsigned)frame->height, destinationHeight);
     for (unsigned int y = 0; y < height; ++y)
@@ -256,7 +260,7 @@ void BinkCopyToBuffer(renddx9abi::HBINK handle, void* destination, int pitch, un
         unsigned char* out = static_cast<unsigned char*>(destination) + y * pitch;
         for (unsigned int x = 0; x < width; ++x, out += 4)
         {
-            const int u = blue[x / 2] - 128, v = red[x / 2] - 128;
+            const int u = grey ? 0 : blue[x / 2] - 128, v = grey ? 0 : red[x / 2] - 128;
             const int c = fullRange ? luma[x] * 256 : (luma[x] - 16) * 298;
             out[0] = clampByte((c + (fullRange ? 454 : 516) * u + 128) >> 8);
             out[1] = clampByte((c - (fullRange ? 88 : 100) * u - (fullRange ? 183 : 208) * v + 128) >> 8);

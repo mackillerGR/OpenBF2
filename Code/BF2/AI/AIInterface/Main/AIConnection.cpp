@@ -1,5 +1,6 @@
 // [INFERRED] Source placement.
 
+#include <cstdio>
 #include "AIConnection.h"
 #include "../AIInstance.h"                         // cross-port IAI clear dispatch
 #include "../../../Core/PluginDll.h"
@@ -88,10 +89,20 @@ bool AIConnection::init(std::string& libraryName)
         // handle is returned. ClassManager vtable +0x5C.
         m_data->m_ai = classManager->getSimpleSingleton(std::string("AI"));
     }
+#if !DEDICATED && !defined(_WIN32)
+    // [CHOSEN, not recovered] The bot library has no client port yet: games run without bots.
+    // [RETIRE-WHEN: portable-aidll] Remove when the portable client ships the AI library.
+    else
+    {
+        std::fprintf(stderr, "[FRONTIER] dice::hfe::ai::AIConnection::init: no %s, no bots\n",
+                     libraryName.c_str());
+    }
+#else
     else if (libraryName.compare("") != 0)
     {
         abort();                                // [SHIPPED DEFECT] see above
     }
+#endif
 
     return m_data->m_lib != 0 && m_data->m_ai != 0;
 }

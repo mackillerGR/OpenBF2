@@ -93,6 +93,7 @@ namespace gameswf
 
 	path::path(float ax, float ay, int fill0, int fill1, int line)
 	{
+		m_new_shape = false;	// [PLATFORM] left unset here: a stray true made the tesselator skip the path.
 		reset(ax, ay, fill0, fill1, line);
 	}
 
