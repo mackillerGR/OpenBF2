@@ -570,13 +570,13 @@ void* __fastcall smm_destroy(void* self BF2_EDX_PARAM, unsigned char flags)
 unsigned char __fastcall smm_applyStreams(void* self BF2_EDX_PARAM, void* shaderState)
 { return skinnedMeshMaterialApplyStreams(self, shaderState) ? 1u : 0u; }
 
-int __fastcall smm_getVertexCount(void* self BF2_EDX_PARAM)    { return materialDword(self, 0x24); }
+int __fastcall smm_getVertexCount(void* self BF2_EDX_PARAM)    { return materialDword(self, sk(0x24)); }
 int __fastcall smm_slot0C(void* BF2_EDX_PARAM)                 { return -1; }
-int __fastcall smm_getPrimitiveCount(void* self BF2_EDX_PARAM) { return materialDword(self, 0x20); }
-int __fastcall smm_getDword190(void* self BF2_EDX_PARAM)       { return materialDword(self, 0x190); }
-int __fastcall smm_getVertexStart(void* self BF2_EDX_PARAM)    { return materialDword(self, 0x18); }
+int __fastcall smm_getPrimitiveCount(void* self BF2_EDX_PARAM) { return materialDword(self, sk(0x20)); }
+int __fastcall smm_getDword190(void* self BF2_EDX_PARAM)       { return materialDword(self, sk(0x190)); }
+int __fastcall smm_getVertexStart(void* self BF2_EDX_PARAM)    { return materialDword(self, sk(0x18)); }
 int __fastcall smm_slot1C(void* BF2_EDX_PARAM)                 { return 0; }
-int __fastcall smm_getIndexStart(void* self BF2_EDX_PARAM)     { return materialDword(self, 0x1C); }
+int __fastcall smm_getIndexStart(void* self BF2_EDX_PARAM)     { return materialDword(self, sk(0x1C)); }
 
 void* const kSkinnedMeshMaterialVtable[9] =
 {
