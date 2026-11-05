@@ -961,7 +961,7 @@ void __fastcall videoOptions_setViewDistanceScale(void* self BF2_EDX_PARAM, floa
     float v = value;
     if (v < 0.5f)      v = 0.5f;
     else if (v > 1.0f) v = 1.0f;
-    *reinterpret_cast<float*>(reinterpret_cast<unsigned char*>(self) + 0x100) = v;
+    static_cast<VideoOptions*>(self)->dynFloat = v;
 }
 // +0x28, sub_10011340 - return the +0x100 float (the value slot +0x24 clamps and stores).
 // The PE is one `fld dword ptr [ecx+100h]`; BF2.exe consumes it with an `fstp dword`, matching

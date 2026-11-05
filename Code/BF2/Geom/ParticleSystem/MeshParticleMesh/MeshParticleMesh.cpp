@@ -3,6 +3,7 @@
 
 #ifdef BF2_IMAGE_RENDDX9
 
+#include <cstdio>
 #include "MeshParticleMesh.h"
 #include "MeshParticleMeshTemplate.h"
 #include "../../BundledMeshStateManager.h"
@@ -216,8 +217,22 @@ void MeshParticleMesh::queueDraw(void*, void*, int)
         return;
     if (!(*::dice::hfe::dx9rend::rendererRetailBytes(0x69F)))   // particles switch
         return;
+#if defined(BF2_PORTABLE_CLIENT)
+    // [TEMP] [CHOSEN, not recovered] The renderer embedded at +0x5F30 uses the 32-bit manager
+    // layout, so its mesh queue is unreachable here and the particle stays undrawn.
+    // [RETIRE-WHEN: portable-particles] the manager's embedded renderers have native offsets and
+    // mesh particles draw in the portable client.
+    static bool reported = false;
+    if (!reported)
+    {
+        reported = true;
+        std::fprintf(stderr, "[FRONTIER] dice::hfe::geom::MeshParticleMesh::queueDraw skipped\n");
+        std::fflush(stderr);
+    }
+#else
     meshParticlesRendererQueueMesh(
         reinterpret_cast<unsigned char*>(g_ParticleSystemManager) + 0x5F30, this);
+#endif
 }
 
 // sub_101B04C0 - `add ecx, 1D80h`, then the fast push when size < capacity, else _Insert_n
