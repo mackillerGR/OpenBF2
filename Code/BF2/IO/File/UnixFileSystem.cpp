@@ -300,6 +300,9 @@ bool UnixFileSystem::createDirectory(const std::string& path)
         if (path[i] != '/')
             continue;
 
+        if (i == 0)
+            continue;                           // [CHOSEN, not recovered] An absolute path's root.
+
         std::string part(path, 0, i);
         if (mkdir(part.c_str(), 0755) == -1 && errno != EEXIST)
         {

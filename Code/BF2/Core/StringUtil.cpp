@@ -340,8 +340,10 @@ void goUpInPath(std::string& path)
 {
     removeDoubleSlashes(path);
 
+#if DEDICATED || defined(_WIN32) // [CHOSEN, not recovered] The portable client keeps its absolute home.
     if (!path.empty() && path[0] == '/')
         path.erase(0, 1);                       // absolute becomes relative - see above
+#endif
 
     const std::string::size_type found = path.find("/../");
     if (found == std::string::npos)
