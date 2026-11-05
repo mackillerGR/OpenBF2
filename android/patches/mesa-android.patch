@@ -1,0 +1,13 @@
+diff --git a/src/vulkan/util/vk_extensions.py b/src/vulkan/util/vk_extensions.py
+index 75125d8..ebadd36 100644
+--- a/src/vulkan/util/vk_extensions.py
++++ b/src/vulkan/util/vk_extensions.py
+@@ -54,6 +54,8 @@ class Extension:
+         if not self.name.startswith(ANDROID_EXTENSION_WHITELIST_PREFIXES):
+             return 'true'
+ 
++        # This driver ships inside the app for DXVK, not as a system HAL held to CTS.
++        return 'true'
+         allowed_version = ALLOWED_ANDROID_VERSION.get(self.name, None)
+         if allowed_version is None:
+             return 'false'
