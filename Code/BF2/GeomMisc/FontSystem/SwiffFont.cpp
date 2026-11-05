@@ -910,8 +910,8 @@ public:
     static int   __fastcall vSetText(void* self BF2_EDX_PARAM, const wchar_t* text, int flag);     // +16
     static void  __fastcall vDraw(void* self BF2_EDX_PARAM, const float* m, unsigned int color);   // +20
     static char  __fastcall vGetExtent(void* self BF2_EDX_PARAM, int arg, float* outW, float* outH);// +28
-    static char  __fastcall vForward32(void* self BF2_EDX_PARAM, int arg, float x, float y);       // +32
-    static char  __fastcall vForward40(void* self BF2_EDX_PARAM, int a, int b);                     // +40
+    static char  __fastcall vForward32(void* self BF2_EDX_PARAM, void* arg, float x, float y);       // +32
+    static char  __fastcall vForward40(void* self BF2_EDX_PARAM, void* a, void* b);                    // +40
     static char  __fastcall vForward44(void* self BF2_EDX_PARAM, float x1, float y1,
                                        float x2, float y2);                                  // +44
     static int   __fastcall vForward48(void* self BF2_EDX_PARAM);                                   // +48
@@ -1321,8 +1321,8 @@ char __fastcall SwiffFontObject::vGetExtent(void* self BF2_EDX_PARAM, int arg, f
     *outW = o->m_scrollOffset + *outW;
     return 1;
 }
-char __fastcall SwiffFontObject::vForward32(void* BF2_EDX_PARAM, int, float, float) { fontForwardNote(); return 0; }
-char __fastcall SwiffFontObject::vForward40(void* BF2_EDX_PARAM, int, int)          { fontForwardNote(); return 0; }
+char __fastcall SwiffFontObject::vForward32(void* BF2_EDX_PARAM, void*, float, float) { fontForwardNote(); return 0; }
+char __fastcall SwiffFontObject::vForward40(void* BF2_EDX_PARAM, void*, void*)          { fontForwardNote(); return 0; }
 char __fastcall SwiffFontObject::vForward44(void* BF2_EDX_PARAM, float, float, float, float) { fontForwardNote(); return 0; }
 int  __fastcall SwiffFontObject::vForward48(void* BF2_EDX_PARAM)                    { fontForwardNote(); return 0; }
 

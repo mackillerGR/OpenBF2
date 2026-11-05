@@ -1014,6 +1014,21 @@ namespace gameswf
 		}
 
 		// sub_10085F50: put `text` on line `index`, creating the line when it is the next one.
+		// [PLATFORM] Field text is UTF-16 here, and the renderer takes wchar_t: the same width on
+		// Win32, four bytes on the portable hosts, where each unit is widened into a scratch buffer.
+		static void	text_set_utf16(void* line, const Uint16* text)
+		{
+#if defined(_WIN32)
+			render::text_set(line, (const wchar_t*) text);
+#else
+			static array<wchar_t>	s_wide;
+			s_wide.resize(0);
+			while (*text) { s_wide.push_back((wchar_t) *text++); }
+			s_wide.push_back(0);
+			render::text_set(line, &s_wide[0]);
+#endif
+		}
+
 		void	set_line_text(int index, float width_px, const array<Uint16>& text)
 		{
 			if (index >= m_lines.size())
@@ -1025,7 +1040,7 @@ namespace gameswf
 			render::text_set_size(line, width_px, (int) m_def->m_alignment);
 			if (!m_password)
 			{
-				render::text_set(line, (const wchar_t*) &text[0]);
+				text_set_utf16(line, &text[0]);
 				return;
 			}
 			// A password field shows one asterisk per character (the shipped fills a 512-wide buffer).
@@ -1038,7 +1053,7 @@ namespace gameswf
 			int	n = 0;
 			while (text[n]) n++;
 			if (n > 511) n = 511;
-			render::text_set(line, (const wchar_t*) &s_asterisks[511 - n]);
+			text_set_utf16(line, &s_asterisks[511 - n]);
 		}
 
 		// sub_10084DE0: grow the field's y scale so at least `height_px` is visible (auto-size).

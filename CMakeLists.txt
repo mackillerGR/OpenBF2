@@ -1893,6 +1893,48 @@ if(BUILD_TESTING AND MSVC)
     set_property(TARGET bf2_run_checks PROPERTY FOLDER "Checks")
 endif()
 
+# [CHOSEN, not recovered] The Flash menu player for the portable client.
+if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
+    set(bf2_ext "${BF2_EXTERNAL_ROOT}")
+    file(GLOB bf2_gameswf_sources "${bf2_ext}/gameswf/gameswf_*.cpp")
+    list(FILTER bf2_gameswf_sources EXCLUDE REGEX "gameswf_(xmlsocket|render_handler_|sound_handler_|test_|processor|tools|parser|morph$|morph\\.)")
+    add_library(bf2_swiff_portable SHARED EXCLUDE_FROM_ALL
+        ${bf2_gameswf_sources}
+        "${bf2_ext}/base/config.cpp" "${bf2_ext}/base/container.cpp" "${bf2_ext}/base/file_util.cpp"
+        "${bf2_ext}/base/image.cpp" "${bf2_ext}/base/image_filters.cpp" "${bf2_ext}/base/jpeg.cpp"
+        "${bf2_ext}/base/membuf.cpp" "${bf2_ext}/base/tu_file.cpp" "${bf2_ext}/base/tu_random.cpp"
+        "${bf2_ext}/base/tu_timer.cpp" "${bf2_ext}/base/tu_types.cpp" "${bf2_ext}/base/utf8.cpp"
+        "${bf2_ext}/base/utility.cpp" "${bf2_ext}/base/zlib_adapter.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/BfMemory.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/Vc71String.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/Frontier.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/SwiffPlayerAbi/PluginEntry.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/SwiffPlayerAbi/SwiffMemory.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/SwiffPlayerAbi/PortableWin32.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Code/RendDX9Abi/Msvcr71Heap.cpp"
+        "${bf2_ext}/gameswf/SwiffPlayer/SwiffPlayer.cpp"
+        "${bf2_ext}/gameswf/SwiffPlayer/SwiffPlayerModule.cpp")
+    set_target_properties(bf2_swiff_portable PROPERTIES OUTPUT_NAME SwiffPlayer
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin_portable")
+    target_compile_definitions(bf2_swiff_portable PRIVATE BF2_IMAGE_SWIFFPLAYER=1 BF2_PLUGIN_ABI_NATIVE=1
+        DEDICATED=0 "BF2_EDX_PARAM=" _ITERATOR_DEBUG_LEVEL=0 _LINUX DXVK_NATIVE NDEBUG
+        "__FUNCSIG__=__PRETTY_FUNCTION__"
+        RD9ABI_LOG_FILENAME="SwiffPlayerRebuilt.log" RD9ABI_FRONTIER_ENV="BF2_SWIFFPLAYER_FRONTIER")
+    target_include_directories(bf2_swiff_portable PRIVATE "${BF2_DXVK_ROOT}/include/native/directx"
+        "${BF2_DXVK_ROOT}/include/native/windows" "${BF2_ROOT}" "${BF2_ROOT}/PortShim" "${bf2_ext}"
+        "${bf2_ext}/gameswf" "${BF2_SDL3_INCLUDE}" "${BF2_VKD3D_INCLUDE}")
+    if(ANDROID)
+        target_link_libraries(bf2_swiff_portable PRIVATE "${CMAKE_BINARY_DIR}/libmain.so" SDL3 dl log)
+        target_link_directories(bf2_swiff_portable PRIVATE "${BF2_SDL3_LIBDIR}")
+    else()
+        target_link_libraries(bf2_swiff_portable PRIVATE dl pthread)
+    endif()
+    target_compile_options(bf2_swiff_portable PRIVATE -std=gnu++14 -fms-extensions -fpermissive -w
+        -fno-strict-aliasing -fwrapv -fno-delete-null-pointer-checks
+        "-include${BF2_ROOT}/Core/BuildConfig.h" "-include${BF2_ROOT}/Core/PlatformCompat.h"
+        "-include${BF2_ROOT}/Core/PortableClient.h" "-include${BF2_ROOT}/PortShim/RendCompat.h")
+endif()
+
 # [CHOSEN, not recovered] The sound engine plugin for the portable client, over OpenAL Soft.
 if(BF2_BUILD_LINUX AND BF2_DXVK_ROOT)
     set(bf2_snd "${BF2_ROOT}/Sound/SoundEngine")

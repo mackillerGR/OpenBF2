@@ -38,6 +38,29 @@
 #include <stdio.h>         // memset, memcpy
 #include <time.h>          // time(): the stamp the host records carry
 #include <stdlib.h>         // getenv (the AS-diagnostic gate)
+#include <vector>
+
+// [PLATFORM] Flash text is UTF-16 and the engine's wide strings are wchar_t: the same width on Win32,
+// four bytes on the portable hosts, where each string is narrowed for the length of the call.
+namespace {
+#if defined(_WIN32)
+inline const Uint16* swiffUtf16(const wchar_t* w) { return reinterpret_cast<const Uint16*>(w); }
+#else
+struct SwiffUtf16
+{
+    std::vector<Uint16> units;
+    explicit SwiffUtf16(const wchar_t* w)
+    {
+        for (; w && *w; ++w)
+            units.push_back(static_cast<Uint16>(*w));
+        units.push_back(0);
+    }
+    operator const Uint16*() const { return units.data(); }
+};
+inline SwiffUtf16 swiffUtf16(const wchar_t* w) { return SwiffUtf16(w); }
+#endif
+}
+
 #include <stdarg.h>         // va_list: swiffFormatString (sub_10003320) behind Logic.setDecimals
 #include <map>              // unk_100F882C: the server-browser filter clauses, keyed by bit
 
@@ -632,7 +655,7 @@ void as_locale_getString(const gameswf::fn_call& fn)
     renddx9abi::HostString ids(fn.arg(0).to_string());
     std::wstring out;
     h->getLocalizedString(out, ids);
-    gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(out.c_str()));
+    gameswf::assign_dice_string_object_wide(text, swiffUtf16(out.c_str()));
     fn.result->set_as_object_interface(text);
 }
 
@@ -769,7 +792,7 @@ struct ListResult
     void pushWide(const wchar_t* w, int n)
     {
         gameswf::array_object_push(row.get_ptr(),
-            gameswf::as_value(gameswf::create_dice_string_object(reinterpret_cast<const Uint16*>(w), n)));
+            gameswf::as_value(gameswf::create_dice_string_object(swiffUtf16(w), n)));
     }
     void pushNarrow(const char* v) { gameswf::array_object_push(row.get_ptr(), gameswf::as_value(tu_string(v ? v : ""))); }
     // sub_1001CC50 - an int column: "%d" through the shipped 256-byte global (byte_100F78F0), then
@@ -780,7 +803,7 @@ struct ListResult
     void setWide(const char* key, const wchar_t* w, int n)
     {
         rowObj->set_member(key, gameswf::as_value(
-            gameswf::create_dice_string_object(reinterpret_cast<const Uint16*>(w), n)));
+            gameswf::create_dice_string_object(swiffUtf16(w), n)));
     }
     void setTotalCount(int n)
     {
@@ -858,7 +881,7 @@ void as_endofround_getMapDescription(const gameswf::fn_call& fn)
         const std::string& key = !map->briefingLocId.empty() ? map->briefingLocId : map->briefing;
         HostWide wide;
         g_swiffPlayerInstance->getSwiffHost()->getLocalizedString(wide, key);
-        gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+        gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
     }
     fn.result->set_as_object_interface(text);
 }
@@ -902,7 +925,7 @@ void as_endofround_getMapGameModeDescription(const gameswf::fn_call& fn)
                 const std::string& key = !mt->locId.empty() ? mt->locId : mt->description;
                 HostWide wide;
                 g_swiffPlayerInstance->getSwiffHost()->getLocalizedString(wide, key);
-                gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+                gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
                 found = true;
                 break;
             }
@@ -1055,7 +1078,7 @@ void as_endofround_getSquadTeamName(const gameswf::fn_call& fn)
         const std::string key = std::string("EOR_best") + name + "squad";
         hostLocaliseAlways(std::string(key.c_str()), title);
     }
-    gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(title.c_str()));
+    gameswf::assign_dice_string_object_wide(text, swiffUtf16(title.c_str()));
     fn.result->set_as_object_interface(text);
 }
 
@@ -1098,7 +1121,7 @@ void as_endofround_getPreviousMapDescription(const gameswf::fn_call& fn)
     {
         HostWide wide;
         hostLocaliseAlways(map->briefingLocId != "" ? map->briefingLocId : map->briefing, wide);
-        gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+        gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
     }
     fn.result->set_as_object_interface(text);
 }
@@ -1150,7 +1173,7 @@ void as_endofround_getPreviousMapGameModeDescription(const gameswf::fn_call& fn)
                 if (mt->players != size) continue;
                 HostWide wide;
                 hostLocaliseAlways(mt->locId != "" ? mt->locId : mt->description, wide);
-                gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+                gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
                 found = true;
                 break;
             }
@@ -1784,7 +1807,7 @@ static gameswf::as_object_interface* videoSettingsLocalisedString(const renddx9a
     {
         (void) h->getLocalizedString(wide, key);                                       // +0xA8
         text = gameswf::create_dice_string_object(nullptr, 0);
-        gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+        gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
     }
     return text;
 }
@@ -3720,7 +3743,7 @@ void as_profile_getFirstCountry(const gameswf::fn_call& fn)
     std::wstring w;
     h->getLocalizedString(w, key);
     tu_string utf8;
-    tu_string::encode_utf8_from_wchar(&utf8, reinterpret_cast<const uint16*>(w.c_str()));
+    tu_string::encode_utf8_from_wchar(&utf8, swiffUtf16(w.c_str()));
     fn.result->set_tu_string(utf8);
 }
 
@@ -3860,7 +3883,7 @@ void as_playerstats_getRankString(const gameswf::fn_call& fn)
         hostLocaliseKey(h, key, text);
     }
     fn.result->set_as_object_interface(
-        gameswf::create_dice_string_object(reinterpret_cast<const Uint16*>(text.c_str()), (int) text.size()));
+        gameswf::create_dice_string_object(swiffUtf16(text.c_str()), (int) text.size()));
 }
 
 // The player stats record SwiffHost +432(playerId, record&) fills: 3720 bytes, laid out by the
@@ -5873,11 +5896,11 @@ void as_controlsettings_getMappedString(const gameswf::fn_call& fn)
             {
                 HostWide localised;
                 (void) g_swiffPlayerInstance->getSwiffHost()->getLocalizedString(localised, key);   // +0xA8
-                gameswf::assign_dice_string_object_wide(object, reinterpret_cast<const Uint16*>(localised.c_str()));
+                gameswf::assign_dice_string_object_wide(object, swiffUtf16(localised.c_str()));
             }
         }
         else
-            gameswf::assign_dice_string_object_wide(object, reinterpret_cast<const Uint16*>(text.c_str()));
+            gameswf::assign_dice_string_object_wide(object, swiffUtf16(text.c_str()));
         restoreControlMapSelection();
     }
     fn.result->set_as_object_interface(object);
@@ -6847,7 +6870,7 @@ void as_multiplay_getMapDescriptionFromId(const gameswf::fn_call& fn)
             std::wstring out;
             g_swiffPlayerInstance->getSwiffHost()->getLocalizedString(out, key);            // +0xA8
             gameswf::as_object_interface* text = gameswf::create_dice_string_object(nullptr, 0);
-            gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(out.c_str()));
+            gameswf::assign_dice_string_object_wide(text, swiffUtf16(out.c_str()));
             fn.result->set_as_object_interface(text);
             return;
         }
@@ -7597,7 +7620,7 @@ static void awardText(const gameswf::fn_call& fn, bool description)
         vc71::wstring wide;
         hostLocaliseKey(static_cast<void*>(g_swiffPlayerInstance->getSwiffHost()),
                         vc71::string((description ? award.description : award.name).c_str()), wide);
-        gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+        gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
     }
     else
     {
@@ -8018,7 +8041,7 @@ static void leaderboardText(const gameswf::fn_call& fn, bool description)
     vc71::wstring wide;
     hostLocaliseKey(static_cast<void*>(g_swiffPlayerInstance->getSwiffHost()), vc71::string(key.c_str()), wide);
     gameswf::as_object_interface* text = gameswf::create_dice_string_object(nullptr, 0);
-    gameswf::assign_dice_string_object_wide(text, reinterpret_cast<const Uint16*>(wide.c_str()));
+    gameswf::assign_dice_string_object_wide(text, swiffUtf16(wide.c_str()));
     fn.result->set_as_object_interface(text);
     busyClose(busy);
 }
@@ -9254,7 +9277,11 @@ inline unsigned floatBits(float f) { unsigned d; ::memcpy(&d, &f, 4); return d; 
 
 // [TEMP] SwiffCrashLog.cpp - the env-gated crash logger (BF2_SWIFFPLAYER_CRASHLOG). [RETIRE-WHEN: RW-89]
 } } }   // close dice::hfe::ui for the global declaration
+#if defined(_WIN32)
 void swiffCrashLogInstall();
+#else
+inline void swiffCrashLogInstall() {} // [PLATFORM] the logger is Win32 SEH; this port has its own crash report.
+#endif
 namespace dice { namespace hfe { namespace ui {
 
 SwiffPlayer::SwiffPlayer()
@@ -9857,7 +9884,7 @@ void SwiffPlayer::processQueuedMouseState()
 
 namespace {
 inline void* rhRc(SwiffRenderHandler* self)
-{ return *reinterpret_cast<void**>(reinterpret_cast<char*>(self) + 8); }
+{ return *reinterpret_cast<void**>(reinterpret_cast<char*>(self) + 2 * sizeof(void*)); }
 inline unsigned rgbaDword(const gameswf::rgba& c) { unsigned d; ::memcpy(&d, &c, 4); return d; }
 } // anonymous namespace
 

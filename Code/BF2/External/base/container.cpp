@@ -173,7 +173,7 @@ void tu_string::encode_utf8_from_wchar(tu_string* result, const uint16* wstr)
 #ifdef _WIN32
 	return ::stricmp(a, b);
 #else
-	return strcasecmp(a, b);
+	return ::strcasecmp(a, b);
 #endif
 }
 

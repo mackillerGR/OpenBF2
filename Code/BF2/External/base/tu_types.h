@@ -15,7 +15,7 @@
 #include <stdio.h>
 
 
-#if defined(__i386__) || defined(_WIN32)
+#if defined(__i386__) || defined(_WIN32) || defined(__x86_64__) || defined(__aarch64__)
 
 	// On known little-endian platforms, define this stuff.
 	#define _TU_LITTLE_ENDIAN_	1
@@ -28,8 +28,9 @@
 	typedef int	Sint32;
 	#ifndef _MSC_VER
 		// Probably gcc or something compatible
-		typedef unsigned long long	Uint64;
-		typedef long long Sint64;
+		#include <stdint.h>
+		typedef uint64_t	Uint64;
+		typedef int64_t Sint64;
 	#else	// _MSC_VER
 		typedef unsigned __int64	Uint64;
 		typedef __int64	Sint64;

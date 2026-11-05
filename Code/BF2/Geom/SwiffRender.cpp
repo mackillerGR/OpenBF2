@@ -1756,15 +1756,15 @@ void __fastcall sr_releaseFontHandle(void* self BF2_EDX_PARAM, void* font)
                 "(RW-80)");
 }
 
-int __fastcall sr_fontForward16(void* self BF2_EDX_PARAM, void* font, int arg)
+int __fastcall sr_fontForward16(void* self BF2_EDX_PARAM, void* font, const void* text)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
-    SST("[swiff]   font.setText font=%p arg=%08X", font, (unsigned)arg);   // [TEMP] tracer
+    SST("[swiff]   font.setText font=%p text=%p", font, text);   // [TEMP] tracer
     if (!font || s->fontsDisabled)
         return (int)(uintptr_t)font;
     void** vtbl = *reinterpret_cast<void***>(font);
-    typedef int (__thiscall* Fn)(void*, int, int);
-    return reinterpret_cast<Fn>(vtbl[16 / 4])(font, arg, 0);
+    typedef int (__thiscall* Fn)(void*, const void*, int);
+    return reinterpret_cast<Fn>(vtbl[16 / 4])(font, text, 0);
 }
 
 int __fastcall sr_destroyFont(void* self BF2_EDX_PARAM, void* font)
@@ -1834,23 +1834,23 @@ char __fastcall sr_fontGetExtent(void* self BF2_EDX_PARAM, void* font, int arg,
     return ok;
 }
 
-char __fastcall sr_fontForward32(void* self BF2_EDX_PARAM, void* font, int arg,
+char __fastcall sr_fontForward32(void* self BF2_EDX_PARAM, void* font, void* arg,
                                  float x, float y)
 {
     SwiffRender* s = static_cast<SwiffRender*>(self);
     if (s->fontsDisabled || !font)
         return 0;
     void** vtbl = *reinterpret_cast<void***>(font);
-    typedef char (__thiscall* Fn)(void*, int, float, float);
+    typedef char (__thiscall* Fn)(void*, void*, float, float);
     return reinterpret_cast<Fn>(vtbl[32 / 4])(font, arg, x * s->scaleX, y * s->scaleY);
 }
 
-char __fastcall sr_fontForward40(void* self BF2_EDX_PARAM, void* font, int a, int b)
+char __fastcall sr_fontForward40(void* self BF2_EDX_PARAM, void* font, void* a, void* b)
 {
     if (static_cast<SwiffRender*>(self)->fontsDisabled || !font)
         return 0;
     void** vtbl = *reinterpret_cast<void***>(font);
-    typedef char (__thiscall* Fn)(void*, int, int);
+    typedef char (__thiscall* Fn)(void*, void*, void*);
     return reinterpret_cast<Fn>(vtbl[40 / 4])(font, a, b);
 }
 

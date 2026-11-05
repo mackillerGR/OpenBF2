@@ -35,13 +35,13 @@ struct ISwiffRender : public IBase
                             unsigned int e) = 0;                                           // 25 +0x64  0x10152DE0 retn 14h
     virtual void* createFont(const char* name, int size) = 0;                              // +0x68
     virtual void  releaseFontHandle(void* font) = 0;                                       // +0x6C
-    virtual int   fontForward16(void* font, int arg) = 0;                                  // +0x70
+    virtual int   fontForward16(void* font, const void* text) = 0;                                  // +0x70
     virtual int   destroyFont(void* font) = 0;                                             // +0x74
     virtual void  drawGlyphBitmap(void* font, const float* m2x3, unsigned int rgba,
                                   int unused) = 0;                                         // 30 +0x78
     virtual char  fontGetExtent(void* font, int arg, float* outW, float* outH) = 0;        // +0x7C
-    virtual char  fontForward32(void* font, int arg, float x, float y) = 0;                // +0x80
-    virtual char  fontForward40(void* font, int a, int b) = 0;                             // +0x84
+    virtual char  fontForward32(void* font, void* arg, float x, float y) = 0;                // +0x80
+    virtual char  fontForward40(void* font, void* a, void* b) = 0;                             // +0x84
     virtual char  fontForward44(void* font, float x1, float y1, float x2, float y2) = 0;   // +0x88
     virtual int   fontForward48(void* font) = 0;                                           // +0x8C
     virtual int   fontSetSize(void* font, float size, int flag) = 0;                       // +0x90
