@@ -102,6 +102,18 @@ public class LauncherActivity extends Activity {
         }
         return null;
     }
+    // The address a PC on this network uses to join a game hosted here.
+    private String localAddress() {
+        try {
+            for (java.net.NetworkInterface n : java.util.Collections.list(java.net.NetworkInterface.getNetworkInterfaces())) {
+                if (!n.isUp() || n.isLoopback()) continue;
+                for (java.net.InetAddress a : java.util.Collections.list(n.getInetAddresses())) {
+                    if (a instanceof java.net.Inet4Address && a.isSiteLocalAddress()) return a.getHostAddress();
+                }
+            }
+        } catch (Exception ignored) { }
+        return "";
+    }
     private void refresh() {
         File mod = modDir();
         ArrayList<String> names = new ArrayList<>();
@@ -114,6 +126,8 @@ public class LauncherActivity extends Activity {
         if (last >= 0) levels.setSelection(last);
         status.setText(mod == null ? "Επίλεξε τον φάκελο εγκατάστασης του Battlefield 2 (έκδοση 1.5)."
                                    : "Βρέθηκε το παιχνίδι: " + names.size() + " χάρτες");
+        String address = localAddress();
+        if (mod != null && !address.isEmpty()) status.append("\nIP στο LAN: " + address);
     }
     private void pickFolder() {
         startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_FOLDER);

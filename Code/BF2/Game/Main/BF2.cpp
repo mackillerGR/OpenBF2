@@ -827,10 +827,10 @@ static std::string androidCommandLine(int argc, char** argv)
         }
         if (FILE* const out = std::fopen(settings.c_str(), "w"))
         {
-            std::fputs("sv.voipEnabled 0\nsv.serverPort 17567\nsv.numPlayersNeededToStart 1\n", out);
+            std::fputs("sv.voipEnabled 0\nsv.serverPort 16567\nsv.internet 0\nsv.numPlayersNeededToStart 1\n", out);
             std::fclose(out);
         }
-        line += " +hostServer 1 +port 17567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16"
+        line += " +hostServer 1 +port 16567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16"
             + " +mapList " + mapList + " +config " + settings;
     }
     else
