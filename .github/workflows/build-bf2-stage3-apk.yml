@@ -50,8 +50,12 @@ jobs:
           python3 android/stage3/patch_folder_picker.py stage3
           # Bump version for the directory-picker fix. The debug signature may
           # differ between builds, so older test builds may need uninstalling.
-          sed -i "s/versionCode 3/versionCode 4/; s/versionName '0.3.0-dev'/versionName '0.3.1-folder-picker'/" stage3/gameapp/build.gradle
+          # Preserve the user's previous Stage 3 installation despite differently signed
+          # ephemeral GitHub Actions debug keys: use a new application ID.
+          sed -i "s/versionCode 3/versionCode 4/; s/versionName '0.3.0-dev'/versionName '0.3.1-folder-picker'/; s/applicationId 'com.mackillergr.bf2.stage3'/applicationId 'com.mackillergr.bf2.stage31'/" stage3/gameapp/build.gradle
+          sed -i 's/Battlefield 2 LAN Stage 3 (dev)/Battlefield 2 LAN Stage 3.1/' stage3/gameapp/src/main/AndroidManifest.xml
           grep -q "GameDirectoryPicker" stage3/gameapp/src/main/java/com/mackillergr/bf2/LauncherActivity.java
+          grep -q "applicationId 'com.mackillergr.bf2.stage31'" stage3/gameapp/build.gradle
 
       - name: Java 17
         uses: actions/setup-java@v4
@@ -94,6 +98,7 @@ jobs:
           APK=stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage31'"
           unzip -l "$APK" | grep -E 'classes.dex|lib/arm64-v8a/libmain.so|lib/arm64-v8a/libSDL3.so'
           sha256sum "$APK"
 
