@@ -45,6 +45,14 @@ jobs:
           test -f stage3/scripts/fetch_sdl_java.py
           echo "Stage 3 APK source and test13 ARM64 libraries are present."
 
+      - name: Add folder picker and safer Android game-file import
+        run: |
+          python3 android/stage3/patch_folder_picker.py stage3
+          # Bump version for the directory-picker fix. The debug signature may
+          # differ between builds, so older test builds may need uninstalling.
+          sed -i "s/versionCode 3/versionCode 4/; s/versionName '0.3.0-dev'/versionName '0.3.1-folder-picker'/" stage3/gameapp/build.gradle
+          grep -q "GameDirectoryPicker" stage3/gameapp/src/main/java/com/mackillergr/bf2/LauncherActivity.java
+
       - name: Java 17
         uses: actions/setup-java@v4
         with:
