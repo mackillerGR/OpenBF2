@@ -57,6 +57,18 @@ jobs:
           grep -q "GameDirectoryPicker" stage3/gameapp/src/main/java/com/mackillergr/bf2/LauncherActivity.java
           grep -q "applicationId 'com.mackillergr.bf2.stage31'" stage3/gameapp/build.gradle
 
+      - name: Enable touchscreen mouse controls in Battlefield 2's menu
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 android/stage3/patch_touch_menu.py stage3 android/src/com/mackillergr/bf2/TouchOverlay.java
+          # Debug signing uses a fresh key per workflow run; keep stage31 installed.
+          sed -i "s/applicationId 'com.mackillergr.bf2.stage31'/applicationId 'com.mackillergr.bf2.stage32'/; s/versionCode 4/versionCode 5/; s/versionName '0.3.1-folder-picker'/versionName '0.3.2-touch-menu'/" stage3/gameapp/build.gradle
+          sed -i 's/Battlefield 2 LAN Stage 3.1/Battlefield 2 LAN Stage 3.2/' stage3/gameapp/src/main/AndroidManifest.xml
+          grep -q 'launch.putExtra("touch", true)' stage3/gameapp/src/main/java/com/mackillergr/bf2/LauncherActivity.java
+          grep -q "new TouchOverlay(this)" stage3/gameapp/src/main/java/com/mackillergr/bf2/GameActivity.java
+          test -s stage3/gameapp/src/main/java/com/mackillergr/bf2/TouchOverlay.java
+
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -98,7 +110,7 @@ jobs:
           APK=stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage31'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage32'"
           unzip -l "$APK" | grep -E 'classes.dex|lib/arm64-v8a/libmain.so|lib/arm64-v8a/libSDL3.so'
           sha256sum "$APK"
 
