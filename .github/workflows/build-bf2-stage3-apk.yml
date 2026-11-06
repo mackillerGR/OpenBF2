@@ -69,6 +69,19 @@ jobs:
           grep -q "new TouchOverlay(this)" stage3/gameapp/src/main/java/com/mackillergr/bf2/GameActivity.java
           test -s stage3/gameapp/src/main/java/com/mackillergr/bf2/TouchOverlay.java
 
+      - name: Add Skip Intro touch control
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stage 3.2 copies the updated TouchOverlay.java from android-port.
+          grep -q 'SKIP INTRO' stage3/gameapp/src/main/java/com/mackillergr/bf2/TouchOverlay.java
+          grep -q 'KEYCODE_ESCAPE, true' stage3/gameapp/src/main/java/com/mackillergr/bf2/TouchOverlay.java
+          # Separate debug package prevents the ephemeral signature from conflicting
+          # with the user's already installed Stage 3.2.
+          sed -i "s/applicationId 'com.mackillergr.bf2.stage32'/applicationId 'com.mackillergr.bf2.stage33'/; s/versionCode 5/versionCode 6/; s/versionName '0.3.2-touch-menu'/versionName '0.3.3-skip-intro'/" stage3/gameapp/build.gradle
+          sed -i 's/Battlefield 2 LAN Stage 3.2/Battlefield 2 LAN Stage 3.3/' stage3/gameapp/src/main/AndroidManifest.xml
+          grep -q "applicationId 'com.mackillergr.bf2.stage33'" stage3/gameapp/build.gradle
+
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -110,7 +123,7 @@ jobs:
           APK=stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage32'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage33'"
           unzip -l "$APK" | grep -E 'classes.dex|lib/arm64-v8a/libmain.so|lib/arm64-v8a/libSDL3.so'
           sha256sum "$APK"
 
