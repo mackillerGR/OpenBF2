@@ -9,6 +9,7 @@ on:
       - android-port
     paths:
       - 'BF2_Stage3_Ready_For_APK_Build_mackillerGR.zip'
+      - '.github/workflows/build-bf2-stage3-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -52,6 +53,9 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The default 'tools' package no longer exists in current SDK repositories.
+          packages: platform-tools
 
       - name: Android SDK API 35 and build tools
         shell: bash
