@@ -35,12 +35,17 @@ public class TouchOverlay extends View {
     private float stickX, stickY, knobX, knobY;
     private boolean w, a, s, d;
     private boolean menu;
+    // The intro movie uses the keyboard's DIK_ESCAPE (1) to advance skippable clips.
+    // Hide this overlay once the native Flash main menu has appeared.
+    private boolean introSkipVisible = true;
+    private int introSkipPointer = -1;
     private static native boolean menuShown();
     private static native void toggleKeyboard();
     private final Runnable watch = new Runnable() {
         @Override public void run() {
             boolean now = menu;
             try { now = menuShown(); } catch (UnsatisfiedLinkError notLoaded) { }
+            if (now && introSkipVisible) { introSkipVisible = false; invalidate(); }
             if (now != menu) { releaseAll(); menu = now; invalidate(); }
             postDelayed(this, 250);
         }
@@ -53,6 +58,10 @@ public class TouchOverlay extends View {
     }
     private void releaseAll() {
         for (Button b : buttons) if (b.pointer >= 0) { b.pointer = -1; press(b, false); }
+        if (introSkipPointer != -1) {
+            introSkipPointer = -1;
+            key(KeyEvent.KEYCODE_ESCAPE, false);
+        }
         stickPointer = -1; setMove(0, 0); look.clear();
     }
     private float keyboardX() { return getWidth() * 0.04f; }
@@ -75,6 +84,29 @@ public class TouchOverlay extends View {
         }
     }
     private boolean menuPressed;
+    private float skipCenterX() { return getWidth() * 0.50f; }
+    private float skipCenterY() { return getHeight() * 0.12f; }
+    private float skipWidth() { return Math.max(160f, Math.min(260f, getWidth() * 0.22f)); }
+    private float skipHeight() { return Math.max(40f, Math.min(64f, getHeight() * 0.09f)); }
+    private boolean onSkipButton(float x, float y) {
+        return Math.abs(x - skipCenterX()) < skipWidth() * 0.5f
+                && Math.abs(y - skipCenterY()) < skipHeight() * 0.5f;
+    }
+    private void drawSkipButton(Canvas canvas) {
+        float x = skipCenterX(), y = skipCenterY();
+        float w = skipWidth(), h = skipHeight();
+        fill.setColor(Color.argb(introSkipPointer >= 0 ? 245 : 212, 24, 25, 24));
+        canvas.drawRoundRect(x - w * 0.5f, y - h * 0.5f,
+                x + w * 0.5f, y + h * 0.5f, h * 0.19f, h * 0.19f, fill);
+        fill.setColor(Color.rgb(255, 200, 0));
+        fill.setStyle(Paint.Style.STROKE);
+        fill.setStrokeWidth(Math.max(2f, h * 0.035f));
+        canvas.drawRoundRect(x - w * 0.5f, y - h * 0.5f,
+                x + w * 0.5f, y + h * 0.5f, h * 0.19f, h * 0.19f, fill);
+        fill.setStyle(Paint.Style.FILL);
+        text.setTextSize(h * 0.36f);
+        canvas.drawText("SKIP INTRO", x, y + h * 0.13f, text);
+    }
     private float radius() { return getHeight() * 0.075f; }
     private float stickRadius() { return getHeight() * 0.16f; }
     private float baseX() { return getWidth() * 0.14f; }
@@ -99,6 +131,7 @@ public class TouchOverlay extends View {
             c.drawCircle(x, y, radius(), fill);
             c.drawText(b.label, x, y + radius() * 0.15f, text);
         }
+        if (introSkipVisible) drawSkipButton(c);
     }
     private void key(int code, boolean down) {
         if (down) SDLActivity.onNativeKeyDown(code); else SDLActivity.onNativeKeyUp(code);
@@ -155,8 +188,33 @@ public class TouchOverlay extends View {
         }
     }
     @Override public boolean onTouchEvent(MotionEvent e) {
-        if (menu) { menuTouch(e); return true; }
         int action = e.getActionMasked(), index = e.getActionIndex();
+        // Handle the introduction independently of menu/gameplay pointer tracking.
+        // Hold Escape until finger-up so the native input polling detects a press.
+        if (introSkipVisible && !menu) {
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                int id = e.getPointerId(index);
+                if (introSkipPointer == -1 && onSkipButton(e.getX(index), e.getY(index))) {
+                    introSkipPointer = id;
+                    key(KeyEvent.KEYCODE_ESCAPE, true);
+                    invalidate();
+                    return true;
+                }
+            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+                if (e.getPointerId(index) == introSkipPointer) {
+                    introSkipPointer = -1;
+                    key(KeyEvent.KEYCODE_ESCAPE, false);
+                    invalidate();
+                    return true;
+                }
+            } else if (action == MotionEvent.ACTION_CANCEL && introSkipPointer != -1) {
+                introSkipPointer = -1;
+                key(KeyEvent.KEYCODE_ESCAPE, false);
+                invalidate();
+                return true;
+            }
+        }
+        if (menu) { menuTouch(e); return true; }
         switch (action) {
             case MotionEvent.ACTION_DOWN: case MotionEvent.ACTION_POINTER_DOWN:
                 began(e.getPointerId(index), e.getX(index), e.getY(index)); break;
