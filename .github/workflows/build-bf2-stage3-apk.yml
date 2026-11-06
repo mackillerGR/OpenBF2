@@ -1,0 +1,95 @@
+name: Build Battlefield 2 Android Stage 3 APK
+
+# This workflow uses only GitHub's STANDARD hosted Ubuntu runner.
+# On PUBLIC repositories standard runners are free; no Railway or paid runners.
+# Triggers only on a Stage 3 source-bundle upload to android-port (or manual dispatch).
+on:
+  push:
+    branches:
+      - android-port
+    paths:
+      - 'BF2_Stage3_Ready_For_APK_Build_mackillerGR.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bf2-android-stage3
+  cancel-in-progress: true
+
+jobs:
+  android-debug-apk:
+    name: Stage 3 ARM64 debug APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout android-port
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify source ZIP and native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT=BF2_Stage3_Ready_For_APK_Build_mackillerGR.zip
+          test -s "$INPUT" || { echo "::error::Upload $INPUT to the android-port branch first."; exit 2; }
+          unzip -t "$INPUT" | tail -1
+          mkdir -p stage3
+          unzip -q "$INPUT" -d stage3
+          test -s stage3/gameapp/src/main/jniLibs/arm64-v8a/libmain.so
+          test -s stage3/gameapp/src/main/jniLibs/arm64-v8a/libSDL3.so
+          test -f stage3/gameapp/build.gradle
+          test -f stage3/scripts/fetch_sdl_java.py
+          echo "Stage 3 APK source and test13 ARM64 libraries are present."
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Android SDK API 35 and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Fetch verified SDL3 Android Java bridge
+        run: python3 stage3/scripts/fetch_sdl_java.py
+
+      - name: Run Stage 3 tests
+        working-directory: stage3
+        run: bash tests/run_stage3.sh
+
+      - name: Compile and sign debug APK
+        working-directory: stage3
+        run: gradle :gameapp:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK and report checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          unzip -l "$APK" | grep -E 'classes.dex|lib/arm64-v8a/libmain.so|lib/arm64-v8a/libSDL3.so'
+          sha256sum "$APK"
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Battlefield2_Android_LAN_Stage3_APK
+          path: stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
