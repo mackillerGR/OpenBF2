@@ -39,13 +39,15 @@ public class TouchOverlay extends View {
     // Hide this overlay once the native Flash main menu has appeared.
     private boolean introSkipVisible = true;
     private int introSkipPointer = -1;
+    private int logPointer = -1;
+    private long skipPressedAt = 0L;
     private static native boolean menuShown();
     private static native void toggleKeyboard();
     private final Runnable watch = new Runnable() {
         @Override public void run() {
             boolean now = menu;
             try { now = menuShown(); } catch (UnsatisfiedLinkError notLoaded) { }
-            if (now && introSkipVisible) { introSkipVisible = false; invalidate(); }
+            // menuShown() is true even while intro videos play; never hide Skip Intro here.
             if (now != menu) { releaseAll(); menu = now; invalidate(); }
             postDelayed(this, 250);
         }
@@ -62,6 +64,7 @@ public class TouchOverlay extends View {
             introSkipPointer = -1;
             key(KeyEvent.KEYCODE_ESCAPE, false);
         }
+        logPointer = -1;
         stickPointer = -1; setMove(0, 0); look.clear();
     }
     private float keyboardX() { return getWidth() * 0.04f; }
@@ -107,6 +110,32 @@ public class TouchOverlay extends View {
         text.setTextSize(h * 0.36f);
         canvas.drawText("SKIP INTRO", x, y + h * 0.13f, text);
     }
+    private float logCenterX() { return getWidth() * 0.90f; }
+    private float logCenterY() { return getHeight() * 0.12f; }
+    private boolean onLogButton(float x, float y) {
+        return Math.abs(x - logCenterX()) < skipWidth() * 0.28f
+                && Math.abs(y - logCenterY()) < skipHeight() * 0.57f;
+    }
+    private void drawLogButton(Canvas c) {
+        float x = logCenterX(), y = logCenterY();
+        float w = skipWidth() * 0.56f, h = skipHeight();
+        fill.setColor(Color.argb(215, 23, 23, 23));
+        c.drawRoundRect(x-w*0.5f,y-h*0.5f,x+w*0.5f,y+h*0.5f,h*0.2f,h*0.2f,fill);
+        text.setTextSize(h * 0.36f);
+        c.drawText("LOG", x, y + h * 0.12f, text);
+    }
+    private void releaseSkipTouch() {
+        introSkipPointer = -1;
+        long elapsed = android.os.SystemClock.uptimeMillis() - skipPressedAt;
+        // Keep ESC down across at least a few SDL frames even for very quick taps.
+        postDelayed(() -> { if (introSkipPointer == -1) key(KeyEvent.KEYCODE_ESCAPE, false); },
+                    Math.max(0L, 180L - elapsed));
+        invalidate();
+    }
+    private void exportGameLog() {
+        if (getContext() instanceof GameActivity)
+            ((GameActivity)getContext()).exportGameLog();
+    }
     private float radius() { return getHeight() * 0.075f; }
     private float stickRadius() { return getHeight() * 0.16f; }
     private float baseX() { return getWidth() * 0.14f; }
@@ -118,6 +147,10 @@ public class TouchOverlay extends View {
             c.drawCircle(keyboardX(), keyboardY(), radius(), fill);
             text.setTextSize(radius() * 0.42f);
             c.drawText("ABC", keyboardX(), keyboardY() + radius() * 0.15f, text);
+            // Video playback and Flash UI both report menuShown=true in test13.
+            // Floating actions must be drawn in both modes.
+            if (introSkipVisible) drawSkipButton(c);
+            drawLogButton(c);
             return;
         }
         fill.setColor(Color.argb(60, 255, 255, 255));
@@ -132,6 +165,7 @@ public class TouchOverlay extends View {
             c.drawText(b.label, x, y + radius() * 0.15f, text);
         }
         if (introSkipVisible) drawSkipButton(c);
+        drawLogButton(c);
     }
     private void key(int code, boolean down) {
         if (down) SDLActivity.onNativeKeyDown(code); else SDLActivity.onNativeKeyUp(code);
@@ -189,31 +223,42 @@ public class TouchOverlay extends View {
     }
     @Override public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked(), index = e.getActionIndex();
-        // Handle the introduction independently of menu/gameplay pointer tracking.
-        // Hold Escape until finger-up so the native input polling detects a press.
-        if (introSkipVisible && !menu) {
-            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-                int id = e.getPointerId(index);
-                if (introSkipPointer == -1 && onSkipButton(e.getX(index), e.getY(index))) {
-                    introSkipPointer = id;
-                    key(KeyEvent.KEYCODE_ESCAPE, true);
-                    invalidate();
-                    return true;
-                }
-            } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
-                if (e.getPointerId(index) == introSkipPointer) {
-                    introSkipPointer = -1;
-                    key(KeyEvent.KEYCODE_ESCAPE, false);
-                    invalidate();
-                    return true;
-                }
-            } else if (action == MotionEvent.ACTION_CANCEL && introSkipPointer != -1) {
-                introSkipPointer = -1;
-                key(KeyEvent.KEYCODE_ESCAPE, false);
+        // Intercept floating buttons before the Flash menu mouse forwarding.
+        // Do NOT use menuShown() here as a sign that the intro finished.
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            int id = e.getPointerId(index);
+            float x = e.getX(index), y = e.getY(index);
+            if (introSkipVisible && introSkipPointer == -1 && onSkipButton(x, y)) {
+                introSkipPointer = id;
+                skipPressedAt = android.os.SystemClock.uptimeMillis();
+                key(KeyEvent.KEYCODE_ESCAPE, true);
                 invalidate();
                 return true;
             }
+            if (logPointer == -1 && onLogButton(x, y)) {
+                logPointer = id;
+                invalidate();
+                return true;
+            }
+        } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP) {
+            int id = e.getPointerId(index);
+            if (id == introSkipPointer) {
+                releaseSkipTouch();
+                return true;
+            }
+            if (id == logPointer) {
+                logPointer = -1;
+                post(this::exportGameLog);
+                invalidate();
+                return true;
+            }
+        } else if (action == MotionEvent.ACTION_CANCEL) {
+            if (introSkipPointer != -1) releaseSkipTouch();
+            logPointer = -1;
+            invalidate();
+            return true;
         }
+        if (introSkipPointer != -1 || logPointer != -1) return true;
         if (menu) { menuTouch(e); return true; }
         switch (action) {
             case MotionEvent.ACTION_DOWN: case MotionEvent.ACTION_POINTER_DOWN:
