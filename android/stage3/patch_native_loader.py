@@ -78,4 +78,28 @@ l = l.replace(needle, needle + '''
         });
 ''',1)
 launcher.write_text(l,encoding="utf-8")
+# The Stage3 source ZIP contains a test asserting test13's eager load order.
+# Update that assertion while keeping a meaningful dependency check.
+test_path = root / "tests/test_stage3_package.py"
+if not test_path.is_file():
+    raise SystemExit("Stage3 native package test missing")
+t = test_path.read_text(encoding="utf-8")
+t = replace_exact(t,
+    "NAMES = ['c++_shared','SDL3','dice_py','dxvk_d3d9','vkd3d-shader','main']",
+    "NAMES = ['SDL3','main']")
+t = replace_exact(t,
+    "def test_library_load_order_from_test13_dex(self):",
+    "def test_native_library_load_order(self):")
+anchor = "    def test_native_libraries_present(self):"
+if t.count(anchor) != 1:
+    raise SystemExit("Stage3 test insertion point missing")
+t = t.replace(anchor, """    def test_transitive_elf_dependencies(self):
+        import subprocess
+        needed = subprocess.check_output(
+            ['readelf', '-d', str(NATIVE/'libmain.so')], text=True)
+        for dep in ('libdice_py.so','libSDL3.so','libc++_shared.so'):
+            self.assertIn(dep, needed)
+""" + anchor, 1)
+test_path.write_text(t, encoding="utf-8")
+
 print("Stage3.4 native-loader error diagnostics installed")
