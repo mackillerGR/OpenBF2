@@ -106,6 +106,25 @@ jobs:
           grep -Fq 'BF2LogExporter.request(this)' stage3/gameapp/src/main/java/com/mackillergr/bf2/LauncherActivity.java
           grep -Fq 'new TouchOverlay(this)' stage3/gameapp/src/main/java/com/mackillergr/bf2/GameActivity.java
 
+      - name: Bypass startup movies in the native BF2 engine (Stage 3.6)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The BF2 Android native entry point has a fixed startup command string.
+          # The +restart parser option sets skipMovies=true before intro playback.
+          # Change only the exact test13 libmain.so constant without changing ELF length.
+          python3 android/stage3/patch_stage36_skip_movies.py stage3
+          sed -i "s/applicationId 'com.mackillergr.bf2.stage35'/applicationId 'com.mackillergr.bf2.stage36'/; s/versionCode 8/versionCode 9/; s/versionName '0.3.5-intro-and-log'/versionName '0.3.6-native-movie-skip'/" stage3/gameapp/build.gradle
+          sed -i 's/Battlefield 2 LAN Stage 3.5/Battlefield 2 LAN Stage 3.6/' stage3/gameapp/src/main/AndroidManifest.xml
+          grep -Fq "applicationId 'com.mackillergr.bf2.stage36'" stage3/gameapp/build.gradle
+          python3 - <<'PY'
+          from pathlib import Path
+          so = Path("stage3/gameapp/src/main/jniLibs/arm64-v8a/libmain.so").read_bytes()
+          assert so.count(b"+modPath mods/bf2 +restart 1    +multi 1 +szx ") == 1
+          assert b"+modPath mods/bf2 +fullscreen 0 +multi 1 +szx " not in so
+          print("PASS native engine uses +restart 1 for skipMovies on all launches")
+          PY
+
       - name: Java 17
         uses: actions/setup-java@v4
         with:
@@ -147,14 +166,14 @@ jobs:
           APK=stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage35'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -m1 "^package: name='com.mackillergr.bf2.stage36'"
           unzip -l "$APK" | grep -E 'classes.dex|lib/arm64-v8a/libmain.so|lib/arm64-v8a/libSDL3.so'
           sha256sum "$APK"
 
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Battlefield2_Android_Stage35_TouchIntro_Log_APK
+          name: Battlefield2_Android_Stage36_NativeSkipMovies_APK
           path: stage3/gameapp/build/outputs/apk/debug/gameapp-debug.apk
           if-no-files-found: error
           retention-days: 7
