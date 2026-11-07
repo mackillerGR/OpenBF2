@@ -74,6 +74,12 @@ g = replace_once(g, "            TouchOverlay overlay = new TouchOverlay(this);"
 game.write_text(g,encoding="utf-8")
 
 a = overlay.read_text(encoding="utf-8")
+a = replace_once(a, "        logPointer = -1;\n        stickPointer = -1; setMove(0, 0); look.clear();",
+"""        logPointer = -1;
+        if (menuPressed) SDLActivity.onNativeMouse(0, MOUSE_UP, 0, 0, false);
+        menuPressed = false;
+        menuPointer = -1;
+        stickPointer = -1; setMove(0, 0); look.clear();""")
 a = replace_once(a, "    private boolean menu;\n",
 """    private boolean menu;
     private int gameWidth = 1280;
