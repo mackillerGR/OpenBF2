@@ -34,7 +34,7 @@ public class LauncherActivity extends Activity {
     private TextView status;
     private Spinner levels, resolution;
     private EditText server, name, cdKey;
-    private CheckBox touch, turnip;
+    private CheckBox touch, turnip, skipMovies;
 
     private Button button(LinearLayout parent, String label, View.OnClickListener action) {
         Button b = new Button(this);
@@ -80,6 +80,8 @@ public class LauncherActivity extends Activity {
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);
         turnip = new CheckBox(this); turnip.setText("Ενσωματωμένος driver Turnip (προτείνεται)"); turnip.setTextColor(Color.WHITE);
         turnip.setChecked(prefs.getBoolean("turnip", true)); root.addView(turnip);
+        skipMovies = new CheckBox(this); skipMovies.setText("Παράλειψη βίντεο εισαγωγής"); skipMovies.setTextColor(Color.WHITE);
+        skipMovies.setChecked(prefs.getBoolean("skipMovies", true)); root.addView(skipMovies);
         button(root, "Έναρξη", new View.OnClickListener() { @Override public void onClick(View v) { start(true); } });
         button(root, "Απευθείας σε χάρτη / διακομιστή (χωρίς μενού)", new View.OnClickListener() { @Override public void onClick(View v) { start(false); } });
         button(root, "Εξαγωγή log", new View.OnClickListener() { @Override public void onClick(View v) { exportLog(); } });
@@ -180,6 +182,7 @@ public class LauncherActivity extends Activity {
             "--libdir", getApplicationInfo().nativeLibraryDir,
             "--driver", turnip.isChecked() ? "turnip" : "system",
             "--cdkey", cdKey.getText().toString().trim()));
+        if (skipMovies.isChecked()) args.add("--skipmovies");
         if (menu) args.add("--menu");
         else if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
         else args.addAll(Arrays.asList("--connect", host));
@@ -188,6 +191,7 @@ public class LauncherActivity extends Activity {
             .putInt("resolution", resolution.getSelectedItemPosition())
             .putBoolean("touch", touch.isChecked())
             .putBoolean("turnip", turnip.isChecked())
+            .putBoolean("skipMovies", skipMovies.isChecked())
             .putString("cdkey", cdKey.getText().toString().trim()).apply();
         Intent i = new Intent(this, GameActivity.class);
         i.putExtra("args", args.toArray(new String[0]));

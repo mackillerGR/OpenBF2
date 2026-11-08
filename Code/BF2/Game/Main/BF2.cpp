@@ -756,12 +756,13 @@ void installAndroidCrashReport()
 static std::string androidCommandLine(int argc, char** argv)
 {
     std::string mod, width = "1280", height = "720", name, level, server, libraryDir, driver;
-    bool hosted = false, menu = false;
+    bool hosted = false, menu = false, skipMovies = false;
     for (int i = 1; i < argc; ++i)
     {
         const std::string option(argv[i]);
         if (option == "--hosted") { hosted = true; continue; }
         if (option == "--menu") { menu = true; continue; }
+        if (option == "--skipmovies") { skipMovies = true; continue; }
         if (i + 1 >= argc) break;
         const char* const value = argv[++i];
         if (option == "--mod") mod = value;
@@ -790,6 +791,8 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
+    // [CHOSEN, not recovered] D3D9 shaders rely on 0 * inf being 0; Strict keeps that on Adreno.
+    setenv("DXVK_CONFIG", "d3d9.floatEmulation = Strict", 0);
     setenv("TU_DEBUG", "sysmem", 1);    // Tile rendering loses the terrain's lighting pass.
     setenv("MESA_LOG", "file", 1);
     installAndroidCrashReport();
@@ -819,6 +822,8 @@ static std::string androidCommandLine(int argc, char** argv)
     if (chdir(root.c_str()) != 0)
         std::fprintf(stderr, "chdir %s failed\n", root.c_str());
     std::string line = "+modPath mods/bf2 +fullscreen 0 +multi 1 +szx " + width + " +szy " + height;
+    if (skipMovies)
+        line += " +restart 1";              // the retail re-exec flag: its only effect is skipping movies
     if (menu)
         return line;
     line += " +playerName " + name;

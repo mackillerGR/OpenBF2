@@ -68,7 +68,19 @@ extern "C" void portableMenuTap(float x, float y, int action) {
 }
 static void drainMenuTaps() {
     std::vector<MenuTap> taps;
-    { std::lock_guard<std::mutex> lock(g_tapLock); taps.swap(g_taps); }
+    {
+        // A release waits for the next frame when its press is in this batch, so a quick tap is
+        // seen pressed for at least one menu update.
+        std::lock_guard<std::mutex> lock(g_tapLock);
+        size_t keep = g_taps.size();
+        bool pressed = false;
+        for (size_t i = 0; i < g_taps.size(); ++i) {
+            if (g_taps[i].action == 1) pressed = true;
+            else if (g_taps[i].action == 2 && pressed) { keep = i; break; }
+        }
+        taps.assign(g_taps.begin(), g_taps.begin() + keep);
+        g_taps.erase(g_taps.begin(), g_taps.begin() + keep);
+    }
     for (const MenuTap& t : taps) {
         const int x = (int)(t.x * g_engineWidth), y = (int)(t.y * g_engineHeight);
         post(WM_MOUSEMOVE, 0, (LPARAM)((x & 0xFFFF) | ((y & 0xFFFF) << 16)));

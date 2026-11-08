@@ -3621,8 +3621,14 @@ namespace gameswf
 			{
 				for (int i = m_display_list.get_character_count() - 1; i >= 0; i--)
 				{
+					// [CHOSEN, not recovered] A handler run by an earlier child may remove clips,
+					// so the index is checked again and the child is kept alive across its call.
+					if (i >= m_display_list.get_character_count())
+					{
+						continue;
+					}
 					const display_object_info&	dobj = m_display_list.get_display_object(i);
-					character*	ch = dobj.m_ref ? dobj.m_character.get_ptr() : NULL;
+					smart_ptr<character>	ch = dobj.m_ref ? dobj.m_character.get_ptr() : NULL;
 					if (ch != NULL && ch->get_visible())
 					{
 						consumed = ch->mouse_update(consumed) || consumed;

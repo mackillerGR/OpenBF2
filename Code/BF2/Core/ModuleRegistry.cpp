@@ -1220,9 +1220,10 @@ bool BfSoundModule::init()
                 << "Invalid " << "BF2Audio.dll" << ". Function getSoundEngine not found.";
         facade->init();
 #if !defined(_WIN32)
-        // [CHOSEN, not recovered] Direct start skips the profile login that applies AudioSettings.
-        // [RETIRE-WHEN: portable-swiff-player] Remove when the menu's login path runs on this host.
-        if (getenv("BF2_PORT_DIRECT_START"))
+        // [CHOSEN, not recovered] AudioSettings only initializes the device when the profile's
+        // settings differ from what is applied, so a fresh profile left the portable client silent.
+        // [RETIRE-WHEN: portable-audio-settings] Remove once the AudioSettings apply path is proven
+        // to open the device on its own on this host, from the menu and from a direct start.
         {
             const int status = facade->initialize(1, std::string("System OpenAL"), 32);
             std::fprintf(stderr, "Sound: System OpenAL initialize -> %d\n", status);
