@@ -12,14 +12,17 @@ import java.util.HashMap;
 
 /** On-screen controls. They feed SDL the same keys and mouse a PC player uses. */
 public class TouchOverlay extends View {
-    private static final int MOUSE_DOWN = 0, MOUSE_UP = 1, MOUSE_MOVE = 2, LEFT_BUTTON = 1;
+    private static final int MOUSE_DOWN = 0, MOUSE_UP = 1, MOUSE_MOVE = 2, LEFT_BUTTON = 1, RIGHT_BUTTON = 2;
+    /** Marker key codes for the two mouse buttons; Android key codes are never negative. */
+    private static final int KEY_LEFT_MOUSE = 0, KEY_RIGHT_MOUSE = -1;
 
     private static class Button {
         final String label; final int key; final float rx, ry; int pointer = -1;
         Button(String label, int key, float rx, float ry) { this.label = label; this.key = key; this.rx = rx; this.ry = ry; }
     }
     private final Button[] buttons = {
-        new Button("ΠΥΡ", 0, 0.90f, 0.62f),
+        new Button("ΠΥΡ", KEY_LEFT_MOUSE, 0.90f, 0.62f),
+        new Button("ΣΤΟΧΟΣ", KEY_RIGHT_MOUSE, 0.90f, 0.40f),
         new Button("ΑΛΜΑ", KeyEvent.KEYCODE_SPACE, 0.80f, 0.82f),
         new Button("ΣΚΥΨΕ", KeyEvent.KEYCODE_CTRL_LEFT, 0.90f, 0.86f),
         new Button("ΤΡΕΞΕ", KeyEvent.KEYCODE_SHIFT_LEFT, 0.70f, 0.86f),
@@ -35,6 +38,7 @@ public class TouchOverlay extends View {
     private float stickX, stickY, knobX, knobY;
     private boolean w, a, s, d;
     private boolean menu;
+    private int mouseState;
     private static native boolean menuShown();
     private static native void toggleKeyboard();
     private static native void menuTap(float x, float y, int action);
@@ -106,8 +110,12 @@ public class TouchOverlay extends View {
         if (down) SDLActivity.onNativeKeyDown(code); else SDLActivity.onNativeKeyUp(code);
     }
     private void press(Button b, boolean down) {
-        // SDL takes the button state after the event, so a release carries 0.
-        if (b.key == 0) SDLActivity.onNativeMouse(down ? LEFT_BUTTON : 0, down ? MOUSE_DOWN : MOUSE_UP, 0, 0, true);
+        // SDL takes the whole button state after the event, so both mouse buttons share one mask.
+        if (b.key == KEY_LEFT_MOUSE || b.key == KEY_RIGHT_MOUSE) {
+            int bit = b.key == KEY_LEFT_MOUSE ? LEFT_BUTTON : RIGHT_BUTTON;
+            mouseState = down ? (mouseState | bit) : (mouseState & ~bit);
+            SDLActivity.onNativeMouse(mouseState, down ? MOUSE_DOWN : MOUSE_UP, 0, 0, true);
+        }
         else key(b.key, down);
     }
     private void setMove(float x, float y) {

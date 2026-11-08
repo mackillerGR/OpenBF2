@@ -79,7 +79,7 @@ public class LauncherActivity extends Activity {
         label(root, "Διόρθωση γραφικών (δοκιμή για τα μαύρα σημεία)");
         graphics = new Spinner(this);
         graphics.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-            new String[] {"Λειτουργία 1", "Λειτουργία 2", "Λειτουργία 3"}));
+            new String[] {"Λειτουργία 1", "Λειτουργία 2", "Λειτουργία 3", "Λειτουργία 4 (αργή)"}));
         graphics.setSelection(prefs.getInt("graphics", 0)); root.addView(graphics);
         touch = new CheckBox(this); touch.setText("Χειριστήρια αφής"); touch.setTextColor(Color.WHITE);
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);

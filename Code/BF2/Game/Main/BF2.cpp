@@ -793,20 +793,23 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
-    // [CHOSEN, not recovered] Driver workarounds the launcher can switch while the black surfaces
-    // on Adreno are tracked down: 0 keeps D3D9's 0 * inf = 0 and renders without tiling; 1 also
-    // reports an NVIDIA adapter, which moves the game's shadow maps from R16F render targets to
-    // depth textures; 2 adds whole pipelines, plain descriptor sets and tiled rendering.
+    // [CHOSEN, not recovered] Driver workarounds the launcher can switch while the view-dependent
+    // dark surfaces on Adreno are tracked down. Every mode keeps D3D9's 0 * inf = 0. Mode 0 renders
+    // without tiling and without Turnip's low-resolution depth pass (LRZ); 1 keeps tiling but turns
+    // off LRZ and compressed (UBWC) images; 2 turns all three off; 3 also reports an NVIDIA adapter,
+    // which moves the game's shadow maps from R16F render targets to depth textures, and makes the
+    // driver finish every draw before the next one.
     std::string dxvkConfig = "d3d9.floatEmulation = Strict";
-    if (graphicsMode >= 1)
+    if (graphicsMode >= 3)
         dxvkConfig += "; d3d9.customVendorId = 10de; d3d9.customDeviceId = 2484";
-    if (graphicsMode >= 2)
-        dxvkConfig += "; dxvk.enableGraphicsPipelineLibrary = False; dxvk.enableDescriptorBuffer = False";
+    static const char* const turnipFlags[] = {
+        "sysmem,nolrz", "nolrz,noubwc", "sysmem,nolrz,noubwc", "sysmem,nolrz,noubwc,flushall,syncdraw" };
+    if (graphicsMode < 0 || graphicsMode > 3)
+        graphicsMode = 0;
     setenv("DXVK_CONFIG", dxvkConfig.c_str(), 0);
-    if (graphicsMode < 2)
-        setenv("TU_DEBUG", "sysmem", 1);
+    setenv("TU_DEBUG", turnipFlags[graphicsMode], 1);
     std::fprintf(stderr, "Graphics mode %d: DXVK_CONFIG=\"%s\" TU_DEBUG=%s\n", graphicsMode,
-                 dxvkConfig.c_str(), graphicsMode < 2 ? "sysmem" : "(none)");
+                 dxvkConfig.c_str(), turnipFlags[graphicsMode]);
     setenv("MESA_LOG", "file", 1);
     installAndroidCrashReport();
     if (driver == "turnip" && !libraryDir.empty())
