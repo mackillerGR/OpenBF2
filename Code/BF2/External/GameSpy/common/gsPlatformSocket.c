@@ -1,6 +1,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 #include "gsPlatformSocket.h"
+#if defined(__ANDROID__)
+#include <ifaddrs.h>
+#include <net/if.h>
+#endif
 #include "gsPlatformUtil.h"
 #include "gsMemory.h"
 
@@ -564,6 +568,42 @@ HOSTENT * getlocalhost(void)
 #elif defined(_XBOX)
 	return NULL;
 
+
+#elif defined(__ANDROID__)
+	// [CHOSEN, not recovered] Android port: the host name resolves only to 127.0.0.1, so the
+	// addresses come from the interfaces, like the EENET arm above - up, running, not loopback.
+	#define MAX_IPS  5
+	static HOSTENT localhost;
+	static char * aliases = NULL;
+	static char * ipPtrs[MAX_IPS + 1];
+	static unsigned int ips[MAX_IPS];
+	struct ifaddrs * list;
+	struct ifaddrs * entry;
+	int count = 0;
+
+	if(getifaddrs(&list) != 0)
+		return NULL;
+	for(entry = list ; entry && count < MAX_IPS ; entry = entry->ifa_next)
+	{
+		if(!entry->ifa_addr || entry->ifa_addr->sa_family != AF_INET)
+			continue;
+		if(!(entry->ifa_flags & IFF_UP) || !(entry->ifa_flags & IFF_RUNNING) || (entry->ifa_flags & IFF_LOOPBACK))
+			continue;
+		ips[count] = ((struct sockaddr_in *)entry->ifa_addr)->sin_addr.s_addr;
+		ipPtrs[count] = (char *)&ips[count];
+		count++;
+	}
+	freeifaddrs(list);
+	if(!count)
+		return NULL;
+
+	localhost.h_name = "localhost";
+	localhost.h_aliases = &aliases;
+	localhost.h_addrtype = AF_INET;
+	localhost.h_length = (gsi_u16)sizeof(ips[0]);
+	localhost.h_addr_list = ipPtrs;
+	ipPtrs[count] = NULL;
+	return &localhost;
 
 #else
 	char hostname[256] = "";

@@ -8,6 +8,7 @@
 #include "../External/GameSpy/serverbrowsing/sb_serverbrowsing.h"
 #include "../External/GameSpy/common/gsAvailable.h"
 #include "../External/GameSpy/common/gsPlatformUtil.h"
+#include "../External/GameSpy/common/gsPlatformSocket.h"
 #include "../External/GameSpy/qr2/qr2regkeys.h"
 #include "../Game/IGame.h"                      // game: the current map's name / mode / size (fillLocalRecord)
 #include "../Game/IGameServer.h"                // the server view's client counts and content checking
@@ -94,6 +95,12 @@ void browserCallback(::ServerBrowser browser, SBCallbackReason reason, SBServer 
 // Returns the first address resolved for this host, or 127.0.0.1 if hostname lookup or resolution fails.
 std::string localAddress()
 {
+#if defined(__ANDROID__)
+    // [CHOSEN, not recovered] The phone's host name resolves only to loopback; use the
+    // first interface address GameSpy reports instead.
+    if (HOSTENT* const local = getlocalhost())
+        return std::string(inet_ntoa(*reinterpret_cast<struct in_addr*>(local->h_addr_list[0])));
+#endif
     char name[260];
     if (gethostname(name, 260) != -1)
     {

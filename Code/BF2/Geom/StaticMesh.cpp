@@ -645,14 +645,15 @@ bool staticMeshTemplateUsesLightmaps(const void* objectTemplate)
         dx9rend::IRenderer* const b = static_cast<dx9rend::IRenderer*>(::dice::hfe::dx9rend::g_rendererBase);
         IVideoOptions* const o = b ? b->getVideoOptions() : 0;
         std::fprintf(stderr, "[LMDIAG] usesLightmaps t185=%d t2A4=%d base=%d opts=%d q2=%d xpack=%d\n",
-                     t[0x185], t[0x2A4], b != 0, o != 0, o ? o->getQuality(2) : -1,
+                     t[offsetof(StaticMeshTemplate, m_finished)], t[offsetof(StaticMeshTemplate, m_isWater)], b != 0, o != 0, o ? o->getQuality(2) : -1,
                      b ? (int)b->isExpansionPack() : -1);
         std::fflush(stderr);
     }
 #endif
-    if (!t[0x185])
+    // Retail +0x185 and +0x2A4; named so the 64-bit layout reads the same fields.
+    if (!t[offsetof(StaticMeshTemplate, m_finished)])
         return false;
-    if (t[0x2A4])
+    if (t[offsetof(StaticMeshTemplate, m_isWater)])
         return true;
 
     dx9rend::IRenderer* const base =
@@ -2670,7 +2671,7 @@ void StaticMesh::drawVanilla()
                 {
                     staticMeshMaterialShader(material) = staticMeshFindShaderBits(qualityMask & bits);
                 }
-                else if (material[0x1EC])                                      // m_vegetationNonTiled
+                else if (material[offsetof(StaticMeshMaterial, m_vegetationNonTiled)])                                      // m_vegetationNonTiled
                 {
                     const float f = m_float25C;
                     const Vec3& treeSun = g_LightManager->getTreeSunColor();     // +0x1C8
@@ -2736,7 +2737,7 @@ void StaticMesh::drawVanilla()
                 {
                     // the point-light pass: one entry per gathered light
                     dx9rend::Ra::RaShader* pointShader;
-                    if (material[0x1EC])
+                    if (material[offsetof(StaticMeshMaterial, m_vegetationNonTiled)])
                     {
                         pointShader = staticMeshFindShaderBits(
                             m_byte355 ? 0xF0000600u : 0xF0000400u);
