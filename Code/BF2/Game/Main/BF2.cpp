@@ -795,13 +795,13 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
     // [CHOSEN, not recovered] Driver workarounds the launcher can switch while the black surfaces
     // on Adreno are tracked down: 0 keeps D3D9's 0 * inf = 0 and renders without tiling; 1 also
-    // builds every pipeline whole instead of from linked parts; 2 adds plain descriptor sets
-    // and gives tiled rendering back.
+    // reports an NVIDIA adapter, which moves the game's shadow maps from R16F render targets to
+    // depth textures; 2 adds whole pipelines, plain descriptor sets and tiled rendering.
     std::string dxvkConfig = "d3d9.floatEmulation = Strict";
     if (graphicsMode >= 1)
-        dxvkConfig += "; dxvk.enableGraphicsPipelineLibrary = False";
+        dxvkConfig += "; d3d9.customVendorId = 10de; d3d9.customDeviceId = 2484";
     if (graphicsMode >= 2)
-        dxvkConfig += "; dxvk.enableDescriptorBuffer = False";
+        dxvkConfig += "; dxvk.enableGraphicsPipelineLibrary = False; dxvk.enableDescriptorBuffer = False";
     setenv("DXVK_CONFIG", dxvkConfig.c_str(), 0);
     if (graphicsMode < 2)
         setenv("TU_DEBUG", "sysmem", 1);
