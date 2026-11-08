@@ -54,18 +54,28 @@ inline void* CreateMutexA(void*, int, const char*)
     pthread_mutexattr_destroy(&attr);
     return h;
 }
+// Like Win32, a null handle fails without touching memory: closeConnection locks m_mutex
+// unconditionally, and the mutex exists only once a receive thread has been started.
 inline void WaitForSingleObject(void* handle, unsigned int)
 {
     Handle* const h = static_cast<Handle*>(handle);
+    if (!h)
+        return;
     if (h->isThread)
         pthread_join(h->thread, 0);
     else
         pthread_mutex_lock(&h->mutex);
 }
-inline void ReleaseMutex(void* handle) { pthread_mutex_unlock(&static_cast<Handle*>(handle)->mutex); }
+inline void ReleaseMutex(void* handle)
+{
+    if (handle)
+        pthread_mutex_unlock(&static_cast<Handle*>(handle)->mutex);
+}
 inline void CloseHandle(void* handle)
 {
     Handle* const h = static_cast<Handle*>(handle);
+    if (!h)
+        return;
     if (!h->isThread)
         pthread_mutex_destroy(&h->mutex);
     delete h;
