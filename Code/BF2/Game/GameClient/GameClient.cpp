@@ -267,6 +267,12 @@ void GameClient::shutdown()
 // acts on it next frame; BF2Engine::mainLoop reads it through IGameClient +0x70 and shuts the game.
 void GameClient::requestDisconnect(int reason)
 {
+#if defined(__ANDROID__)
+    // [TEMP][CHOSEN, not recovered] Reports why a LAN join ends on the phone.
+    // [RETIRE-WHEN: android-lan-disconnect-diag] the phone log names the disconnect cause.
+    std::fprintf(stderr, "[NETDIAG] GameClient::requestDisconnect reason=%d\n", reason);
+    std::fflush(stderr);
+#endif
     m_disconnectRequested = true;
     m_disconnectReason    = reason;
 }
@@ -932,6 +938,14 @@ bool GameClient::receive(float dt)
         }
     }
     while (code != 8);
+#if defined(__ANDROID__)
+    if (disconnected)
+    {
+        std::fprintf(stderr, "[NETDIAG] GameClient::receive disconnect reason=%d text=\"%s\"\n", reason,
+                     m_netClient ? m_netClient->getDisconnectText().c_str() : "");
+        std::fflush(stderr);
+    }
+#endif
     if (!disconnected)
         return !m_abortLoadingLevel;
     if (hudManager)

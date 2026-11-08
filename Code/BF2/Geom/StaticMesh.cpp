@@ -635,6 +635,21 @@ bool staticMeshTemplateUsesLightmaps(const void* objectTemplate)
         return false;
 
     const unsigned char* const t = static_cast<const unsigned char*>(objectTemplate);
+#if defined(__ANDROID__)
+    // [TEMP][CHOSEN, not recovered] Device diagnostic for the missing object lightmaps on Android.
+    // [RETIRE-WHEN: android-lightmap-diag] the phone log shows why the atlas is never requested.
+    static int traced = 0;
+    if (traced < 6)
+    {
+        ++traced;
+        dx9rend::IRenderer* const b = static_cast<dx9rend::IRenderer*>(::dice::hfe::dx9rend::g_rendererBase);
+        IVideoOptions* const o = b ? b->getVideoOptions() : 0;
+        std::fprintf(stderr, "[LMDIAG] usesLightmaps t185=%d t2A4=%d base=%d opts=%d q2=%d xpack=%d\n",
+                     t[0x185], t[0x2A4], b != 0, o != 0, o ? o->getQuality(2) : -1,
+                     b ? (int)b->isExpansionPack() : -1);
+        std::fflush(stderr);
+    }
+#endif
     if (!t[0x185])
         return false;
     if (t[0x2A4])
@@ -1830,6 +1845,17 @@ void StaticMesh::postLoad()
 
     if (staticMeshTemplateUsesLightmaps(objectTemplate))
     {
+#if defined(__ANDROID__)
+        // [TEMP][CHOSEN, not recovered] See [RETIRE-WHEN: android-lightmap-diag].
+        static int traced = 0;
+        if (traced < 6)
+        {
+            ++traced;
+            std::fprintf(stderr, "[LMDIAG] setup transform=%d dword26C=%d byte35A=%d\n",
+                         m_transform != 0, m_dword26C != 0, m_byte35A);
+            std::fflush(stderr);
+        }
+#endif
         if (m_transform && !m_dword26C && !m_byte35A)
             loadLightmap();
     }
@@ -2140,6 +2166,18 @@ void StaticMesh::updateObjectParameters()
 
 void StaticMesh::loadLightmap()
 {
+#if defined(__ANDROID__)
+    // [TEMP][CHOSEN, not recovered] See [RETIRE-WHEN: android-lightmap-diag] above.
+    static int traced = 0;
+    if (traced < 6)
+    {
+        ++traced;
+        std::fprintf(stderr, "[LMDIAG] loadLightmap byte35A=%d base102=%d flag4=%d transform=%d\n",
+                     m_byte35A, rendererBaseByte(0x102), staticMeshRenderer()->m_flags60[4],
+                     m_transform != 0);
+        std::fflush(stderr);
+    }
+#endif
     if (m_byte35A && !rendererBaseByte(0x102))
         return;
 
