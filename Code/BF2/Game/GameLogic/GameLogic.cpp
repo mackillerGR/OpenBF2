@@ -1233,7 +1233,7 @@ void GameLogic::setFogStartEndAndBase(const Vec4& value)
     {
         typedef void (__fastcall* SetStateVec4Fn)(void* self BF2_EDX_PARAM, const Vec4* value);
         void** const vtbl = *reinterpret_cast<void***>(framework);
-        #if defined(_WIN32)
+#if defined(_WIN32) || DEDICATED     // BF2_EDX_PARAM is empty only in the portable client
         reinterpret_cast<SetStateVec4Fn>(vtbl[0x24 / 4])(framework, 0, &value);
 #else
         reinterpret_cast<SetStateVec4Fn>(vtbl[0x24 / 4])(framework, &value);

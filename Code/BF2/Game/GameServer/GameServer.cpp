@@ -2,6 +2,7 @@
 // GameServer owns level loading, client admission, simulation and outgoing game state.
 // Keep the recovered lifecycle and dispatch ordering; method-level exceptions remain at their sites.
 
+#include "../../Sound/BfSound.h"
 #include "GameServer.h"
 #include "VoipServerConnection.h"
 #include "ClientInfo.h"                    // handleDataBlock parses a block-id-1 payload into one
@@ -2403,9 +2404,13 @@ bool GameServer::update(int steps, float dt)
             updateConnections(elapsed);
             processGameStateAndSendPackets(elapsed);
         }
-        // [PLATFORM] NOT  - BF2.exe 0x4D1138..0x4D1151, a listen-server arm the dedicated ELF
-        // folded away: `if (!isDedicated() && i == steps - 1)` the sound owner (ds:0xA23DC0) vslot
-        // +0x18(steps). Its identity is unread.
+#if !DEDICATED
+        // [PLATFORM] BF2.exe 0x4D1138..0x4D1151, folded away by the dedicated ELF: a listen server
+        // updates the sound on its last step. ds:0xA23DC0 is g_bfSound - GameClient::update makes
+        // the same +0x18 call through it at 0x4D599E - and 0x440510 is isDedicated().
+        if (!isDedicated() && i == steps - 1)
+            g_bfSound->update(steps);
+#endif
     }
     // [PLATFORM] NOT  - BF2.exe 0x4D1162..0x4D1173: `if (isLightmapRenderingNode())`
     // (0x440530) ds:0x987350 vslot +0x28() - a lightmap-farm tool arm the dedicated ELF folded away.

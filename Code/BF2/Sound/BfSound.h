@@ -3,6 +3,7 @@
 #ifndef SOUND_BFSOUND_H     // [INFERRED] guard style
 #define SOUND_BFSOUND_H
 
+#include <cstdio>
 #include <string>
 #include "NullSound.h"
 #include <list>
@@ -246,10 +247,23 @@ public:
     virtual int   seek(void* handle, int offset, int origin);
     virtual int   read(void* handle, void* buffer, int bytes);
 
+#if defined(_WIN32)
     // Trace callbacks intentionally do nothing.
     virtual void  error(const char*, const char*, int) {}
     virtual void  warning(const char*, const char*, int) {}
     virtual void  info(const char*, const char*, int) {}
+#else
+    // [CHOSEN, not recovered] The portable client reports the sound engine's trace to stderr, which
+    // is its log; information lines stop after the first 300 so a long session stays readable.
+    virtual void  error(const char* msg, const char*, int)   { std::fprintf(stderr, "Sound error: %s\n", msg ? msg : ""); }
+    virtual void  warning(const char* msg, const char*, int) { std::fprintf(stderr, "Sound warning: %s\n", msg ? msg : ""); }
+    virtual void  info(const char* msg, const char*, int)
+    {
+        static int count = 0;
+        if (count++ < 300)
+            std::fprintf(stderr, "Sound: %s\n", msg ? msg : "");
+    }
+#endif
     virtual void  assertFailed(const char*, const char*, int) {}
     virtual void  debug(const char*, const char*, int) {}
 

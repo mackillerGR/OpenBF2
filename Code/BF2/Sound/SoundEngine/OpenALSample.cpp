@@ -21,9 +21,37 @@
 #include <cmath>
 #include <climits>
 #include <cstring>
+#include <cstdio>
 
 #if defined(BF2AUDIO_WITH_VORBIS)
 #include <vorbis/vorbisfile.h>
+
+namespace dice { namespace hfe {
+#if defined(_WIN32)
+inline void portableSourcePlay(ALuint source) { al_SourcePlay(source); }
+#else
+// [CHOSEN, not recovered] Counts effect playback for the portable log: the first errors in full,
+// then one line per 500 starts, so a silent device can be told apart from sounds never started.
+static void portableSourcePlay(ALuint source)
+{
+    static int started = 0, failed = 0;
+    if (al_GetError)
+        al_GetError();
+    al_SourcePlay(source);
+    const ALenum error = al_GetError ? al_GetError() : 0;
+    ++started;
+    if (error)
+    {
+        ++failed;
+        if (failed <= 10)
+            std::fprintf(stderr, "Sound: alSourcePlay(%u) failed with 0x%X\n", (unsigned)source, (unsigned)error);
+    }
+    if (started == 1 || started % 500 == 0)
+        std::fprintf(stderr, "Sound: %d effect starts, %d failed\n", started, failed);
+}
+#endif
+} }
+
 #endif
 
 namespace dice {
@@ -277,7 +305,7 @@ bool updateSourceBuffers(OggVorbis_File* vf, SoundFile* file, char* buffer, int*
     al_GetSourcei(source, AL_SOURCE_STATE, &state);
     if (queued > 0 && state == AL_STOPPED)
     {
-        al_SourcePlay(source);
+        portableSourcePlay(source);
         if (report)
             checkOpenALError("SoundFileOgg::updateSourceBuffers::restart");
     }
@@ -452,7 +480,7 @@ bool OpenALSample::stop(bool force)
             releaseBuffers();
             if (endLoop())
             {
-                al_SourcePlay(m_source);
+                portableSourcePlay(m_source);
                 goto done;
             }
         }
@@ -578,7 +606,7 @@ int OpenALSample::start(int startSample, int loops)
         al_Sourcefv(m_source, AL_DIRECTION, dir);
         applyDistanceAndCone();
         update(0);
-        al_SourcePlay(m_source);
+        portableSourcePlay(m_source);
         checkOpenALError("OpenALSample::start");
         return 0;
     }
@@ -746,7 +774,7 @@ int StaticSample::updateBuffers()
             ALuint b;
             al_SourceUnqueueBuffers(m_source, 1, &b);
             al_Sourcei(m_source, AL_LOOPING, 1);
-            al_SourcePlay(m_source);
+            portableSourcePlay(m_source);
             m_loopPending = false;
         }
     }

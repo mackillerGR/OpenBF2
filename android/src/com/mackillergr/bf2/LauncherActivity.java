@@ -32,7 +32,7 @@ public class LauncherActivity extends Activity {
     private static final int PICK_FOLDER = 1, EXPORT_LOG = 2;
     private SharedPreferences prefs;
     private TextView status;
-    private Spinner levels, resolution;
+    private Spinner levels, resolution, graphics;
     private EditText server, name, cdKey;
     private CheckBox touch, turnip, skipMovies;
 
@@ -76,6 +76,11 @@ public class LauncherActivity extends Activity {
         resolution.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
             new String[] {"720p", "1080p"}));
         resolution.setSelection(prefs.getInt("resolution", 0)); root.addView(resolution);
+        label(root, "Διόρθωση γραφικών (δοκιμή για τα μαύρα σημεία)");
+        graphics = new Spinner(this);
+        graphics.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+            new String[] {"Λειτουργία 1", "Λειτουργία 2", "Λειτουργία 3"}));
+        graphics.setSelection(prefs.getInt("graphics", 0)); root.addView(graphics);
         touch = new CheckBox(this); touch.setText("Χειριστήρια αφής"); touch.setTextColor(Color.WHITE);
         touch.setChecked(prefs.getBoolean("touch", true)); root.addView(touch);
         turnip = new CheckBox(this); turnip.setText("Ενσωματωμένος driver Turnip (προτείνεται)"); turnip.setTextColor(Color.WHITE);
@@ -181,6 +186,7 @@ public class LauncherActivity extends Activity {
             "--width", size[0], "--height", size[1], "--name", name.getText().toString().trim(),
             "--libdir", getApplicationInfo().nativeLibraryDir,
             "--driver", turnip.isChecked() ? "turnip" : "system",
+            "--gfx", String.valueOf(graphics.getSelectedItemPosition()),
             "--cdkey", cdKey.getText().toString().trim()));
         if (skipMovies.isChecked()) args.add("--skipmovies");
         if (menu) args.add("--menu");
@@ -189,6 +195,7 @@ public class LauncherActivity extends Activity {
         prefs.edit().putString("server", host).putString("name", name.getText().toString().trim())
             .putString("level", level == null ? "" : level.toString())
             .putInt("resolution", resolution.getSelectedItemPosition())
+            .putInt("graphics", graphics.getSelectedItemPosition())
             .putBoolean("touch", touch.isChecked())
             .putBoolean("turnip", turnip.isChecked())
             .putBoolean("skipMovies", skipMovies.isChecked())

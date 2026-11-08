@@ -757,6 +757,7 @@ static std::string androidCommandLine(int argc, char** argv)
 {
     std::string mod, width = "1280", height = "720", name, level, server, libraryDir, driver;
     bool hosted = false, menu = false, skipMovies = false;
+    int graphicsMode = 0;
     for (int i = 1; i < argc; ++i)
     {
         const std::string option(argv[i]);
@@ -773,6 +774,7 @@ static std::string androidCommandLine(int argc, char** argv)
         else if (option == "--connect") server = value;
         else if (option == "--libdir") libraryDir = value;
         else if (option == "--driver") driver = value;
+        else if (option == "--gfx") graphicsMode = std::atoi(value);
         else if (option == "--cdkey") setenv("BF2_PORT_CDKEY", value, 1);
     }
     const char* const files = SDL_GetAndroidExternalStoragePath();
@@ -791,9 +793,20 @@ static std::string androidCommandLine(int argc, char** argv)
     setenv("DXVK_WSI_DRIVER", "SDL3", 1);
     setenv("DXVK_LOG_LEVEL", "warn", 1);
     setenv("DXVK_HUD", "fps,frametimes,memory", 1);
-    // [CHOSEN, not recovered] D3D9 shaders rely on 0 * inf being 0; Strict keeps that on Adreno.
-    setenv("DXVK_CONFIG", "d3d9.floatEmulation = Strict", 0);
-    setenv("TU_DEBUG", "sysmem", 1);    // Tile rendering loses the terrain's lighting pass.
+    // [CHOSEN, not recovered] Driver workarounds the launcher can switch while the black surfaces
+    // on Adreno are tracked down: 0 keeps D3D9's 0 * inf = 0 and renders without tiling; 1 also
+    // builds every pipeline whole instead of from linked parts; 2 adds plain descriptor sets
+    // and gives tiled rendering back.
+    std::string dxvkConfig = "d3d9.floatEmulation = Strict";
+    if (graphicsMode >= 1)
+        dxvkConfig += "; dxvk.enableGraphicsPipelineLibrary = False";
+    if (graphicsMode >= 2)
+        dxvkConfig += "; dxvk.enableDescriptorBuffer = False";
+    setenv("DXVK_CONFIG", dxvkConfig.c_str(), 0);
+    if (graphicsMode < 2)
+        setenv("TU_DEBUG", "sysmem", 1);
+    std::fprintf(stderr, "Graphics mode %d: DXVK_CONFIG=\"%s\" TU_DEBUG=%s\n", graphicsMode,
+                 dxvkConfig.c_str(), graphicsMode < 2 ? "sysmem" : "(none)");
     setenv("MESA_LOG", "file", 1);
     installAndroidCrashReport();
     if (driver == "turnip" && !libraryDir.empty())
