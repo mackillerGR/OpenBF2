@@ -8,6 +8,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <mutex>
+#include <vector>
 #include <string>
 
 static WNDPROC g_wndProc = 0;
@@ -55,7 +57,27 @@ static void postMenuPointer(float x, float y) {
     }
     post(WM_MOUSEMOVE, 0, (LPARAM)(((int)x & 0xFFFF) | (((int)y & 0xFFFF) << 16)));
 }
+// Menu taps from the Android touch overlay, as fractions of the screen. They skip SDL's mouse,
+// whose window size need not match what is on screen, and land in engine pixels directly.
+struct MenuTap { float x, y; int action; };   // action: 0 move, 1 press, 2 release
+static std::mutex g_tapLock;
+static std::vector<MenuTap> g_taps;
+extern "C" void portableMenuTap(float x, float y, int action) {
+    std::lock_guard<std::mutex> lock(g_tapLock);
+    g_taps.push_back(MenuTap{x, y, action});
+}
+static void drainMenuTaps() {
+    std::vector<MenuTap> taps;
+    { std::lock_guard<std::mutex> lock(g_tapLock); taps.swap(g_taps); }
+    for (const MenuTap& t : taps) {
+        const int x = (int)(t.x * g_engineWidth), y = (int)(t.y * g_engineHeight);
+        post(WM_MOUSEMOVE, 0, (LPARAM)((x & 0xFFFF) | ((y & 0xFFFF) << 16)));
+        if (t.action == 1) post(WM_LBUTTONDOWN, 0, (LPARAM)((x & 0xFFFF) | ((y & 0xFFFF) << 16)));
+        else if (t.action == 2) post(WM_LBUTTONUP, 0, (LPARAM)((x & 0xFFFF) | ((y & 0xFFFF) << 16)));
+    }
+}
 static void pumpSdl() {
+    drainMenuTaps();
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         switch (e.type) {

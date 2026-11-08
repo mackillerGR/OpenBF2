@@ -853,6 +853,11 @@ static std::string androidCommandLine(int argc, char** argv)
 
 #if defined(__ANDROID__)
 extern "C" void portableToggleKeyboard();
+extern "C" void portableMenuTap(float x, float y, int action);
+extern "C" JNIEXPORT void JNICALL Java_com_mackillergr_bf2_TouchOverlay_menuTap(JNIEnv*, jclass, jfloat x, jfloat y, jint action)
+{
+    portableMenuTap(x, y, action);
+}
 
 // The touch overlay stands aside while the Flash menu is up, and asks for the keyboard there.
 extern "C" JNIEXPORT jboolean JNICALL Java_com_mackillergr_bf2_TouchOverlay_menuShown(JNIEnv*, jclass)

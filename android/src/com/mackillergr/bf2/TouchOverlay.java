@@ -37,6 +37,7 @@ public class TouchOverlay extends View {
     private boolean menu;
     private static native boolean menuShown();
     private static native void toggleKeyboard();
+    private static native void menuTap(float x, float y, int action);
     private final Runnable watch = new Runnable() {
         @Override public void run() {
             boolean now = menu;
@@ -59,17 +60,18 @@ public class TouchOverlay extends View {
     private float keyboardY() { return getHeight() * 0.92f; }
     private void menuTouch(MotionEvent e) {
         float x = e.getX(e.getActionIndex()), y = e.getY(e.getActionIndex());
+        float nx = x / Math.max(1, getWidth()), ny = y / Math.max(1, getHeight());
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 if (Math.hypot(x - keyboardX(), y - keyboardY()) < radius() * 1.1f) { toggleKeyboard(); return; }
-                SDLActivity.onNativeMouse(0, MOUSE_MOVE, x, y, false);
-                SDLActivity.onNativeMouse(LEFT_BUTTON, MOUSE_DOWN, x, y, false);
+                menuTap(nx, ny, 0);
+                menuTap(nx, ny, 1);
                 menuPressed = true; break;
             case MotionEvent.ACTION_MOVE:
-                if (menuPressed) SDLActivity.onNativeMouse(LEFT_BUTTON, MOUSE_MOVE, x, y, false);
+                if (menuPressed) menuTap(nx, ny, 0);
                 break;
             case MotionEvent.ACTION_UP: case MotionEvent.ACTION_CANCEL:
-                if (menuPressed) SDLActivity.onNativeMouse(0, MOUSE_UP, x, y, false);
+                if (menuPressed) menuTap(nx, ny, 2);
                 menuPressed = false; break;
             default: break;
         }
