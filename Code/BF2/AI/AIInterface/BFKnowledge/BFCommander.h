@@ -33,7 +33,7 @@ public:
     virtual int giveDefendOrder(const Vec3& position, int a, int b, IAIObject* target) = 0;
     virtual void sendAttackMessage(int a, int b) = 0;
     virtual void sendDefendMessage(int a, int b) = 0;
-    virtual int fireArtillery(int a, int b, Vec2 position) = 0;
+    virtual void fireArtillery(int team, int squad, Vec2 position) = 0;
     virtual int sendUav(int a, int b, Vec2 position) = 0;
     virtual int dropSupply(int a, int b, Vec2 position) = 0;
     virtual int dropVehicle(int a, int b, Vec2 position) = 0;
@@ -59,7 +59,7 @@ public:
     virtual int giveDefendOrder(const Vec3& position, int a, int b, IAIObject* target);
     virtual void sendAttackMessage(int a, int b);
     virtual void sendDefendMessage(int a, int b);
-    virtual int fireArtillery(int a, int b, Vec2 position);
+    virtual void fireArtillery(int team, int squad, Vec2 position);
     virtual int sendUav(int a, int b, Vec2 position);
     virtual int dropSupply(int a, int b, Vec2 position);
     virtual int dropVehicle(int a, int b, Vec2 position);

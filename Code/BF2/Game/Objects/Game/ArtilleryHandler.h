@@ -37,6 +37,8 @@ public:
     void failedFire();
     void doFire();
     bool haveAnyArtillery();
+    // Whether any piece was found, intact or not; BFCommander reads the list size inline.
+    bool hasArtilleryPieces() const { return !m_artillery.empty(); }
 
 private:
     void findHelperObjects(ArtilleryObjectStruct& artillery);

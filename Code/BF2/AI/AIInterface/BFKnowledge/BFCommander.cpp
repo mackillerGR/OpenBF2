@@ -8,6 +8,12 @@
 
 #include "AIFrontier.h"
 
+#include "../../../Core/EventManager.h"                          // fireArtillery's queued request
+#include "../../../Game/IEventListener.h"                        // ECGameLogic
+#include "../../../Game/GameEvents/ArtilleryEvent.h"
+#include "../../../Game/GameLogic/SquadManager/ISquadManager.h"
+#include "../../../Game/Objects/Game/ArtilleryHandler.h"
+
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
 #include "../SingletonServer.h"   // BFSingletonServer::updateStaticMethods
@@ -16,6 +22,8 @@ namespace dice {
 namespace hfe {
 
 extern ClassManager* classManager;
+
+extern IBase* squadManager;
 
 namespace ai {
 
@@ -83,9 +91,15 @@ void BFCommander::sendDefendMessage(int a, int b)
     BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::sendDefendMessage");
 }
 
-int BFCommander::fireArtillery(int a, int b, Vec2 position)
+// Queues the team's artillery request for the next game-logic update and, for a squad's request,
+// marks that squad's order unaccepted. Client PE 0x8177E0 materializes no result.
+void BFCommander::fireArtillery(int team, int squad, Vec2 position)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::fireArtillery");
+    ArtilleryEvent* const event = new ArtilleryEvent(team, position, 0u);
+    eventManager->postEventNextUpdate(ECGameLogic, 15, event);
+    if (squad != -1)
+        static_cast<ISquadManager*>(squadManager)->setIsAccepted(
+            team, squad, false, static_cast<OrderType>(2), static_cast<SquadOrderType>(0), false);
 }
 
 int BFCommander::sendUav(int a, int b, Vec2 position)
@@ -108,14 +122,17 @@ int BFCommander::denyArtilleryRequest(int a, int b)
     BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::denyArtilleryRequest");
 }
 
+// Whether the team's handler found any artillery piece. Client PE 0x8179B0 reads the handler's
+// list size without a manager guard.
 bool BFCommander::gameHasArtillery(int team)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::gameHasArtillery");
+    return world::artilleryManager->getHandler(static_cast<unsigned char>(team))->hasArtilleryPieces();
 }
 
+// Whether any of the team's pieces is still intact. Client PE 0x817410.
 bool BFCommander::anyArtilleryPiecesLeft(int team)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::anyArtilleryPiecesLeft");
+    return world::artilleryManager->getHandler(static_cast<unsigned char>(team))->haveAnyArtillery();
 }
 
 // dice's capital A. Frozen - it is the mangled name.

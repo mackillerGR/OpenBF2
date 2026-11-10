@@ -82,6 +82,8 @@ public:
     virtual bool hasNeighbouringObjectWithStatus(StatusMap::Status status,
                                                  int side) const;  // slot 17,
     virtual int  getObjectTypeFlags() const;                       // slot 18,
+    // The area centre; PE +0x118. [INFERRED] accessor form.
+    const Vec2& getCentre() const { return m_centre; }
     // Borrowed; non-virtual. PE 100DECF0.
     const std::vector<AILandingZone*>& getLandingZones() const { return m_landingZones; }
     // Tests a StrategicObjectType bit position, not a mask.

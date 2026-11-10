@@ -7,6 +7,9 @@
 #include <string>
 
 #include "../Main/AIDllFrontier.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"
+#include "../Main/AIRandom.h"
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getMaxNBots
 #include "../Main/BotBehaviourManager.h"                   // getBehaviourId, by name
 #include "../Main/CommonSingletonServer.h"
@@ -744,14 +747,89 @@ void SAI::updateRequestDenyTimers()
     }
 }
 
+// The AI commander's artillery decision, at most every ten seconds and sixty after the last
+// strike. A hostile takeover in progress is shelled with probability 0.9 unless friends are within
+// the artillery radius of the point; otherwise the first enemy long out of a valid position is.
+// Skipped while a human commands or when the bot limit is one or less. PE 1013B8D0.
 void SAI::checkCommanderUseArtillery()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::checkCommanderUseArtillery");
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    const bool tooFewBots = settings && settings->getMaxNBots() - 1 <= 0;
+    if (m_flag1D1 || tooFewBots)
+        return;
+
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    IBFCommander* const commander = static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander);
+    if (!commander->gameHasArtillery(m_side) || !commander->anyArtilleryPiecesLeft(m_side))
+        return;
+    if (!(now > m_time68) || !(now > m_time88))
+        return;
+
+    SquadManager* const squads = SquadManager::m_instance;
+    m_time88 = now + 10.0;
+    AIStrategicObject* object;
+    Vec2 target;
+    target.x = 0.0f;
+    target.y = 0.0f;
+    IAITerrain* const terrain = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    if (hostileTakeoveInProgress(object, target) && AIRandom::m_instance->nextFloat() > 0.1f)
+    {
+        const float height = terrain->getHeight(target.x, target.y);
+        Vec3 point;
+        point.x = target.x;
+        point.y = height;
+        point.z = target.y;
+        if (!squads->isFriendlyNearPosition(point, squads->getArtilleryRadius(), m_side))
+        {
+            m_time68 = now + 60.0;
+            commander->fireArtillery(m_side, -1, target);
+            squads->incomingArtillery(point, m_side);
+            return;
+        }
+    }
+
+    if (squads->getArtilleryTarget(m_side, target))
+    {
+        const float height = terrain->getHeight(target.x, target.y);
+        m_time68 = now + 60.0;
+        commander->fireArtillery(m_side, -1, target);
+        Vec3 point;
+        point.x = target.x;
+        point.y = height;
+        point.z = target.y;
+        squads->incomingArtillery(point, m_side);
+    }
 }
 
-bool SAI::hostileTakeoveInProgress(AIStrategicObject*&, Vec2&)
+// The first area being taken over by the enemy with less than 0.75 of its counter left; the
+// position is a random point between the area centre and twice its offset to this side's position.
+// PE 1013C8E0.
+bool SAI::hostileTakeoveInProgress(AIStrategicObject*& object, Vec2& position)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::hostileTakeoveInProgress");
+    const std::vector<AIStrategicObject*>& objects = AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    AIStrategicObject* candidate = 0;
+    bool found = false;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end(); ++it)
+    {
+        candidate = *it;
+        if (candidate && candidate->hasObjectTypeFlag(0x10) && candidate->isEnemyTakingOverBase(m_side) &&
+            candidate->getControlPointTakeOverCounter() < 0.75f)
+        {
+            object = candidate;
+            found = true;
+            break;
+        }
+    }
+    if (candidate && found)
+    {
+        const Vec2 centre = static_cast<AIStrategicArea*>(candidate)->getCentre();
+        const Vec2 own = candidate->getPosition(m_side);
+        const float rx = static_cast<float>(AIRandom::m_instance->next());
+        position.x = static_cast<float>(rx * ((own.x - centre.x) * 2.0f) * 2.3283064e-10f + centre.x);
+        const float rz = static_cast<float>(AIRandom::m_instance->next());
+        position.y = static_cast<float>(rz * ((own.y - centre.y) * 2.0f) * 2.3283064e-10f + centre.y);
+    }
+    return found;
 }
 
 bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)

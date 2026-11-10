@@ -3,6 +3,11 @@
 
 #include "SquadManager.h"
 #include "SquadMember.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
+#include "../Main/AIRandom.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/Information.h"
 
 #include "SquadCoordinator.h"                        // the constructor builds two per squad
 #include "BotMain.h"
@@ -406,6 +411,94 @@ int SquadManager::releaseSquadsFromArea(int areaIndex, int side)
         }
     }
     return released;
+}
+
+float SquadManager::getArtilleryRadius() const
+{
+    return m_float152;
+}
+
+// True when a player of the side sits in a vehicle whose information is of type bit 5, or lacks
+// type bit 4, strictly inside the radius. PE 1012BB20 sums dz^2 + dy^2 + dx^2.
+bool SquadManager::isFriendlyNearPosition(const Vec3& position, float radius, int side)
+{
+    const float radiusSq = radius * radius;
+    std::vector<int> ids;
+    static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)->getWorldPlayerIds(ids);
+    bool found = false;
+    for (std::vector<int>::iterator it = ids.begin(); it != ids.end(); ++it)
+    {
+        IAIPlayer* const player =
+            static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(*it);
+        if (!player || player->getSide() != side)
+            continue;
+        IAIObject* const vehicle = player->getCurrentVehicle();
+        if (!vehicle)
+            continue;
+        Information* const information = informationManager->getInformation(vehicle->getInformation(side));
+        if (!information)
+            continue;
+        const unsigned int flags = information->getObjectTypeFlags();
+        if (!(flags & 0x20u) && (flags & 0x10u))
+            continue;
+        const Vec3& at = information->getPosition();
+        const float dx = at.x - position.x;
+        const float dy = at.y - position.y;
+        const float dz = at.z - position.z;
+        if (dz * dz + dy * dy + dx * dx < radiusSq)
+        {
+            found = true;
+            break;
+        }
+    }
+    return found;
+}
+
+// Records incoming fire for a side: the start time, the impact point and a delay of
+// (random + 1) * m_double156 / 2; both flee positions of this and the other side become invalid.
+// PE 10128C80.
+void SquadManager::incomingArtillery(const Vec3& position, int side)
+{
+    SideBlock& block = (side == 1) ? m_sideBlock0 : m_sideBlock1;
+    SideBlock& other = (side == 1) ? m_sideBlock1 : m_sideBlock0;
+    const double scale = m_double156 * 0.5;
+    block.m_b0 = true;
+    block.m_artilleryStartTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    block.m_artilleryPosition = position;
+    const float random = AIRandom::m_instance->nextFloat();
+    block.m_validFlee0 = false;
+    block.m_validFlee1 = false;
+    block.m_artilleryDelay = (random + 1.0) * scale;
+    other.m_validFlee0 = false;
+    other.m_validFlee1 = false;
+}
+
+// The first enemy player, in id order, whose position has been invalid for over sixty seconds and
+// who sits in a vehicle with information: its XZ position becomes the target. PE 10129BE0.
+bool SquadManager::getArtilleryTarget(int side, Vec2& target)
+{
+    const int enemySide = (side == 1) ? 2 : 1;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    for (std::map<int, double>::iterator it = m_playerValidPositions.begin(); it != m_playerValidPositions.end(); ++it)
+    {
+        IAIPlayer* const player =
+            static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(it->first);
+        if (!player || player->getSide() != enemySide)
+            continue;
+        if (!(it->second + 60.0 < now))
+            continue;
+        IAIObject* const vehicle = player->getCurrentVehicle();
+        if (!vehicle)
+            continue;
+        Information* const information = informationManager->getInformation(vehicle->getInformation(player->getSide()));
+        if (!information)
+            continue;
+        const Vec3& at = information->getPosition();
+        target.x = at.x;
+        target.y = at.z;
+        return true;
+    }
+    return false;
 }
 
 // Drops the strategic-area assignment of every squad of a one-based side. PE 1012AC70.

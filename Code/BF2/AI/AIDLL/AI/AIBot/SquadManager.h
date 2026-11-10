@@ -45,6 +45,12 @@ public:
     void resetSquads();                     // [INFERRED] name; PE 1012B810
     void unAssignSquads(int side);          // [INFERRED] name; PE 1012AC70, one-based side
     int releaseSquadsFromArea(int areaIndex, int side); // [INFERRED] name; PE 1012AC00
+    float getArtilleryRadius() const;       // [INFERRED] name; PE 101284C0 returns m_float152
+    // Any side member's qualifying vehicle within radius of the position. [INFERRED] name and
+    // argument split: PE 1012BB20 takes the four floats by value. PE 1012BB20.
+    bool isFriendlyNearPosition(const Vec3& position, float radius, int side);
+    void incomingArtillery(const Vec3& position, int side); // PE 10128C80, one-based side
+    bool getArtilleryTarget(int side, Vec2& target);        // [INFERRED] name; PE 10129BE0
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
