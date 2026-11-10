@@ -15,6 +15,7 @@
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../Main/AIRandom.h"
 #include "../Main/IBotManager.h"                          // updateBotPositions
+#include "../AIBot/SquadCoordinator.h"                     // commander orders
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../Main/StrategyManager.h"                       // chooseStrategy
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getMaxNBots
@@ -197,19 +198,34 @@ CommanderInterface::~CommanderInterface()
 }
 
 
-void CommanderInterface::giveAttackOrder(const Vec3&, SquadCoordinator*)
+// PE 10194FE0. Forwards to the commander with the one-based squad id and side and no target; the
+// side is read before the squad id.
+void CommanderInterface::giveAttackOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveAttackOrder (SquadCoordinator)");
+    IBFCommander* const commander = static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander);
+    const int side = squad->getSide() + 1;
+    const int squadId = squad->getSquadId() + 1;
+    commander->giveAttackOrder(position, squadId, side, 0);
 }
 
-void CommanderInterface::giveMoveOrder(const Vec3&, SquadCoordinator*)
+// PE 10195020. Forwards to the commander with the one-based squad id and side and no target; the
+// side is read before the squad id.
+void CommanderInterface::giveMoveOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveMoveOrder (SquadCoordinator)");
+    IBFCommander* const commander = static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander);
+    const int side = squad->getSide() + 1;
+    const int squadId = squad->getSquadId() + 1;
+    commander->giveMoveOrder(position, squadId, side, 0);
 }
 
-void CommanderInterface::giveDefendOrder(const Vec3&, SquadCoordinator*)
+// PE 10195060. Forwards to the commander with the one-based squad id and side and no target; the
+// side is read before the squad id.
+void CommanderInterface::giveDefendOrder(const Vec3& position, SquadCoordinator* squad)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommanderInterface::giveDefendOrder (SquadCoordinator)");
+    IBFCommander* const commander = static_cast<IBFCommander*>(CommonSingletonServer::m_iBFCommander);
+    const int side = squad->getSide() + 1;
+    const int squadId = squad->getSquadId() + 1;
+    commander->giveDefendOrder(position, squadId, side, 0);
 }
 
 void CommanderInterface::giveAttackOrder(const Vec3&, Bot*)
@@ -1896,7 +1912,7 @@ void SAI::distributeDefence()
 
 namespace {
 
-// Element of distributeDefence's need list; ordered by need alone. [INFERRED] name.
+// Element of the defence-need and attack-value lists; ordered by value alone. [INFERRED] name.
 struct DefenceNeed
 {
     int index;
@@ -2023,9 +2039,153 @@ void SAI::distributeDefence(const std::vector<AIStrategicObject*>& objects)
     }
 }
 
+// PE 10144CA0. Runs per category when categories exist, otherwise over all objects; nothing
+// happens when the active strategy asks for no attacks.
 void SAI::distributeAttack()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeAttack");
+    if (m_activeStrategy->m_strategy->getNumberOfAttacks() == 0)
+        return;
+
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    if (manager->getNumberOfCategories() == 0)
+    {
+        distributeAttack(manager->getStrategicObjects());
+        return;
+    }
+    for (int category = 0; category < manager->getNumberOfCategories(); ++category)
+        distributeAttack(manager->getStrategicObjectsOfCategory(category));
+}
+
+// PE 10144410. Objects with attack value above 0.001 are ranked by value. The list keeps the
+// first `attacks` entries, then follow-ups up to twice that while they stay within 80 % of the
+// last kept value; cut objects that are attacking release their squads. With attackers in excess
+// and nothing released, the weakest target is dropped and squads are released from the best
+// targets until one goes. Otherwise up to attacks + 1 targets are chosen, objects already
+// attacking first, each marked attacking and given its squads, then offered one more squad at a
+// time, lowest assigned ratio first, until none accepts.
+void SAI::distributeAttack(const std::vector<AIStrategicObject*>& objects)
+{
+    std::list<DefenceNeed> values;
+    std::list<int> chosen;
+    int released = 0;
+    DefenceNeed entry;
+    entry.index = -1;
+    entry.need = 0.0f;
+
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it)
+            continue;
+        entry.need = (*it)->calculateAttackValue(m_side);
+        if (entry.need > 0.001f)
+        {
+            entry.index = (*it)->m_index;
+            values.push_back(entry);
+        }
+        else if (!(entry.need > 0.0f) && entry.need == entry.need)
+        {
+            (*it)->isAttack(m_side);                     // result discarded, as shipped
+        }
+    }
+
+    values.sort();
+    values.reverse();
+    if (values.empty())
+        return;
+
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    Strategy* const strategy = m_activeStrategy->m_strategy;
+    float pivot = 0.0f;
+    unsigned int position = 0;
+    std::list<DefenceNeed>::iterator node = values.begin();
+    for (; node != values.end(); ++node)
+    {
+        ++position;
+        if (position <= static_cast<unsigned int>(strategy->getNumberOfAttacks()))
+            pivot = node->need;
+        else if (position > (static_cast<unsigned int>(strategy->getNumberOfAttacks()) << 1)
+                 || pivot * 0.8f > node->need)
+            break;
+    }
+    while (node != values.end())
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(node->index);
+        if (object && object->isAttack(m_side))
+            released += object->releaseAssignedResources(m_side);
+        node = values.erase(node);
+    }
+
+    const bool excess = m_flag1CD && !m_flag1CE && released == 0;
+    values.erase(excess ? --values.end() : values.end(), values.end());
+    if (values.empty())
+        return;
+
+    if (excess)
+    {
+        for (node = values.begin(); node != values.end(); ++node)
+        {
+            AIStrategicObject* const object = manager->getStrategicObject(node->index);
+            if (!object || !object->isAttack(m_side))
+                continue;
+            released += object->releaseAssignedResources(m_side);
+            if (released > 0)
+                return;
+        }
+        return;
+    }
+
+    node = values.begin();
+    while (node != values.end()
+           && chosen.size() <= static_cast<unsigned int>(strategy->getNumberOfAttacks()))
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(node->index);
+        if (object && object->isAttack(m_side))
+        {
+            chosen.push_back(node->index);
+            node = values.erase(node);
+        }
+        else
+        {
+            ++node;
+        }
+    }
+    for (node = values.begin();
+         chosen.size() <= static_cast<unsigned int>(strategy->getNumberOfAttacks())
+         && node != values.end(); ++node)
+        chosen.push_back(node->index);
+
+    for (std::list<int>::iterator id = chosen.begin(); id != chosen.end(); ++id)
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(*id);
+        if (!object)
+            continue;
+        object->setAttack(true, m_side);
+        object->collectSquadResources(m_side, this);
+    }
+
+    AssignedRatioLess less;
+    less.side = m_side;
+    std::vector<AIStrategicObject*> heap;
+    for (std::list<int>::iterator id = chosen.begin(); id != chosen.end(); ++id)
+    {
+        AIStrategicObject* object = manager->getStrategicObject(*id);
+        if (!object)
+            continue;
+        heap.push_back(object);
+        std::push_heap(heap.begin(), heap.end(), less);
+    }
+
+    while (!heap.empty())
+    {
+        AIStrategicObject* const top = heap.front();
+        std::pop_heap(heap.begin(), heap.end(), less);
+        heap.pop_back();
+        if (top->collectAdditionalSquadResources(1, m_side, this) == 0)
+            continue;
+        heap.push_back(top);
+        std::push_heap(heap.begin(), heap.end(), less);
+    }
 }
 
 void SAI::distributeWithNoAreas()

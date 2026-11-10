@@ -77,8 +77,8 @@ public:
     virtual float getControlPointTakeOverCounter() = 0;                                  // slot 9; ST0 float chain
     virtual bool isEnemyTakingOverBase(int side) = 0;                                     // slot 10
     virtual float calculateDefenseNeed(int side) = 0;                                     // slot 11; x87 float
-    virtual int  calculateAttackValue(int side) = 0;                                      // slot 12
-    virtual int  calculateAttackCost(int side) = 0;                                       // slot 13
+    virtual float calculateAttackValue(int side) = 0;                                     // slot 12; x87 float
+    virtual float calculateAttackCost(int side) = 0;                                      // slot 13; x87 float
     virtual bool isNeighbour(AIStrategicObject* object) const = 0;                        // slot 14
     virtual bool hasNeighbourWithStatus(StatusMap::Status status, int side) const = 0;    // slot 15
     virtual bool isNeighbouringObject(AIStrategicObject* object) const = 0;               // slot 16

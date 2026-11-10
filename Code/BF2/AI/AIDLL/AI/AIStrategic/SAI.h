@@ -271,6 +271,8 @@ public:
     void distributeDefence();
     // Defence distribution over one category's objects. PE 10143ED0; [INFERRED] overload.
     void distributeDefence(const std::vector<AIStrategicObject*>& objects);
+    // Attack distribution over one category's objects. PE 10144410; [INFERRED] overload.
+    void distributeAttack(const std::vector<AIStrategicObject*>& objects);
     void distributeAttack();
     void distributeWithNoAreas();
     void distributeArtillery();                     // genuinely empty, PE update elides it

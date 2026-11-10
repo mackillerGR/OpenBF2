@@ -2,6 +2,9 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SquadManager operations.
 
 #include "SquadManager.h"
+
+#include <cmath>
+
 #include "SquadMember.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
@@ -420,6 +423,32 @@ float SquadManager::getArtilleryRadius() const
 
 // True when a player of the side sits in a vehicle whose information is of type bit 5, or lacks
 // type bit 4, strictly inside the radius. PE 1012BB20 sums dz^2 + dy^2 + dx^2.
+// PE 1012AD80. Squads without members are skipped; the size is re-read every iteration.
+float SquadManager::getDistanceToClosestSquad(const Vec3& position, int side)
+{
+    Vec3 leaderPosition;
+    leaderPosition.x = 0.0f;
+    leaderPosition.y = 0.0f;
+    leaderPosition.z = 0.0f;
+    float best = 3.40282347e+38f;
+    std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < squads.size(); ++i)
+    {
+        SquadCoordinator* const squad = squads[i];
+        if (squad->getNumberOfSquadMembers() <= 0)
+            continue;
+        if (!squad->getSquadLeader()->getPosition(leaderPosition))
+            continue;
+        const float dx = position.x - leaderPosition.x;
+        const float dy = position.y - leaderPosition.y;
+        const float dz = position.z - leaderPosition.z;
+        const float distance = dz * dz + dx * dx + dy * dy;
+        if (distance < best)
+            best = distance;
+    }
+    return std::sqrt(best);
+}
+
 bool SquadManager::isFriendlyNearPosition(const Vec3& position, float radius, int side)
 {
     const float radiusSq = radius * radius;

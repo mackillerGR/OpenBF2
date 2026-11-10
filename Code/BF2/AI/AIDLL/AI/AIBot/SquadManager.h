@@ -49,6 +49,9 @@ public:
     // Any side member's qualifying vehicle within radius of the position. [INFERRED] name and
     // argument split: PE 1012BB20 takes the four floats by value. PE 1012BB20.
     bool isFriendlyNearPosition(const Vec3& position, float radius, int side);
+    // Distance to the nearest squad leader with a valid position; sqrt(FLT_MAX) when none.
+    // PE 1012AD80; [INFERRED] name.
+    float getDistanceToClosestSquad(const Vec3& position, int side);
     void incomingArtillery(const Vec3& position, int side); // PE 10128C80, one-based side
     bool getArtilleryTarget(int side, Vec2& target);        // [INFERRED] name; PE 10129BE0
     SquadMember* getSquadMember(int playerId, int side);

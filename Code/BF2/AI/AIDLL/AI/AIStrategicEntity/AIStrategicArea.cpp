@@ -725,14 +725,51 @@ float AIStrategicArea::calculateDefenseNeed(int side)
     return need;
 }
 
-int AIStrategicArea::calculateAttackValue(int)
+// PE 100E0300. Only a non-owned area next to an owned one has value: its temperature scaled by
+// (1 + need input), raised by 1.5 when its only foreign neighbours are neutral or 1.25 when it has
+// none, and weighted 100 / distance to the closest friendly squad leader when that distance lies
+// strictly between 1 and 100000. The attack cost is subtracted in every case.
+float AIStrategicArea::calculateAttackValue(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateAttackValue");
+    float value;
+    if (m_status[side - 1] == StatusMap::Owned || !hasNeighbourWithStatus(StatusMap::Owned, side))
+    {
+        value = 0.0f;
+        return value - calculateAttackCost(side);
+    }
+
+    value = (m_needCurveInput[side - 1] + 1.0f) * m_f164[side - 1];
+    if (!hasNeighbourWithStatus(StatusMap::Hostile, side))
+    {
+        if (hasNeighbourWithStatus(StatusMap::Neutral, side))
+            value = static_cast<float>(value * 1.5);
+        else
+            value = static_cast<float>(value * 1.25);
+    }
+
+    Vec3 position;
+    position.x = m_position[0].x;
+    position.y = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+                     ->getTerrainAltitude(m_position[0].x, m_position[0].y);
+    position.z = m_position[0].y;
+    const float distance = SquadManager::m_instance->getDistanceToClosestSquad(position, side);
+    if (!(distance > 1.0f) || distance >= 100000.0f || distance != distance)
+    {
+        value = 0.0f;
+        return value - calculateAttackCost(side);
+    }
+
+    value = 1.0f / distance * value * 100.0f;
+    return value - calculateAttackCost(side);
 }
 
-int AIStrategicArea::calculateAttackCost(int)
+// PE 100DEB30. The second strategic-statistics bucket (-1 with fewer than two buckets), scaled
+// by (1.5 - half the need input) and by one plus the friendly ratio.
+float AIStrategicArea::calculateAttackCost(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateAttackCost");
+    const EnemyStatistics* const statistics = m_statistics[side + 1];
+    const float value = statistics->m_size <= 1 ? -1.0f : statistics->m_strength[1];
+    return value * (1.5f - m_needCurveInput[side - 1] * 0.5f) * (m_friendlyRatio[side - 1] + 1.0f);
 }
 
 bool AIStrategicArea::isNeighbour(AIStrategicObject*) const

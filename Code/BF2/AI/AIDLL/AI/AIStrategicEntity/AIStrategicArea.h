@@ -90,8 +90,8 @@ public:
     virtual float getControlPointTakeOverCounter();               // slot 9
     virtual bool isEnemyTakingOverBase(int side);                  // slot 10,
     virtual float calculateDefenseNeed(int side);                  // slot 11,
-    virtual int  calculateAttackValue(int side);                   // slot 12,
-    virtual int  calculateAttackCost(int side);                    // slot 13,
+    virtual float calculateAttackValue(int side);                  // slot 12,
+    virtual float calculateAttackCost(int side);                   // slot 13,
     virtual bool isNeighbour(AIStrategicObject* object) const;     // slot 14,
     virtual bool hasNeighbourWithStatus(StatusMap::Status status,
                                         int side) const;           // slot 15,
