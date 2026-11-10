@@ -704,9 +704,10 @@ float AIStrategicArea::getControlPointTakeOverCounter()
     return 1.0f;
 }
 
-bool AIStrategicArea::isEnemyTakingOverBase(int)
+// PE 100DEA90.
+bool AIStrategicArea::isEnemyTakingOverBase(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isEnemyTakingOverBase");
+    return m_enemyTakeover[side - 1];
 }
 
 // PE 100DEAB0. Zero unless owned; otherwise (2 - SCurve(need input)) times the enemy battle
