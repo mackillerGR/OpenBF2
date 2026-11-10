@@ -167,6 +167,18 @@ Bot* SquadMember::getBot()
 
 int SquadMember::getMemberIndex() { return m_memberIndex; }
 void SquadMember::setMemberIndex(int index) { m_memberIndex = index; }
+
+// Level reset of the member's position and movement state. PE 1017BDC0.
+void SquadMember::resetMember()
+{
+    m_time24 = 0.0;
+    m_positionValid = false;
+    m_flag4B = false;
+    m_flag49 = true;
+    m_flag4A = true;
+    m_vector54.x = m_vector54.y = m_vector54.z = 0.0f;
+    m_vector60.x = m_vector60.y = m_vector60.z = 0.0f;
+}
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 

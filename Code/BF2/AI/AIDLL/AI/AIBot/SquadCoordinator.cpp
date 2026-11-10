@@ -741,6 +741,42 @@ void SquadCoordinator::addSquadMember(IAIPlayer* player)
     member->updateMemberPos();
 }
 
+// Level reset: the maneuver and repair state clear, the never-happened time returns to -20, the
+// formation rejoins its leader, the fire records go, the slots are rebuilt and every member resets.
+// The need-orders timer restarts at the current game time. PE 101A2470.
+void SquadCoordinator::reset()
+{
+    m_d48 = -20.0;
+    m_strategicAreaAssignment = 0;
+    m_i40 = 4;
+    m_i44 = 0;
+    m_i76 = 4;
+    m_i60 = 0;
+    m_i80 = 0;
+    m_i120 = 0;
+    m_formation->joinSquadLeader();
+    for (std::list<SquadMemberFire*>::iterator it = m_list12.begin(); it != m_list12.end(); )
+    {
+        delete *it;
+        it = m_list12.erase(it);
+    }
+    m_formation->rebuildSlots();
+    m_v108.x = m_v108.y = m_v108.z = 0.0f;
+    m_d132 = 0.0;
+    m_i148 = 0;
+    m_d140 = 0.0;
+    m_i152 = 0;
+    m_b156 = false;
+    m_b157 = false;
+    m_b172 = false;
+    m_b196 = false;
+    m_v200.x = m_v200.y = m_v200.z = 0.0f;
+    m_needOrderMessageTimer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_b220 = false;
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->resetMember();
+}
+
 // Removes the member at index without deleting it: its fire records go first, then its formation
 // slot, then the vector entry; the remaining members are renumbered by position before the leader
 // and the formation slots are rebuilt. No range guard, as in retail. PE 101A45A0.

@@ -29,6 +29,7 @@ public:
     Bot* getBot();                           // borrowed
     int getMemberIndex();
     void setMemberIndex(int index);          // PE 1017BCA0
+    void resetMember();                      // [INFERRED] name; PE 1017BDC0
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved

@@ -351,11 +351,41 @@ SAI::~SAI()
 
 
 // Map-dimension setters intentionally ignore their arguments, matching the shipped bodies.
-// Clears the per-strategy counters and the side's request state for a level reset; true on success.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-sai-reset] Recover PE 1013DFC0.
+// Level reset: clears each strategy's first eight bytes, the strength and count tables and the
+// pending deny requests, rewinds the resumable update to state 19 at -1000, restarts the timers
+// (three at now + 60, one at now + 10, one at zero) and resets the squads. Always true. PE 1013DFC0.
 bool SAI::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::reset");
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin(); it != m_strategies.end(); ++it)
+        for (unsigned int i = 0; i < sizeof(it->m_unresolved00); ++i)
+            it->m_unresolved00[i] = 0;
+    for (int i = 0; i < 6; ++i)
+    {
+        m_enemyStrengths[i] = 0.0f;
+        m_enemyCounts[i] = 0.0f;
+        m_friendlyStrengths[i] = 0.0f;
+        m_friendlyCounts[i] = 0.0f;
+    }
+    m_flag1C0 = false;
+    m_flag1C1 = false;
+    m_intD8 = 0;
+    m_intDC = 0;
+    m_float190 = -1000.0f;
+    m_int18C = 19;
+    m_flag1CE = true;
+    for (std::list<DenyRequest*>::iterator it = m_denyRequests.begin(); it != m_denyRequests.end(); )
+    {
+        delete *it;
+        it = m_denyRequests.erase(it);
+    }
+
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_time68 = m_time70 = m_time78 = now + 60.0;
+    m_time80 = now + 10.0;
+    m_time88 = 0.0;
+    SquadManager::m_instance->resetSquads();
+    m_flagAC = true;
+    return true;
 }
 
 void SAI::setMapXDimension(int)

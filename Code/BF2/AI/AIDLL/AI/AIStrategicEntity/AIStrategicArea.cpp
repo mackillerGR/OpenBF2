@@ -671,9 +671,20 @@ bool AIStrategicArea::retainBot(int, int, ISAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::retainBot");
 }
 
-void AIStrategicArea::setAsDirty(int)
+// Marks the side's distances dirty and sets every vehicle group's flag for that side; with no
+// vehicle groups the array's single element is set. PE 100DED70.
+void AIStrategicArea::setAsDirty(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::setAsDirty");
+    m_distancesDirty[side - 1] = true;
+    bool* const flags = (side == 1) ? m_flagsA : m_flagsB;
+    const int groups = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNumberOfVehicleGroups();
+    if (groups == 0)
+    {
+        flags[0] = true;
+        return;
+    }
+    for (int i = 0; i < groups; ++i)
+        flags[i] = true;
 }
 
 int AIStrategicArea::orderBot(int, const std::list<AIStrategicObject*>&, int, ISAI*)

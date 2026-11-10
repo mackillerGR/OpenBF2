@@ -372,6 +372,33 @@ void SquadManager::playerJoinsSquad(int playerId, int squadId, int side)
     coordinator->updateSquadLeader();
 }
 
+// Level reset: both sides' squads lose their area assignments, the commander messages and
+// position records go, the per-side flags and the update cursors rewind, and every coordinator
+// resets, side one first. PE 1012B810.
+void SquadManager::resetSquads()
+{
+    unAssignSquads(1);
+    unAssignSquads(2);
+    clearCommanderMessages();
+    clearPlayerValidPositions();
+    m_sideBlock0.m_b0 = false;
+    m_sideBlock1.m_b0 = false;
+    m_squadCursor = 0;
+    m_sideCursor = 1;
+    for (unsigned int i = 0; i < m_coordinators[0].size(); ++i)
+        m_coordinators[0][i]->reset();
+    for (unsigned int i = 0; i < m_coordinators[1].size(); ++i)
+        m_coordinators[1][i]->reset();
+}
+
+// Drops the strategic-area assignment of every squad of a one-based side. PE 1012AC70.
+void SquadManager::unAssignSquads(int side)
+{
+    std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < coordinators.size(); ++i)
+        coordinators[i]->unAssignSquad();
+}
+
 // Squad zero and players without a squad member are ignored. The member leaves the coordinator of
 // the given squad but is not deleted, as in retail. PE 1012B230; the name is [INFERRED].
 void SquadManager::playerLeavesSquad(int playerId, int squadId, int side)

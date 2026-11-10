@@ -42,6 +42,8 @@ public:
     void newSquadLeader(int side, int squadId);
     void playerJoinsSquad(int playerId, int squadId, int side);
     void playerLeavesSquad(int playerId, int squadId, int side); // [INFERRED] name; PE 1012B230
+    void resetSquads();                     // [INFERRED] name; PE 1012B810
+    void unAssignSquads(int side);          // [INFERRED] name; PE 1012AC70, one-based side
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
