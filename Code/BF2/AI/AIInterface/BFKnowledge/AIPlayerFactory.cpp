@@ -11,6 +11,7 @@
 #include "AIPlayer.h"                                 // the concrete wrapper this creates
 #include "../../AIDLL/AI/AIUtils/checkPointer.h"
 #include "../../../Game/GameLogic/Player.h"           // world::IPlayer::getId
+#include "../../../Scene/Object/PlayerManager.h"       // world::playerManager
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
@@ -85,14 +86,35 @@ IAIPlayer* AIPlayerFactory::create(world::IPlayer* player)
     return created;
 }
 
+// Client 0x817C20. A wrapper with a game player clears its id slot; one without is searched
+// for and cleared in place. The wrapper is then deleted.
 void AIPlayerFactory::destroy(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::destroy");
+    if (player->getPlayer())
+    {
+        m_players[player->getId()] = 0;
+    }
+    else
+    {
+        for (std::vector<IAIPlayer*>::iterator it = m_players.begin(); it != m_players.end(); ++it)
+        {
+            if (*it == player)
+            {
+                *it = 0;
+                break;
+            }
+        }
+    }
+    delete player;
 }
 
+// Client 0x817B30. -1 for an unknown name.
 int AIPlayerFactory::getPlayerIdFromName(const std::string& name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::getPlayerIdFromName");
+    world::IPlayer* const player = world::playerManager->getPlayerFromName(name);
+    if (!player)
+        return -1;
+    return player->getId();
 }
 
 // IAIPlayerFactory's ELF slot +0x20
@@ -107,25 +129,32 @@ IAIPlayer* AIPlayerFactory::getPlayerFromId(int id)
     return m_players[id];
 }
 
+// Client 0x817BE0. Unchecked id index.
 void AIPlayerFactory::setIdToPlayerMapping(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::setIdToPlayerMapping");
+    m_players[player->getId()] = player;
 }
 
+// Client 0x817C00. Unchecked id index.
 void AIPlayerFactory::removeIdToPlayerMapping(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::removeIdToPlayerMapping");
+    m_players[player->getId()] = 0;
 }
 
 // - a bare member load, so it hands back the vector itself.
+// Client 0x6B5900 (a shared `lea eax, [ecx+4]` body).
 const std::vector<IAIPlayer*>& AIPlayerFactory::getAllPlayers()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::getAllPlayers");
+    return m_players;
 }
 
 IAIPlayer* AIPlayerFactory::getPlayerFromLocalHumanPlayer()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerFactory::getPlayerFromLocalHumanPlayer");
+    // Client 0x817CB0.
+    world::IPlayer* const player = world::playerManager->getLocalHumanPlayer();
+    if (!player)
+        return 0;
+    return m_players[player->getId()];
 }
 
 } // namespace ai
