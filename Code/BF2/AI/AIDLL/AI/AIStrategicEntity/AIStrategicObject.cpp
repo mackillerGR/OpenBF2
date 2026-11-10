@@ -3,6 +3,8 @@
 
 #include "AIStrategicObject.h"
 
+#include <string>
+
 #include "../AIStrategic/SAI.h"          // EnemyStatistics - the four objects the constructor makes
 #include "../Main/AIDllFrontier.h"
 #include "../Main/AIMain.h"
@@ -166,6 +168,42 @@ float AIStrategicObject::getXExtent(int side) const
 float AIStrategicObject::getZExtent(int side) const
 {
     return m_size[side] + m_size[side];
+}
+
+// The comparisons are case-sensitive and run in the shipped order, so "Enemy", "Neutral" and the
+// four compass names resolve to their numeric codes exactly as listed here.
+std::istream& operator>>(std::istream& stream, AIStrategicObject::StrategicObjectType& type)
+{
+    std::string token;
+    stream >> token;
+
+    if      (token == "Flank")          type = AIStrategicObject::Flank;
+    else if (token == "Centre")         type = AIStrategicObject::Centre;
+    else if (token == "Base")           type = AIStrategicObject::Base;
+    else if (token == "Close")          type = AIStrategicObject::Close;
+    else if (token == "Remote")         type = AIStrategicObject::Remote;
+    else if (token == "AirSpawner")     type = AIStrategicObject::AirSpawner;
+    else if (token == "LandSpawner")    type = AIStrategicObject::LandSpawner;
+    else if (token == "NavalSpawner")   type = AIStrategicObject::NavalSpawner;
+    else if (token == "SoldierSpawner") type = AIStrategicObject::SoldierSpawner;
+    else if (token == "StrongPoint")    type = AIStrategicObject::StrongPoint;
+    else if (token == "ChokePoint")     type = AIStrategicObject::ChokePoint;
+    else if (token == "Bridge")         type = AIStrategicObject::Bridge;
+    else if (token == "AirField")       type = AIStrategicObject::AirField;
+    else if (token == "SupplyPoint")    type = AIStrategicObject::SupplyPoint;
+    else if (token == "Route")          type = AIStrategicObject::Route;
+    else if (token == "ControlPoint")   type = AIStrategicObject::ControlPoint;
+    else if (token == "Front")          type = AIStrategicObject::Front;
+    else if (token == "Safe")           type = AIStrategicObject::Safe;
+    else if (token == "Enemy")          type = AIStrategicObject::Enemy;
+    else if (token == "Neutral")        type = AIStrategicObject::NeutralType;
+    else if (token == "North")          type = AIStrategicObject::North;
+    else if (token == "West")           type = AIStrategicObject::West;
+    else if (token == "South")          type = AIStrategicObject::South;
+    else
+        type = static_cast<AIStrategicObject::StrategicObjectType>(token == "East" ? 20 : 27);
+
+    return stream;
 }
 
 } // namespace ai

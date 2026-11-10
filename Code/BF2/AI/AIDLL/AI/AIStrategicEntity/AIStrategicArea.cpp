@@ -43,7 +43,7 @@ AIStrategicArea::AIStrategicArea(const std::string& name, unsigned int controlPo
 {
     // The tail. Everything above this point lands before the three list members are constructed, so
     // it cannot be body code; everything here lands after them, so it cannot be an initialiser.
-    m_i400 = -1;
+    m_layer = -1;
     m_b404 = true;
     m_statusChanged = false;
     m_i416 = 0;
@@ -51,6 +51,113 @@ AIStrategicArea::AIStrategicArea(const std::string& name, unsigned int controlPo
     m_i424 = 0;
     m_fromControlPoint      = true;    // the phase selector - see the header
     m_orderPosesInitialised = false;
+}
+
+// PE 100E8840. Same member initialization as the control-point form except for the centre, the
+// invalid control point id and the cleared phase selector, then the shared constructor tail.
+AIStrategicArea::AIStrategicArea(const std::string& name, Vec2 firstCorner, Vec2 secondCorner,
+                                 float height, float radius)
+    : AIStrategicObject(radius, height)
+    , m_list268()
+    , m_centre(firstCorner)
+    , m_mapData(checkPointer(new MapData[IAIPathfinding::instance->getNumberOfMaps()]))
+    , m_neighbours()
+    , m_neighbouringObjects()
+    , m_name(name)
+    , m_objectTypeFlags(0)
+    , m_controlPointId(0xFFFFFFFFu)
+    , m_landingZones()
+    , m_i340(0)
+    , m_b358(false)
+{
+    m_layer = -1;
+    m_b404 = true;
+    m_statusChanged = false;
+    m_i416 = 0;
+    m_i420 = 0;
+    m_i424 = 0;
+    m_fromControlPoint      = false;
+    m_orderPosesInitialised = false;
+
+    internalConstructorCall(firstCorner, secondCorner);
+}
+
+// PE 100E8A20.
+void AIStrategicArea::setSide(int side)
+{
+    if (side == 1)
+    {
+        m_status[0] = StatusMap::Owned;
+        m_status[2] = StatusMap::Owned;
+        m_status[1] = StatusMap::Hostile;
+        m_status[3] = StatusMap::Hostile;
+    }
+    else if (side == 2)
+    {
+        m_status[0] = StatusMap::Hostile;
+        m_status[2] = StatusMap::Hostile;
+        m_status[1] = StatusMap::Owned;
+        m_status[3] = StatusMap::Owned;
+    }
+    else
+    {
+        m_status[2] = StatusMap::Neutral;
+        m_status[3] = StatusMap::Neutral;
+    }
+}
+
+// PE 100E0490. After initOrderPoses the navmesh query is made with the map's previous offset,
+// not the new position, and only its island result is kept; preserved as shipped.
+bool AIStrategicArea::setOrderPosition(int map, const Vec3& position)
+{
+    if (!m_orderPosesInitialised)
+    {
+        m_mapData[map].m_offset = position;
+        return true;
+    }
+
+    Vec3 areaPosition;
+    areaPosition.x = 0.0f;
+    areaPosition.y = 0.0f;
+    areaPosition.z = 0.0f;
+    vec2ToVec3XZ(m_position[0], areaPosition);
+    areaPosition.y = m_f148;
+
+    unsigned int polygon = 0;
+    unsigned int island  = 0;
+    IAIPathfinding::instance->getPolygon(m_mapData[map].m_offset, map, polygon, island, 1);
+
+    MapData& data = m_mapData[map];
+    data.m_offset.x = position.x - areaPosition.x;
+    data.m_offset.y = position.y - areaPosition.y;
+    data.m_offset.z = position.z - areaPosition.z;
+    data.m_island = island;
+    return true;
+}
+
+// PE 100E53F0.
+void AIStrategicArea::addNeighbour(AIStrategicObject* neighbour)
+{
+    const int count = static_cast<int>(m_neighbours.size());
+    for (int i = 0; i < count; ++i)
+    {
+        if (m_neighbours[i] == neighbour)
+            return;
+    }
+    m_neighbours.push_back(neighbour);
+}
+
+// PE 100E5500. Grows by resize and then assigns the new last element.
+void AIStrategicArea::addNeighbouringObject(AIStrategicObject* object)
+{
+    const int count = static_cast<int>(m_neighbouringObjects.size());
+    for (int i = 0; i < count; ++i)
+    {
+        if (m_neighbouringObjects[i] == object)
+            return;
+    }
+    m_neighbouringObjects.resize(count + 1);
+    m_neighbouringObjects[count] = object;
 }
 
 // Eleven hundred bytes: the per-map array, four lists, the name, and whatever the twenty-eight
@@ -227,7 +334,7 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
     m_f408 = 1.0f;
     m_f412 = 1.0f;
 
-    m_f396 = m_size[1] + m_size[1];
+    m_vehicleSearchRadius = m_size[1] + m_size[1];
 }
 
 // Raises the stored area height to the terrain height when the terrain is higher.

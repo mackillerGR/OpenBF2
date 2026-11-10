@@ -83,14 +83,14 @@ public:
     const std::map<std::string, AIStrategicArea*>& getStrategicAreas() const;
     std::string getStrategicAreaNames();
     AIStrategicArea* getActiveArea();
-    void setActive(std::string);
+    bool setActive(std::string);
     std::string getActive() const;
     // Initializes strategic areas; has no return value.
     void initAreas();
     void postLoadInitAreas();
     Vec2 getPosition() const;
     bool isInside(const std::string&, const Vec2&);
-    void create(std::string, Vec2, Vec2, float, float, const std::string&);
+    bool create(std::string, Vec2, Vec2, float, float, const std::string&);
     // Creates an area from a control point. Returns false for duplicate names or allocation
     // failure and true after successful creation.
     bool createFromControlPoint(const std::string&, unsigned, float, const std::string&);
@@ -99,7 +99,7 @@ public:
     std::string list() const;
 
     // neighbours
-    void addNeighbour(std::string);
+    bool addNeighbour(std::string);
     void addTwoWayNeighbour(std::string, std::string);
     void removeAllNeighbours();
     std::string getNeighbours();
@@ -111,7 +111,7 @@ public:
     void createNewCategory(const std::string&);
 
     // object type flags
-    void addObjectTypeFlag(int);
+    int addObjectTypeFlag(int);
     void removeObjectTypeFlag(int);
     void setObjectTypeFlags(int);
     int getObjectTypeFlags();

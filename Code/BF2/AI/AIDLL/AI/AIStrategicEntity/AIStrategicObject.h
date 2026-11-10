@@ -7,6 +7,7 @@
 
 #include <list>
 #include <set>
+#include <istream>
 
 // Vec2 and Vec3 cannot be forward-declared in this tree: both are typedefs to
 // `dice::hfe::Math::Vec2/Vec3`, so a local `struct Vec3;` is a redefinition with a different basic
@@ -156,6 +157,10 @@ public:
     /* +252 */ int   m_category;    // 1 until createFromControlPoint or create sets it
     /* +256 */ std::set<int> m_set256;
 };
+
+// Reads one whitespace-delimited token and maps the exact spelling to its type; any other token
+// yields 27, the value addObjectTypeFlag refuses. PE 100DA9E0; [INFERRED] placement.
+std::istream& operator>>(std::istream& stream, AIStrategicObject::StrategicObjectType& type);
 
 } // namespace ai
 } // namespace hfe

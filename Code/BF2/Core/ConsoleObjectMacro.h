@@ -941,6 +941,52 @@ private:                                                                        
 static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
 }
 
+// Five required arguments, an optional sixth, and a typed result (aiStrategicArea.create).
+#define BF2_CONSOLE_METHOD_5_6_RET_ACTIVE(fnName, target, RET, activeExpr, A0, A1, A2, A3, A4, A5, A5DEFAULT, listTag) \
+namespace {                                                                                        \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                      \
+{                                                                                                  \
+    BF2_CC_HEAD(fnName, 0, 5, 6, #RET, true)                                                       \
+            m_argTypes[0] = #A0;                                                                   \
+            m_argTypes[1] = #A1;                                                                   \
+            m_argTypes[2] = #A2;                                                                   \
+            m_argTypes[3] = #A3;                                                                   \
+            m_argTypes[4] = #A4;                                                                   \
+            m_argTypes[5] = #A5;                                                                   \
+    BF2_CC_TAIL(6, listTag)                                                                        \
+    virtual bool isObjectActive() const { return (activeExpr); }                                   \
+    virtual void executeObjectMethod()                                                             \
+    {                                                                                              \
+        if (m_argCount == 5)              /* the trailing argument is defaulted */                 \
+        {                                                                                          \
+            m_hasReturnValue = true;                                                               \
+            m_returnValue = target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2),        \
+                                   BF2_CC_ARG(A3, 3), BF2_CC_ARG(A4, 4), (A5DEFAULT));             \
+        }                                                                                          \
+        else if (m_argCount == 6)         /* everything parsed */                                  \
+        {                                                                                          \
+            m_hasReturnValue = true;                                                               \
+            m_returnValue = target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2),        \
+                                   BF2_CC_ARG(A3, 3), BF2_CC_ARG(A4, 4), BF2_CC_ARG(A5, 5));       \
+        }                                                                                          \
+    }                                                                                              \
+    virtual void setArgFromString(int index, const std::string& value)                             \
+    {                                                                                              \
+        BF2_CC_CONVERT(A0, 1)                                                                      \
+        BF2_CC_CONVERT(A1, 2)                                                                      \
+        BF2_CC_CONVERT(A2, 3)                                                                      \
+        BF2_CC_CONVERT(A3, 4)                                                                      \
+        BF2_CC_CONVERT(A4, 5)                                                                      \
+        BF2_CC_CONVERT(A5, 6)                                                                      \
+    }                                                                                              \
+    BF2_CC_RETURN_AS_STRING                                                                        \
+    BF2_CC_COMMON_HOOKS                                                                            \
+private:                                                                                           \
+    RET m_returnValue;                                                                             \
+};                                                                                                 \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                                \
+}
+
 // Set/get property: one argument calls the setter without a result; zero calls the getter.
 // objExpr selects the receiver. Upstream lookup checks availability; execution does not recheck it.
 #define BF2_CONSOLE_PROPERTY(fnName, T, objExpr, setFn, getFn, listTag)                            \

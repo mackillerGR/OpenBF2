@@ -47,6 +47,21 @@ public:
     struct AreaRecord { int m_words[6]; };
 
     AIStrategicArea(const std::string& name, unsigned int controlPointId, float radius);
+    // Explicit-bounds area from `aiStrategicArea.create`. The first corner is kept as the centre
+    // field and both corners go to internalConstructorCall; the control point id is invalid.
+    AIStrategicArea(const std::string& name, Vec2 firstCorner, Vec2 secondCorner,
+                    float height, float radius);
+
+    // Writes both live and initial side statuses for side 1 or 2 (Owned for that side, Hostile for
+    // the other). Any other value marks only the initial statuses Neutral.
+    void setSide(int side);
+    // Stores a per-map order position. Before initOrderPoses it is kept absolute; afterwards it is
+    // converted to an area-relative offset and its navmesh island is cached. Always returns true.
+    bool setOrderPosition(int map, const Vec3& position);
+    // Appends an area once to the neighbour list. [INFERRED] name.
+    void addNeighbour(AIStrategicObject* neighbour);
+    // Appends an object once to the neighbouring-object list. [INFERRED] name.
+    void addNeighbouringObject(AIStrategicObject* object);
 
     // [INFERRED] Initializes area state. Manager-created areas call this during initAreas;
     // control-point areas defer it until postLoadInit.
@@ -146,8 +161,10 @@ public:
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
     /* +392 */ std::list<AreaRecord> m_list392;    // node
     // Stored doubled extent, initialized to twice m_size[1].
-    /* +396 */ float m_f396;                       // = 2 * m_size[1] [UNRESOLVED] meaning
-    /* +400 */ int m_i400;                         // 1 [UNRESOLVED]
+    // Exposed to scripts as `vehicleSearchRadius`; internalConstructorCall initializes it.
+    /* +396 */ float m_vehicleSearchRadius;
+    // Script layer; addNeighbour links only areas on the same layer. Both constructors store -1.
+    /* +400 */ int m_layer;
     /* +404 */ bool m_b404;                        // true
     /* +405 */ bool m_statusChanged;               // false; update stores its changed output here
     // Additional state initialized by internalConstructorCall.
