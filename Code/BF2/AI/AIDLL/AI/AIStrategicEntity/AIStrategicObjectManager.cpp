@@ -7,6 +7,12 @@
 #include "../AIUtils/checkPointer.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"   // addStrategicObject's null-guarded tail
 #include "../Main/AIDllFrontier.h"
+#include <cmath>
+#include "../../../../Math/Mat4.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/Information.h"
 #include "../../../../Core/ConsoleObjectMacro.h"      // the aiStrategicArea.* binding at the foot
 
 namespace dice {
@@ -246,14 +252,90 @@ void AIStrategicObjectManager::bridgeSegmentRepaired(IAIObject* object)
 // [FRONTIER] Reset operations require the remaining strategic-area lifecycle behavior.
 // [RETIRE-WHEN: aidll-02-skeleton] Implement and validate area resets and collection rebuilding.
 
+namespace {
+
+// The engine's Vec3 normalize as the AI image inlines it (PE 1006EEC0): a squared length already
+// within FLT_EPSILON of one is left alone, a near-zero vector becomes zero.
+void normalizeInPlace(Vec3& v)
+{
+    const float lengthSq = v.x * v.x + v.y * v.y + v.z * v.z;
+    if (std::fabs(lengthSq - 1.0f) < 1.1920929e-07f)
+        return;
+    if (std::fabs(lengthSq) < 1.1920929e-07f)
+    {
+        v.x = v.y = v.z = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSq);
+    v.x *= scale;
+    v.y *= scale;
+    v.z *= scale;
+}
+
+// The side-one information of a bridge segment's object; null for a stale handle.
+Information* segmentInformation(IAIObject* object)
+{
+    return informationManager->getInformation(object->getHandle(1));
+}
+
+} // namespace
+
+// Marks every bridge segment intact and recomputes its direction: towards the first other segment
+// whose centre lies within (2r + 5)^2 of this one's (r its physical radius), else the object's own
+// third transform axis. PE 1008FA80; the direction role of m_position is [INFERRED].
+void AIStrategicObjectManager::resetBridges()
+{
+    for (std::list<BridgeSegment*>::iterator it = m_bridgeSegments.begin(); it != m_bridgeSegments.end(); ++it)
+    {
+        BridgeSegment* const segment = *it;
+        segment->m_destroyed = false;
+
+        Information* const information = segmentInformation(segment->m_object);
+        const Vec3 centre = information->getPosition();
+        const float reach = information->getPhysical()->getRadius() * 2.0f + 5.0f;
+        const float reachSq = reach * reach;
+
+        bool found = false;
+        for (std::list<BridgeSegment*>::iterator other = m_bridgeSegments.begin();
+             other != m_bridgeSegments.end(); ++other)
+        {
+            const Vec3& position = segmentInformation((*other)->m_object)->getPosition();
+            Vec3 delta;
+            delta.x = position.x - centre.x;
+            delta.y = position.y - centre.y;
+            delta.z = position.z - centre.z;
+            const float distanceSq = delta.y * delta.y + delta.z * delta.z + delta.x * delta.x;
+            if (distanceSq > 0.0099999998f && distanceSq < reachSq)
+            {
+                normalizeInPlace(delta);
+                segment->m_position = delta;
+                found = true;
+                break;
+            }
+        }
+        if (!found)
+        {
+            const Mat4& transform = segment->m_object->getTransformation();
+            segment->m_position.x = transform.m[8];
+            segment->m_position.y = transform.m[9];
+            segment->m_position.z = transform.m[10];
+        }
+    }
+}
+
 bool AIStrategicObjectManager::reset()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::reset");
 }
 
+// Lowers the initialised flag and restores every area's side statuses. PE 10090ED0.
 bool AIStrategicObjectManager::resetAreas()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::resetAreas");
+    m_areasInitialised = false;
+    for (std::map<std::string, AIStrategicArea*>::iterator it = m_strategicAreas.begin();
+         it != m_strategicAreas.end(); ++it)
+        it->second->resetStatus();
+    return true;
 }
 
 // The accessors that are two or three instructions. Each is transcribed from its own body; none of

@@ -31,6 +31,7 @@
 #include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"  // updateBotProjectiles
 #include "../AIBot/SquadManager.h"                                // update(double)
 #include "AIMineManager.h"                                       // IAIMineManager::update
+#include "CommunicationHub.h"                                    // resetLevel
 
 namespace dice {
 namespace hfe {
@@ -458,9 +459,26 @@ void AIMain::reset()
     BF2_AI_FRONTIER("dice::hfe::ai::AIMain::reset");
 }
 
+// Resets the level state in this order: bridges, strategic areas, each side's strategic AI (only
+// while every earlier reset succeeded), projectiles, destroyable map parts, bridges again, the
+// communication hub (unguarded, as in retail) and the mines. PE 100D3AD0 materializes the combined
+// result in AL; the interface slot is void and every caller discards it.
 void AIMain::resetLevel()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::resetLevel");
+    AIStrategicObjectManager::getInstance()->resetBridges();
+    bool succeeded = AIStrategicObjectManager::getInstance()->resetAreas();
+    for (int side = 1; side < static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNSides() + 1; ++side)
+    {
+        SAI* const sai = m_sai[side];
+        if (sai)
+            succeeded = succeeded && sai->reset();
+    }
+    static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler)->removeAllProjectiles();
+    IAIPathfinding::instance->resetDestroyableMapParts();
+    AIStrategicObjectManager::getInstance()->resetBridges();
+    CommunicationHub::m_instance->reset();
+    static_cast<IAIMineManager*>(CommonSingletonServer::m_iAIMineManager)->reset();
+    (void)succeeded;
 }
 
 void AIMain::setAISystemQuotient(const double& /*q*/)

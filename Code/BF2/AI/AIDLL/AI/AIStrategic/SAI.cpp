@@ -351,6 +351,13 @@ SAI::~SAI()
 
 
 // Map-dimension setters intentionally ignore their arguments, matching the shipped bodies.
+// Clears the per-strategy counters and the side's request state for a level reset; true on success.
+// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-sai-reset] Recover PE 1013DFC0.
+bool SAI::reset()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SAI::reset");
+}
+
 void SAI::setMapXDimension(int)
 {
 }

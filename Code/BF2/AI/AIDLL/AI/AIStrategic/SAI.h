@@ -154,6 +154,7 @@ public:
 class SAI : public ISAI
 {
 public:
+    bool reset();                         // [INFERRED] name; PE 1013DFC0 [FRONTIER]
     // [PLATFORM] BotInfo is 28 bytes with ELF double alignment and 32 with MSVC alignment.
     // Do not serialize its native object representation.
     struct BotInfo

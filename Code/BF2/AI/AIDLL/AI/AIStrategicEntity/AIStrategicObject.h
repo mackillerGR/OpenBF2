@@ -116,6 +116,9 @@ public:
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.
     StatusMap::Status getStatus(int side) const { return m_status[side - 1]; }
     int getIndex() const { return m_index; }
+    // Restores both live side statuses from the two stored after them. PE 100E8DE0; the name and
+    // the "initial status" role of m_status[2..3] are [INFERRED].
+    void resetStatus() { m_status[0] = m_status[2]; m_status[1] = m_status[3]; }
 
     // [CHOSEN, not recovered] Public fields allow manager access; the original may have
     // used friendship instead. Offsets document ELF layout and do not constrain modern STL sizes.
