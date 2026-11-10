@@ -28,10 +28,10 @@ public:
 
     virtual int getNextEmptySquad(int team) const = 0;
     virtual bool joinSquad(int squad, IAIPlayer* player) = 0; // ELF/PE return AL; BotSquad tests it
-    virtual int exitSquad(int squad, IAIPlayer* player) = 0;
+    virtual void exitSquad(int squad, IAIPlayer* player) = 0;
     virtual bool isSquadLeader(int squad, IAIPlayer* player) = 0;
-    virtual int assignAsSquadLeader(int squad, IAIPlayer* player) = 0;
-    virtual int retireAsSquadLeader(int squad, IAIPlayer* player) = 0;
+    virtual void assignAsSquadLeader(int squad, IAIPlayer* player) = 0;
+    virtual void retireAsSquadLeader(int squad, IAIPlayer* player) = 0;
     virtual int issueSquadAttackOrder(const Vec3& position, int a, int b, IAIObject* target) = 0;
     virtual int issueSquadMoveOrder(const Vec3& position, int a, int b, IAIObject* target) = 0;
     virtual int issueSquadDefendOrder(const Vec3& position, int a, int b, IAIObject* target) = 0;
@@ -56,10 +56,10 @@ public:
 
     virtual int getNextEmptySquad(int team) const;
     virtual bool joinSquad(int squad, IAIPlayer* player);
-    virtual int exitSquad(int squad, IAIPlayer* player);
+    virtual void exitSquad(int squad, IAIPlayer* player);
     virtual bool isSquadLeader(int squad, IAIPlayer* player);
-    virtual int assignAsSquadLeader(int squad, IAIPlayer* player);
-    virtual int retireAsSquadLeader(int squad, IAIPlayer* player);
+    virtual void assignAsSquadLeader(int squad, IAIPlayer* player);
+    virtual void retireAsSquadLeader(int squad, IAIPlayer* player);
     virtual int issueSquadAttackOrder(const Vec3& position, int a, int b, IAIObject* target);
     virtual int issueSquadMoveOrder(const Vec3& position, int a, int b, IAIObject* target);
     virtual int issueSquadDefendOrder(const Vec3& position, int a, int b, IAIObject* target);

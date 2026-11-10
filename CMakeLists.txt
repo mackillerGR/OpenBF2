@@ -1099,37 +1099,8 @@ else()
 endif()
 endif() # BF2_BUILD_LINUX / MSVC link contracts
 
-# =================================================================================================
-# bf2_aidll - THE BOT-AI SIDE-DLL IMAGE.
-# The native-x64 profile is intentionally dedicated-only. Do not let it emit x64 binaries under
-# the shipped x86 AIDLL/BF2 names; those ports require separate targets and ABI validation.
-if(NOT BF2_BUILD_X64)
-#
-# AIDLL_w32ded.dll is a THIRD server-side image built from this same tree: bf2_w32ded.exe loads it
-# through ai::AIConnection::init -> LoadLibraryBf -> the exported initDll, and reaches it afterwards
-# only through the ClassManager simple-singleton registry. Its ABI is two undecorated exports and
-# nothing else (Code/BF2/Core/DllModule.h); Code/AidllAbi/AIDLL_w32ded.def pins them to the shipped
-# ordinals.
-#
-# NOT a relink of bf2_engine_objects, and it cannot be: this image compiles with BF2_IMAGE_AIDLL,
-# which removes the engine-only main-ConsoleObjects instance from Core/ConsoleObjects.cpp (in
-# libaidll.so that pointer is plain .bss, filled by initDll - see Core/DllGlobals.cpp). The manifest
-# below is therefore its own compilation, and it MIRRORS Code/Build/aidll.cmd. Keep the two lists
-# in step; aidll.cmd is the one the harness and every gate use.
-#
-# EXCLUDE_FROM_ALL, and /FORCE for the same reason bf2_w32ded is: every unwritten function links at
-# RVA 0 and faults BY NAME on the path that reaches it. The only unresolved symbol today is
-# ai::informationManager, the InformationManager frontier BF2AI.cpp declares and chunk 02 fills.
-#
-# OUTPUT: <BF2_AIDLL_OUTPUT_DIR>/AIDLL_w32ded.dll - the build tree's bin/, NEVER the game folder.
-# "D:/B2BF Launcher/Battlefield2/AIDLL_w32ded.dll" is the REFERENCE binary. The server reaches the
-# rebuilt DLL through a RELATIVE `AIDLL` setting (LoadLibraryBf builds ".\\" + name against the
-# current directory); Code/Tests/aidll/run.py does exactly that and copies nothing.
-# =================================================================================================
-set(BF2_AIDLL_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
-    "Where AIDLL_w32ded.dll is written (NOT the game folder - the original lives there)")
-
-add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL
+# The bot-AI side-DLL manifest, shared by the x86 bf2_aidll image below and the portable aidll.so.
+set(bf2_aidll_image_sources
     # group 1 - the module entry point; engine code compiled into every side-DLL, never into the exe
     "${BF2_ROOT}/Core/DllModule.cpp"
     "${BF2_ROOT}/Core/DllGlobals.cpp"
@@ -1232,6 +1203,38 @@ add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL
     "${BF2_ROOT}/IO/File/File.cpp"            # io::File - AerialHeightMap's file paths
     "${BF2_ROOT}/IO/Input/PlayerInput.cpp"    # 0x18F020   - setInput(float), the plan executor
 )
+
+# =================================================================================================
+# bf2_aidll - THE BOT-AI SIDE-DLL IMAGE.
+# The native-x64 profile is intentionally dedicated-only. Do not let it emit x64 binaries under
+# the shipped x86 AIDLL/BF2 names; those ports require separate targets and ABI validation.
+if(NOT BF2_BUILD_X64)
+#
+# AIDLL_w32ded.dll is a THIRD server-side image built from this same tree: bf2_w32ded.exe loads it
+# through ai::AIConnection::init -> LoadLibraryBf -> the exported initDll, and reaches it afterwards
+# only through the ClassManager simple-singleton registry. Its ABI is two undecorated exports and
+# nothing else (Code/BF2/Core/DllModule.h); Code/AidllAbi/AIDLL_w32ded.def pins them to the shipped
+# ordinals.
+#
+# NOT a relink of bf2_engine_objects, and it cannot be: this image compiles with BF2_IMAGE_AIDLL,
+# which removes the engine-only main-ConsoleObjects instance from Core/ConsoleObjects.cpp (in
+# libaidll.so that pointer is plain .bss, filled by initDll - see Core/DllGlobals.cpp). The manifest
+# below is therefore its own compilation, and it MIRRORS Code/Build/aidll.cmd. Keep the two lists
+# in step; aidll.cmd is the one the harness and every gate use.
+#
+# EXCLUDE_FROM_ALL, and /FORCE for the same reason bf2_w32ded is: every unwritten function links at
+# RVA 0 and faults BY NAME on the path that reaches it. The only unresolved symbol today is
+# ai::informationManager, the InformationManager frontier BF2AI.cpp declares and chunk 02 fills.
+#
+# OUTPUT: <BF2_AIDLL_OUTPUT_DIR>/AIDLL_w32ded.dll - the build tree's bin/, NEVER the game folder.
+# "D:/B2BF Launcher/Battlefield2/AIDLL_w32ded.dll" is the REFERENCE binary. The server reaches the
+# rebuilt DLL through a RELATIVE `AIDLL` setting (LoadLibraryBf builds ".\\" + name against the
+# current directory); Code/Tests/aidll/run.py does exactly that and copies nothing.
+# =================================================================================================
+set(BF2_AIDLL_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
+    "Where AIDLL_w32ded.dll is written (NOT the game folder - the original lives there)")
+
+add_library(bf2_aidll SHARED EXCLUDE_FROM_ALL ${bf2_aidll_image_sources})
 set_target_properties(bf2_aidll PROPERTIES
     LINKER_LANGUAGE CXX
     OUTPUT_NAME AIDLL_w32ded
@@ -1891,6 +1894,34 @@ if(BUILD_TESTING AND MSVC)
         VERBATIM
     )
     set_property(TARGET bf2_run_checks PROPERTY FOLDER "Checks")
+endif()
+
+# [CHOSEN, not recovered] The bot-AI library for the portable client: the shared AIDLL manifest
+# compiled as libaidll.so: BF2Engine names aidll.so and the ELF loader maps it to lib<stem>.so. It loads
+# through LoadLibraryBf and is reached only through initDll and the ClassManager registry.
+# [RETIRE-WHEN: portable-aidll] see AI/AIInterface/Main/AIConnection.cpp.
+if(BF2_BUILD_LINUX)
+    add_library(bf2_aidll_portable SHARED EXCLUDE_FROM_ALL ${bf2_aidll_image_sources})
+    set_target_properties(bf2_aidll_portable PROPERTIES OUTPUT_NAME aidll
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin_portable")
+    bf2_configure_cpp_target(bf2_aidll_portable)
+    bf2_set_image(bf2_aidll_portable 0)
+    bf2_set_platform_compat(bf2_aidll_portable)
+    target_compile_definitions(bf2_aidll_portable PRIVATE BF2_IMAGE_AIDLL=1 BF2_PLUGIN_ABI_NATIVE=1
+        _ITERATOR_DEBUG_LEVEL=0 _LINUX "BF2_EDX_PARAM=")
+    target_compile_options(bf2_aidll_portable PRIVATE -fno-devirtualize
+        -include "${BF2_ROOT}/Core/PortableClient.h")
+    target_include_directories(bf2_aidll_portable PRIVATE "${BF2_ROOT}" "${BF2_ROOT}/PortShim"
+        ${BF2_PYTHON_INCLUDE_DIRS} "${BF2_EXTERNAL_ROOT}/zlib-1.2.3"
+        "${BF2_EXTERNAL_ROOT}/zlib-1.2.3/contrib/minizip")
+    if(ANDROID)
+        target_link_libraries(bf2_aidll_portable PRIVATE "${CMAKE_BINARY_DIR}/libmain.so" dl log)
+    else()
+        target_link_libraries(bf2_aidll_portable PRIVATE dl pthread)
+    endif()
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(bf2_aidll_portable PRIVATE -fno-gnu-unique)
+    endif()
 endif()
 
 # [CHOSEN, not recovered] The Flash menu player for the portable client.

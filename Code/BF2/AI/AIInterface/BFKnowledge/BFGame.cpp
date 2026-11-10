@@ -9,6 +9,10 @@
 
 #include "AIFrontier.h"
 
+#include "../../AIDLL/AI/Main/AISettingsInterfaces.h"  // IAISettings - the script override
+#include "../../../Game/GeneralSettings.h"                 // the menu's bot settings
+#include "../../../Game/LocalProfileManager.h"             // the logged-in profile
+
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
 #include "../../../Game/GameServer/ServerSettings.h"
@@ -64,14 +68,35 @@ int BFGame::getMaxNumberOfPlayers() const
     return serverSettings->getMaxPlayers();
 }
 
-// Copies game settings into the AI configuration, including bot population and team balance.
-// [RETIRE-WHEN: aidll-01-adapters] Remove when the corresponding implementation is complete and validated.
+// Copies the bot population, the humans-count flag and the skill into the AI configuration.
+// The client reads them from the menu's GeneralSettings through the logged-in profile; single
+// player first stores 16 bots, or the AI script's count when it overrides the menu. Without
+// GeneralSettings the dedicated server's coop settings apply. Client PE 0x815C50.
 int BFGame::getAISettingsFromGame(int& a, bool& b, float& c) const
 {
-    if (classManager->getSingleton(std::string("GeneralSettings")))
+    IGeneralSettings* const general =
+        static_cast<IGeneralSettings*>(classManager->getSingleton(std::string("GeneralSettings")));
+    if (general)
     {
-        BF2_AI_FRONTIER("dice::hfe::ai::BFGame::getAISettingsFromGame"
-                        " - the MENU arm; this image has no GeneralSettings slots");
+        ILocalProfileManager* const profiles = static_cast<ILocalProfileManager*>(
+            classManager->getSingleton(std::string("LocalProfileManager")));
+        if (!profiles || !profiles->getCurrentProfile())
+            return 0;
+
+        const std::string gameMode = settings->stringGet(std::string("GSGameMode"), std::string("gpm_cq"));
+        if (gameMode.compare(std::string("sp1")) == 0)
+        {
+            int maxBots = 16;
+            IAISettings* const aiSettings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+            if (aiSettings && aiSettings->overrideMenuSettings())
+                maxBots = aiSettings->getMaxNBots();
+            general->setMaxBots(maxBots);
+        }
+
+        a = general->getMaxBots();
+        b = general->getMaxBotsIncludeHumans();
+        c = general->getBotSkill();
+        return 1;
     }
 
     // no settings and no menu is A reported failure, not A silent zero - and the caller honours

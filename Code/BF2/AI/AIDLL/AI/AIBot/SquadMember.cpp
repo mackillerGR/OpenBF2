@@ -11,6 +11,7 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 namespace dice {
 namespace hfe {
@@ -165,6 +166,7 @@ Bot* SquadMember::getBot()
 }
 
 int SquadMember::getMemberIndex() { return m_memberIndex; }
+void SquadMember::setMemberIndex(int index) { m_memberIndex = index; }
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 
@@ -316,10 +318,35 @@ bool SquadMember::isAllowedInFormation()
         return false;
     if (m_player->isManDown())
         return false;
-    if (!m_player->getCurrentVehicle())
+    IAIObject* const vehicle = m_player->getCurrentVehicle();
+    if (!vehicle)
         return false;
 
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::isAllowedInFormation (IAIObject information handle)");
+    // PE 1017C0D0: the vehicle's information must be a unit of type bit 21 with a mobile plug-in.
+    const unsigned int handle = vehicle->getInformation(m_side + 1);
+    Information* const information = informationManager->getInformation(handle);
+    if (!information || !information->getUnit() ||
+        !(information->getObjectTypeFlags() & 0x200000u) || !information->getMobile())
+        return false;
+
+    // During mission status 2 with a squad position, a member already within the formation
+    // distance of its order position leaves the formation.
+    bool allowed = true;
+    Vec3 target = m_squad->getSquadGotoPos();
+    if (m_squad->getMissionStatus() != 2)
+        return allowed;
+    if (!m_squad->squadHasPosition())
+        return allowed;
+    m_squad->getMemberOrderPos(this, target);
+    const Vec3 position = m_position;
+    if (!m_positionValid)
+        return allowed;
+    const float dx = position.x - target.x;
+    const float dy = position.y - target.y;
+    const float dz = position.z - target.z;
+    if (dx * dx + dy * dy + dz * dz < m_formationDistanceSq)
+        allowed = false;
+    return allowed;
 }
 
 // The getter occurs before either flag is cleared. A null current

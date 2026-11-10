@@ -569,6 +569,30 @@ void SquadFormation::resetSlot(int slotIndex)
     slot->m_i28 = 0.0f;
 }
 
+// Clears every slot, then seats the members allowed in formation in member order, one slot each,
+// for at most one fewer member than there are slots. PE 1019F3F0; the name is [INFERRED].
+void SquadFormation::rebuildSlots()
+{
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+        resetSlot(static_cast<int>(i));
+
+    unsigned int count = static_cast<unsigned int>(m_coordinator->getNumberOfSquadMembers());
+    if (count >= m_maxSquadMembers)
+        count = m_maxSquadMembers - 1;
+
+    unsigned int slot = 0;
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        SquadMember* const member = m_coordinator->getSquadMember(static_cast<int>(i));
+        if (member->isAllowedInFormation())
+        {
+            Slot* const seat = m_slots[slot++];
+            seat->m_occupied = true;
+            seat->m_memberIndex = member->getMemberIndex();
+        }
+    }
+}
+
 // [INFERRED]
 // void return from discarded calls and inconsistent exit registers. Zero slots, null slots
 // and bad member indices retain the retail missing guards. A missing member still updates

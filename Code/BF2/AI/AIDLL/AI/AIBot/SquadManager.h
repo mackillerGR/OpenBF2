@@ -34,13 +34,14 @@ public:
     // player id then one-based side. All two callers in
     // each image discard the result; neither body materializes one independently of its last
     // updateSquadLeader call. void is the recovered no-result contract, not decompiler EAX.
-    // The relocation branch retains a named stop before removeSquadMember's first mutation.
+    // A full squad hands its last member to the next, empty squad before the new player joins.
     void addSquadMember(int playerId, int side);
 
     // Engine notifications use one-based side and squad ids. These bodies materialize no
     // result; the engine/courier callers discard it on both ports.
     void newSquadLeader(int side, int squadId);
     void playerJoinsSquad(int playerId, int squadId, int side);
+    void playerLeavesSquad(int playerId, int squadId, int side); // [INFERRED] name; PE 1012B230
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);

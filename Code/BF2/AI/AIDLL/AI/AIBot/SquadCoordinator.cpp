@@ -13,6 +13,10 @@
 #include "../Main/AIMain.h"
 #include "../AIStrategic/SAI.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIStrategicEntity/AIStrategicObject.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"      // IBFTimer::getGameTime
 #include "../../../AIInterface/BFKnowledge/BFSquad.h"
@@ -735,6 +739,73 @@ void SquadCoordinator::addSquadMember(IAIPlayer* player)
         m_formation->updateMovementFlag(true);
     }
     member->updateMemberPos();
+}
+
+// Removes the member at index without deleting it: its fire records go first, then its formation
+// slot, then the vector entry; the remaining members are renumbered by position before the leader
+// and the formation slots are rebuilt. No range guard, as in retail. PE 101A45A0.
+void SquadCoordinator::removeSquadMember(int index)
+{
+    SquadMember* const member = m_squadMembers[index];
+    removeSquadMemberFire(member);
+    if (m_formation->isInFormation(member->getMemberIndex()))
+        m_formation->leaveFormation(member->getMemberIndex());
+    m_squadMembers.erase(m_squadMembers.begin() + index);
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setMemberIndex(static_cast<int>(i));
+    updateSquadLeader();
+    m_formation->rebuildSlots();
+}
+
+// Writes the order position of the strategic object with the greatest gravity at m_v28 for the
+// member's vehicle type; false, leaving the output alone, without a member, an object or a mobile
+// unit vehicle. PE 101A1960; the name is [INFERRED].
+bool SquadCoordinator::getMemberOrderPos(SquadMember* member, Vec3& position)
+{
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getClosestObject(m_v28, m_side + 1);
+    if (!member || !object)
+        return false;
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return false;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    if (!information || !information->getUnit() || !information->getMobile())
+        return false;
+    position = object->getOrderPos(information->getMobile()->getVehicleNumber(), m_side + 1);
+    return true;
+}
+
+// Removes the first member with the same player id, without deleting either object. PE 101A4730.
+void SquadCoordinator::removeSquadMember(SquadMember* member)
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        const int playerId = member->getPlayerId();
+        if (playerId == m_squadMembers[i]->getPlayerId())
+        {
+            removeSquadMember(static_cast<int>(i));
+            return;
+        }
+    }
+}
+
+// Deletes every fire record of this member's player and drops it from the list. PE 101A2D30.
+void SquadCoordinator::removeSquadMemberFire(SquadMember* member)
+{
+    const int playerId = member->getPlayer()->getId();
+    for (std::list<SquadMemberFire*>::iterator it = m_list12.begin(); it != m_list12.end(); )
+    {
+        if ((*it)->m_playerId == playerId)
+        {
+            delete *it;
+            it = m_list12.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
 }
 
 // Stop on the first engine-recognized leader; later members

@@ -230,9 +230,11 @@ void AIEventCourier::event_joinedSquad(int playerId, int squadId, int side)
         SquadManager::m_instance->playerJoinsSquad(playerId, squadId, side);
 }
 
-void AIEventCourier::event_removedFromSquad(int, int, int)
+// Player id, squad id, side, forwarded unchanged when the manager exists. PE 100BF5B0.
+void AIEventCourier::event_removedFromSquad(int playerId, int squadId, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_removedFromSquad");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->playerLeavesSquad(playerId, squadId, side);
 }
 
 void AIEventCourier::event_recievedAttackSquadOrder(int)

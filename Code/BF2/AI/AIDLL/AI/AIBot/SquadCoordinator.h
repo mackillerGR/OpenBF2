@@ -66,6 +66,10 @@ public:
     SquadFormation* getSquadFormation();         // borrowed
     const Vec3& getSquadGotoPos();               // borrowed, return spelling inferred
     void addSquadMember(IAIPlayer* player);
+    void removeSquadMember(int index);          // PE 101A45A0
+    void removeSquadMember(SquadMember* member); // PE 101A4730: by player id
+    void removeSquadMemberFire(SquadMember* member); // PE 101A2D30
+    bool getMemberOrderPos(SquadMember* member, Vec3& position); // [INFERRED] name; PE 101A1960
     void updateSquadLeader();                   // change seam
     void unAssignSquad();                       // PE inlined at
     SquadMember* getSquadMember(int index);

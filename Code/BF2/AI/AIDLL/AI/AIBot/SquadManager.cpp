@@ -2,6 +2,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SquadManager operations.
 
 #include "SquadManager.h"
+#include "SquadMember.h"
 
 #include "SquadCoordinator.h"                        // the constructor builds two per squad
 #include "BotMain.h"
@@ -276,11 +277,28 @@ void SquadManager::addSquadMember(int playerId, int side)
         best = selected->getNumberOfSquadMembers();
         if (best >= splitAt)
         {
-            // The old member is fetched before removal. Its removal/formation reindexing
-            // engine exit/rejoin and subsequent deletion remain unrecovered as a chain.
-            selected->getSquadMember(best - 1);
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::addSquadMember (SquadCoordinator::removeSquadMember)");
+            // The full squad's last member moves to the next, empty squad, and the new player
+            // joins that squad instead. PE 1012A897..1012A96E.
+            const int last = best - 1;
+            SquadMember* const moved = selected->getSquadMember(last);
+            selected->removeSquadMember(last);
+            selected->updateSquadLeader();
+            IBFSquad* const squads = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+            squads->exitSquad(selected->getSquadId() + 1, moved->getPlayer());
+            SquadCoordinator* const next = coordinators[selected->getSquadId() + 1];
+            next->addSquadMember(moved->getPlayer());
+            if (moved->isBot())
+            {
+                Bot* const movedBot = IBotManager::instance->getBotFromPlayerId(moved->getPlayerId());
+                movedBot->getBotSquad()->joinSquad(next->getSquadId() + 1);
+            }
+            else
+            {
+                squads->joinSquad(next->getSquadId() + 1, moved->getPlayer());
+            }
+            next->updateSquadLeader();
+            delete moved;
+            selected = next;
         }
     }
 
@@ -351,6 +369,21 @@ void SquadManager::playerJoinsSquad(int playerId, int squadId, int side)
     IAIPlayer* player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
         ->getPlayerFromId(playerId);
     coordinator->addSquadMember(player);
+    coordinator->updateSquadLeader();
+}
+
+// Squad zero and players without a squad member are ignored. The member leaves the coordinator of
+// the given squad but is not deleted, as in retail. PE 1012B230; the name is [INFERRED].
+void SquadManager::playerLeavesSquad(int playerId, int squadId, int side)
+{
+    if (squadId == 0)
+        return;
+    SquadMember* const member = getSquadMember(playerId, side);
+    if (!member)
+        return;
+
+    SquadCoordinator* const coordinator = m_coordinators[side - 1][squadId - 1];
+    coordinator->removeSquadMember(member);
     coordinator->updateSquadLeader();
 }
 

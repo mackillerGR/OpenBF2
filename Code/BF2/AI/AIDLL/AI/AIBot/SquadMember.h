@@ -28,6 +28,7 @@ public:
     bool isBot();
     Bot* getBot();                           // borrowed
     int getMemberIndex();
+    void setMemberIndex(int index);          // PE 1017BCA0
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved

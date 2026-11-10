@@ -84,6 +84,7 @@ public:
     void joinFormation(int memberIndex);
     bool isInFormation(int memberIndex);      // ignores occupied flag
     void leaveFormation(int memberIndex);
+    void rebuildSlots();                      // [INFERRED] name; PE 1019F3F0
     void resetSlot(int slotIndex);            // inlined
     void updateClosestSlots();
     int getClosestSlotIndex(int slotIndex);    // world-position seam
