@@ -164,6 +164,19 @@ public:
     {
         explicit BotInfo(Bot* bot);
         void remove(SAI* sai); // named removal frontier
+        // Moves the bot from one object's set to another's, carrying its membership in the
+        // two role sets; `it` is advanced past the bot. PE 1013F160; [INFERRED] name.
+        void reassign(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
+                      SAI* sai);
+        // Returns the bot to the SAI's free set; with `removeFromObject` it first leaves the role
+        // sets of the object at m_int0C and the busy set. PE 10140F60; [INFERRED] name.
+        void release(bool removeFromObject, SAI* sai);
+        // Records the object as the bot's position and adds the bot to its fourth set and to the
+        // SAI's free set. PE 10140CF0; [INFERRED] name.
+        void assignTo(AIStrategicObject* object, SAI* sai);
+        // Commits the bot to the attack or defence role set of its object and moves it from the
+        // free set (advancing `it`) to the busy set. PE 10140ED0; [INFERRED] name.
+        void commit(std::set<int>::iterator& it, bool attack, SAI* sai);
 
         /* +0x00 */ Bot*   m_bot;
         /* +0x04 */ int    m_int04;       // = -1

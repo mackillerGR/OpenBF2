@@ -52,6 +52,8 @@ public:
     // [INFERRED] accessor name. Area::update reads the existing +0x0C pointer on
     // both ports, supplies two float buckets to SampleHelper and indexes them by status.
     float* getStrategicStrengths() const { return m_strategicStrengths; }
+    // Mean of the strategic strengths. PE 10139C70; [INFERRED] name.
+    float getAverageStrategicStrength();
 
 private:
     // Offsets agree in both shipped x86 ports. The constructor intentionally calls getAmmo before

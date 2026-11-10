@@ -5,12 +5,16 @@
 #include "SAI.h"
 
 #include <cmath>
+#include <cstring>
+#include <list>
 #include <string>
 
 #include "../Main/AIDllFrontier.h"
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../Main/AIRandom.h"
+#include "../Main/IBotManager.h"                          // updateBotPositions
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../Main/StrategyManager.h"                       // chooseStrategy
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getMaxNBots
 #include "../Main/BotBehaviourManager.h"                   // getBehaviourId, by name
@@ -20,6 +24,7 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/UnitPredicate.h"
 #include "../AIBot/BotCallBack.h"
 #include "../AIBot/BotMain.h"
@@ -849,9 +854,18 @@ bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::isPosInsideOwnedControlPoint");
 }
 
-bool SAI::haveAnyOwnedCps(int)
+// PE 1013CA20. Null entries are skipped.
+bool SAI::haveAnyOwnedCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::haveAnyOwnedCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (*it && (*it)->getStatus(side) == StatusMap::Owned)
+            return true;
+    }
+    return false;
 }
 
 bool SAI::haveAnyOwnedAndTakeableCps(int)
@@ -1259,6 +1273,59 @@ void SAI::BotInfo::remove(SAI*)
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::remove");
 }
 
+// PE 10140F60. The busy-set entry is erased without an end check, as shipped.
+void SAI::BotInfo::release(bool removeFromObject, SAI* sai)
+{
+    const int botId = static_cast<int>(m_bot->getBotId());
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_int0C);
+    if (removeFromObject)
+    {
+        if (!object->eraseIdFromBotSet20(botId, sai->m_side))
+            object->eraseIdFromBotSet44(botId, sai->m_side);
+        sai->m_setFC.erase(sai->m_setFC.find(botId));
+    }
+    sai->m_set44.insert(static_cast<int>(m_bot->getBotId()));
+}
+
+// PE 10140CF0. The bot id is read three times; the second read is discarded.
+void SAI::BotInfo::assignTo(AIStrategicObject* object, SAI* sai)
+{
+    m_int0C = object->m_index;
+    object->insertBotSet92(static_cast<int>(m_bot->getBotId()), sai->m_side);
+    m_bot->getBotId();
+    sai->m_set44.insert(static_cast<int>(m_bot->getBotId()));
+}
+
+// PE 10140ED0.
+void SAI::BotInfo::commit(std::set<int>::iterator& it, bool attack, SAI* sai)
+{
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_int0C);
+    if (attack)
+        object->insertBotSet20(static_cast<int>(m_bot->getBotId()), sai->m_side);
+    else
+        object->insertBotSet44(static_cast<int>(m_bot->getBotId()), sai->m_side);
+    const std::set<int>::iterator erased = it;
+    ++it;
+    sai->m_set44.erase(erased);
+    sai->m_setFC.insert(static_cast<int>(m_bot->getBotId()));
+}
+
+// PE 1013F160.
+void SAI::BotInfo::reassign(std::set<int>::iterator& it, AIStrategicObject* from,
+                            AIStrategicObject* to, SAI* sai)
+{
+    const int botId = static_cast<int>(m_bot->getBotId());
+    to->insertBotSet92(botId, sai->m_side);
+    if (from->eraseIdFromBotSet20(botId, sai->m_side))
+        to->insertBotSet20(botId, sai->m_side);
+    else if (from->eraseIdFromBotSet44(botId, sai->m_side))
+        to->insertBotSet44(botId, sai->m_side);
+    from->eraseFromBotSet92(it, sai->m_side);
+    m_int0C = to->m_index;
+}
+
 // Void is inferred from complete
 // bodies and their callers. The spawn-group selector and dead-bot/respawn chain remain absent.
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
@@ -1456,19 +1523,357 @@ void SAI::modifyStrategicObjectsTemperatures()
         (*it)->updateTemperature(m_activeStrategy->m_strategy, m_side);
 }
 
+namespace {
+
+// One pass of the second half of updateBotPositions over a per-side bot set. A bot whose recheck
+// interval (20 s on foot, 35 s otherwise) has elapsed and that senses at most one object is
+// offered to the object again through retainBot. The waypoint-list gate in front of that test
+// has no recovered interface yet, so reaching a bot stops at a named frontier.
+void retainBotsInSet(int side, AIStrategicObject* object, std::set<int>& bots, double now)
+{
+    for (std::set<int>::iterator it = bots.begin(); it != bots.end(); ++it)
+    {
+        Bot* const bot = IBotManager::instance->getBotFromId(static_cast<unsigned int>(*it));
+        const unsigned int soldier =
+            bot->getPlayer()->getSoldier()->getInformation(side);
+        const float interval = (bot->getCurrentEquipment() == soldier) ? 20.0f : 35.0f;
+        (void)interval;
+        (void)now;
+        (void)object;
+        // PE: getWaypoints()->byte +5 and its slot +0x0C == 1 gate the timer test, then
+        // getSensedObjects().size() <= 1, isInBotSet92 and retainBot(side, id, sai), and the
+        // BotInfo +0x18 time is restamped. [FRONTIER] [TEMP] [CHOSEN, not recovered]
+        // [RETIRE-WHEN: waypointlist-interface] Recover WaypointList's flag and slot 3.
+        BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateBotPositions (WaypointList gate)");
+    }
+}
+
+} // anonymous namespace
+
+// PE 101400E0. For every strategic area, each bot in its fourth per-side set whose current
+// equipment carries a unit is moved to the neighbouring area that attracts its position most,
+// among neighbours that allow its vehicle group, do not expel its equipment type, are areas and
+// do not carry its type in m_i340. The three remaining bot sets are then offered for retention.
 void SAI::updateBotPositions()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateBotPositions");
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    IBotManager* const bots = IBotManager::instance;
+
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator obj = objects.begin();
+         obj != objects.end(); ++obj)
+    {
+        std::set<int>& positioned = (*obj)->getBotSet92(m_side);
+        if ((*obj)->getType() != 0)
+            continue;
+
+        AIStrategicArea* const area = static_cast<AIStrategicArea*>(*obj);
+        std::vector<AIStrategicObject*>& neighbours = area->m_neighbouringObjects;
+
+        std::set<int>::iterator it = positioned.begin();
+        while (it != positioned.end())
+        {
+            Bot* const bot = bots->getBotFromId(static_cast<unsigned int>(*it));
+            Information* const information =
+                informationManager->getInformation(bot->getCurrentEquipment());
+            if (!information || !information->getUnit())
+            {
+                ++it;
+                continue;
+            }
+
+            const int equipmentType = information->getUnit()->getEquipmentType();
+            const int vehicleGroup = settings->getVehicleGroup(equipmentType);
+
+            AIStrategicObject* best = *obj;
+            float bestGravity = best->gravity(information->getPosition(), m_side);
+            for (std::vector<AIStrategicObject*>::iterator n = neighbours.begin();
+                 n != neighbours.end(); ++n)
+            {
+                if (!(*n)->allowsVehicleGroup(vehicleGroup))
+                    continue;
+                if ((*n)->expelsUnitType(equipmentType))
+                    continue;
+                if ((*n)->getType() != 0)
+                    continue;
+                if (static_cast<AIStrategicArea*>(*n)->hasFlag340(equipmentType))
+                    continue;
+
+                const float gravity = (*n)->gravity(information->getPosition(), m_side);
+                if (bestGravity < gravity)
+                {
+                    best = *n;
+                    bestGravity = gravity;
+                }
+            }
+
+            if (best != *obj)
+                m_botInfo[*it]->reassign(it, *obj, best, this);
+            else
+                ++it;
+        }
+
+        const double now =
+            static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        retainBotsInSet(m_side, *obj, (*obj)->getBotSet68(m_side), now);
+        retainBotsInSet(m_side, *obj, (*obj)->getBotSet20(m_side), now);
+        retainBotsInSet(m_side, *obj, (*obj)->getBotSet44(m_side), now);
+    }
 }
 
+namespace {
+
+// The unit plug-in of a bot's current equipment, or null for a stale handle or a unit-less object.
+IPIUnit* equipmentUnit(Bot* bot)
+{
+    Information* const information = informationManager->getInformation(bot->getCurrentEquipment());
+    return information ? information->getUnit() : 0;
+}
+
+} // anonymous namespace
+
+// PE 10141EF0. Totals the strategic strength held in each object's role sets: the first role set
+// counts toward m_intD8, the second toward m_intDC, the fourth set toward m_intE0, and the
+// assigned set toward D8 or DC by the object's attack flag. A set whose release flag
+// (m_flag1CD / m_flag1CC) is raised is emptied instead, raising m_flag1CE. Finally the
+// truncated sum of both role-set averages is subtracted from m_intE0.
 void SAI::updateDistribution()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateDistribution");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    IBotManager* const bots = IBotManager::instance;
+
+    m_flag1CE = false;
+    m_intD8 = 0;
+    m_intDC = 0;
+    m_intE0 = 0;
+    float firstAverage = 0.0f;
+    float secondAverage = 0.0f;
+
+    for (std::vector<AIStrategicObject*>::const_iterator obj = objects.begin();
+         obj != objects.end(); ++obj)
+    {
+        if (m_flag1CD)
+        {
+            while ((*obj)->getBotSet20(m_side).size() > 0)
+            {
+                m_botInfo[*(*obj)->getBotSet20(m_side).begin()]->release(true, this);
+                m_flag1CE = true;
+            }
+        }
+        else
+        {
+            for (std::set<int>::iterator it = (*obj)->getBotSet20(m_side).begin();
+                 it != (*obj)->getBotSet20(m_side).end(); ++it)
+            {
+                IPIUnit* const unit = equipmentUnit(bots->getBotFromId(static_cast<unsigned int>(*it)));
+                if (!unit)
+                    continue;
+                m_intD8 += static_cast<int>(unit->getStrategicStrengths()[0]);
+                firstAverage = unit->getAverageStrategicStrength() + firstAverage;
+            }
+        }
+
+        if (m_flag1CC)
+        {
+            while ((*obj)->getBotSet44(m_side).size() > 0)
+            {
+                m_botInfo[*(*obj)->getBotSet44(m_side).begin()]->release(true, this);
+                m_flag1CE = true;
+            }
+        }
+        else
+        {
+            for (std::set<int>::iterator it = (*obj)->getBotSet44(m_side).begin();
+                 it != (*obj)->getBotSet44(m_side).end(); ++it)
+            {
+                IPIUnit* const unit = equipmentUnit(bots->getBotFromId(static_cast<unsigned int>(*it)));
+                if (!unit)
+                    continue;
+                m_intDC += static_cast<int>(unit->getStrategicStrengths()[1]);
+                secondAverage = unit->getAverageStrategicStrength() + secondAverage;
+            }
+        }
+
+        for (std::set<int>::iterator it = (*obj)->getBotSet92(m_side).begin();
+             it != (*obj)->getBotSet92(m_side).end(); ++it)
+        {
+            IPIUnit* const unit = equipmentUnit(bots->getBotFromId(static_cast<unsigned int>(*it)));
+            if (unit)
+                m_intE0 += static_cast<int>(unit->getAverageStrategicStrength());
+        }
+
+        for (std::set<int>::iterator it = (*obj)->getBotSet68(m_side).begin();
+             it != (*obj)->getBotSet68(m_side).end(); ++it)
+        {
+            IPIUnit* const unit = equipmentUnit(bots->getBotFromId(static_cast<unsigned int>(*it)));
+            if (!unit)
+                continue;
+            if ((*obj)->isAttack(m_side))
+            {
+                m_intD8 += static_cast<int>(unit->getStrategicStrengths()[0]);
+                firstAverage = unit->getAverageStrategicStrength() + firstAverage;
+            }
+            else
+            {
+                m_intDC += static_cast<int>(unit->getStrategicStrengths()[1]);
+                secondAverage = unit->getAverageStrategicStrength() + secondAverage;
+            }
+        }
+    }
+
+    m_intE0 -= static_cast<int>(secondAverage + firstAverage);
 }
 
+// PE 101423A0. Every free bot is placed on a strategic object (its recorded one, or the most
+// attractive one for its equipment) and committed to attack or defence so that the attacking
+// share of strategic strength tracks the strategy's aggression: all-attack with no owned areas,
+// all-defence with nothing left to take. The last bot's role then decides whether an excess of
+// more than 1.2 times the wanted share raises m_flag1CD (attackers) or m_flag1CC (defenders).
+// A placed bot whose equipment has no unit is dereferenced as shipped.
 void SAI::distributeResources()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeResources");
+    // Two local lists and a bot-count scratch array are created and released without use.
+    std::list<int> unusedA;                                   // [UNRESOLVED] element type
+    std::list<int> unusedB;                                   // [UNRESOLVED] element type
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    bool lastWasDefence = true;
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const int maxBots = settings->getMaxNBots();
+    bool* const scratch = checkPointer(new bool[maxBots]);
+    if (maxBots > 0)
+        std::memset(scratch, 0, static_cast<size_t>(maxBots));
+
+    const float* const friendlyState = m_int1F4 ? m_stateB : m_stateA;
+    float attackShare;
+    float defenceShare;
+    if (friendlyState[StrategyCondition::NumberOfFriendlyAreas] == 0.0f)
+    {
+        attackShare = 1.0f;
+        defenceShare = 0.0f;
+    }
+    else if (friendlyState[StrategyCondition::NumberOfNeutralAreas] == 0.0f
+             && friendlyState[StrategyCondition::NumberOfHostileAreas] == 0.0f)
+    {
+        attackShare = 0.0f;
+        defenceShare = 1.0f;
+    }
+    else
+    {
+        attackShare = m_activeStrategy->m_strategy->getAggression();
+        defenceShare = 1.0f - m_activeStrategy->m_strategy->getAggression();
+    }
+
+    std::set<int>::iterator it = m_set44.begin();
+    while (it != m_set44.end())
+    {
+        if (!m_botInfo[*it])
+        {
+            ++it;
+            continue;
+        }
+
+        Information* const information =
+            informationManager->getInformation(m_botInfo[*it]->m_bot->getCurrentEquipment());
+        if (!information)
+        {
+            ++it;
+            continue;
+        }
+
+        AIStrategicObject* object = manager->getStrategicObject(m_botInfo[*it]->m_int0C);
+        if (!object)
+        {
+            if (!information->getUnit())
+            {
+                ++it;
+                continue;
+            }
+            const int vehicleNumber =
+                information->getMobile() ? information->getMobile()->getVehicleNumber() : -1;
+            object = manager->getClosestObject(information->getPosition(),
+                                               information->getUnit()->getEquipmentType(),
+                                               vehicleNumber, m_side);
+            if (!object)
+            {
+                ++it;
+                continue;
+            }
+            m_botInfo[*it]->assignTo(object, this);
+        }
+        else
+        {
+            object->insertBotSet92(*it, m_side);
+        }
+
+        if (object->m_index != m_botInfo[*it]->m_int08)
+        {
+            object->retainBot(m_side, *it, this);
+            const int index = object->m_index;
+            BotInfo* const info = m_botInfo[*it];
+            info->m_double14 =
+                static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+            info->m_int08 = index;
+        }
+
+        IPIUnit* const unit = information->getUnit();
+        const int attackStrength = m_intD8;
+        const int committed = m_intD8 + m_intDC;
+        bool attack;
+        // The x87 tests send an unordered share down the ratio arm, as written here.
+        if (committed == 0)
+            attack = attackShare >= 0.5f;
+        else if (!(attackShare > 0.0f) && attackShare == attackShare)
+            attack = false;
+        else if (defenceShare <= 0.0f)
+            attack = true;
+        else
+            attack = static_cast<float>(attackStrength) / static_cast<float>(committed)
+                     <= attackShare;
+
+        if (attack)
+            m_intD8 = static_cast<int>(unit->getStrategicStrengths()[0]) + attackStrength;
+        else
+            m_intDC = static_cast<int>(unit->getStrategicStrengths()[1]) + m_intDC;
+
+        m_intE0 = m_intE0 - static_cast<int>(unit->getAverageStrategicStrength());
+        lastWasDefence = !attack;
+        m_botInfo[*it]->commit(it, attack, this);
+    }
+
+    const int attackTotal = m_intD8;
+    const int defenceTotal = m_intDC;
+    const float total = static_cast<float>(m_intD8 + m_intDC + m_intE0);
+    if (total == 0.0f)
+    {
+        m_flag1CD = false;
+        m_flag1CC = false;
+    }
+    else
+    {
+        if (attackShare * 1.2f < static_cast<float>(attackTotal) / total && !lastWasDefence)
+        {
+            m_flag1CD = true;
+            m_flag1CE = true;
+        }
+        else
+        {
+            m_flag1CD = false;
+        }
+
+        if (defenceShare * 1.2f < static_cast<float>(defenceTotal) / total && lastWasDefence)
+        {
+            m_flag1CC = true;
+            m_flag1CE = true;
+        }
+        else
+        {
+            m_flag1CC = false;
+        }
+    }
+
+    delete[] scratch;
 }
 
 void SAI::distributeDefence()

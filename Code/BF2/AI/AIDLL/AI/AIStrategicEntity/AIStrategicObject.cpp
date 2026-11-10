@@ -136,6 +136,36 @@ bool AIStrategicObject::eraseFromBotSet44(std::set<int>::iterator& it, int side)
     return true;
 }
 
+// PE 100E98B0.
+bool AIStrategicObject::eraseIdFromBotSet20(int id, int side)
+{
+    std::set<int>& set = m_set20[side - 1];
+    const std::set<int>::iterator it = set.find(id);
+    if (it == set.end())
+        return false;
+    set.erase(it);
+    return true;
+}
+
+// PE 100E9900.
+bool AIStrategicObject::eraseIdFromBotSet44(int id, int side)
+{
+    std::set<int>& set = m_set44[side - 1];
+    const std::set<int>::iterator it = set.find(id);
+    if (it == set.end())
+        return false;
+    set.erase(it);
+    return true;
+}
+
+// PE 100E9350.
+void AIStrategicObject::eraseFromBotSet92(std::set<int>::iterator& it, int side)
+{
+    const std::set<int>::iterator erased = it;
+    ++it;
+    m_set92[side - 1].erase(erased);
+}
+
 // The ten accessors. Every one of them is between seven and thirty-three bytes in the image.
 
 // Returns type code 3; AIStrategicArea returns 0.

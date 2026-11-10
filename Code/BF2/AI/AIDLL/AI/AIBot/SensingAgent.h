@@ -23,6 +23,8 @@ class ISensingAgentPattern;
 class SensingAgent
 {
 public:
+    // The steered senses. [INFERRED] accessor; PE BotMain::getSensedObjects inlines the load.
+    BotSenses* getSenses() const { return m_senses; }
     // The second parameter is in the ABI and is never read - see the header block.
     SensingAgent(BotMain* owner, unsigned char behaviourCount);
     ~SensingAgent();                            // [FRONTIER]

@@ -156,6 +156,16 @@ int IPIUnit::getNStrategicStrengths()
     return static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNStrategicStrengths();
 }
 
+// PE 10139C70. The count is re-read from the settings on every iteration and once more for the
+// division.
+float IPIUnit::getAverageStrategicStrength()
+{
+    float sum = 0.0f;
+    for (int i = 0; i < getNStrategicStrengths(); ++i)
+        sum = sum + m_strategicStrengths[i];
+    return sum / static_cast<float>(getNStrategicStrengths());
+}
+
 int IPIUnit::getEquipmentType()
 {
     return m_information->getAIObject()->getUnit()->getEquipmentType();

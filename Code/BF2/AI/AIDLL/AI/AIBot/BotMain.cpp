@@ -13,6 +13,7 @@
 #include "BotSquad.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "SensingAgent.h"
+#include "BotSenses.h"
 #include "CommunicationAgent.h"
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
@@ -629,9 +630,10 @@ void BotMain::insertBehaviourInformation(float f, const Vec3& v, unsigned char c
 }
 
 // +0x090
-const std::vector<IAIObject*>& BotMain::getSensedObjects() const
+// PE 1017EE00 forwards through the sensing agent to its senses (PE 101B7380).
+const std::map<unsigned int, SensedObject*>& BotMain::getSensedObjects() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSensedObjects");
+    return m_sensingAgent->getSenses()->getSensedObjects();
 }
 
 // +0x094

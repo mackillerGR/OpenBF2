@@ -8,6 +8,8 @@
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"   // addStrategicObject's null-guarded tail
 #include "../Main/AIDllFrontier.h"
 #include "../Main/IAIPathfinding.h"
+#include "../Main/AISettingsInterfaces.h"
+#include "../Main/CommonSingletonServer.h"
 #include "../../../../Core/Debug.h"
 #include <cmath>
 #include "../../../../Math/Mat4.h"
@@ -501,6 +503,37 @@ bool AIStrategicObjectManager::createFromControlPoint(const std::string& name,
     m_areaNames[area] = name;
     m_activeArea = m_strategicAreas.find(name);
     return true;
+}
+
+// PE 1008E720. The object with the greatest positive gravity at the position among those that
+// allow the equipment's vehicle group and do not expel its type; an area that carries the vehicle
+// number in m_i340 is skipped unless the number is -1. Null when no gravity exceeds zero.
+AIStrategicObject* AIStrategicObjectManager::getClosestObject(const Vec3& position,
+                                                              int equipmentType,
+                                                              int vehicleNumber, int side) const
+{
+    const int vehicleGroup = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)
+                                 ->getVehicleGroup(equipmentType);
+    AIStrategicObject* best = 0;
+    float bestGravity = 0.0f;
+    for (std::vector<AIStrategicObject*>::const_iterator it = m_strategicObjects.begin();
+         it != m_strategicObjects.end(); ++it)
+    {
+        if (!(*it)->allowsVehicleGroup(vehicleGroup))
+            continue;
+        if ((*it)->expelsUnitType(equipmentType))
+            continue;
+        if ((*it)->getType() == 0 && vehicleNumber != -1
+            && static_cast<AIStrategicArea*>(*it)->hasFlag340(vehicleNumber))
+            continue;
+        const float gravity = (*it)->gravity(position, side);
+        if (gravity > bestGravity)
+        {
+            bestGravity = gravity;
+            best = *it;
+        }
+    }
+    return best;
 }
 
 // Creates an explicit-bounds strategic area and selects it. PE 10093990.

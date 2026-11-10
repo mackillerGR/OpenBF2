@@ -58,6 +58,8 @@ public:
     // Stores a per-map order position. Before initOrderPoses it is kept absolute; afterwards it is
     // converted to an area-relative offset and its navmesh island is cached. Always returns true.
     bool setOrderPosition(int map, const Vec3& position);
+    // Bit test on m_i340 with the x86 five-bit shift mask. PE 100DED40; [UNRESOLVED] role.
+    bool hasFlag340(int bit) const { return (m_i340 & (1 << (bit & 31))) != 0; }
     // Appends an area once to the neighbour list. [INFERRED] name.
     void addNeighbour(AIStrategicObject* neighbour);
     // Appends an object once to the neighbouring-object list. [INFERRED] name.

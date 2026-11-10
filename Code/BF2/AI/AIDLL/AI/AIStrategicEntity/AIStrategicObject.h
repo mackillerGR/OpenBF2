@@ -118,6 +118,27 @@ public:
     // Erase the element at `it`, advancing `it`; false when `it` is already at the end.
     bool eraseFromBotSet20(std::set<int>::iterator& it, int side);
     bool eraseFromBotSet44(std::set<int>::iterator& it, int side);
+    std::set<int>& getBotSet68(int side) { return m_set68[side - 1]; }    // PE 100E8BE0
+    std::set<int>& getBotSet92(int side) { return m_set92[side - 1]; }    // PE 100E8C00
+    // PE 100E9310.
+    bool isInBotSet92(int id, int side) { return m_set92[side - 1].find(id) != m_set92[side - 1].end(); }
+    // PE 100E9820.
+    std::pair<std::set<int>::iterator, bool> insertBotSet92(int id, int side)
+    {
+        return m_set92[side - 1].insert(id);
+    }
+    // PE 100E97C0 / 100E97F0; both always report true.
+    bool insertBotSet20(int id, int side) { m_set20[side - 1].insert(id); return true; }
+    bool insertBotSet44(int id, int side) { m_set44[side - 1].insert(id); return true; }
+    // Remove one id; false when absent. PE 100E98B0 / 100E9900.
+    bool eraseIdFromBotSet20(int id, int side);
+    bool eraseIdFromBotSet44(int id, int side);
+    // Erase at `it` after advancing it; no end check. PE 100E9350.
+    void eraseFromBotSet92(std::set<int>::iterator& it, int side);
+    // Bit tests on the two masks constructed as -1 and 0. The shift count is masked to five
+    // bits as the x86 instruction does. PE 100E8D20 / 100E8DB0; [INFERRED] names.
+    bool allowsVehicleGroup(int group) const { return (m_i244 & (1 << (group & 31))) != 0; }
+    bool expelsUnitType(int type) const { return (m_i248 & (1 << (type & 31))) != 0; }
 
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.
