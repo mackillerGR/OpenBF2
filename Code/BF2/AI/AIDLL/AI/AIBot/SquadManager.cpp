@@ -391,6 +391,23 @@ void SquadManager::resetSquads()
         m_coordinators[1][i]->reset();
 }
 
+// Unassigns every squad of a one-based side assigned to the area unless it is taking the flag;
+// answers the number released. PE 1012AC00.
+int SquadManager::releaseSquadsFromArea(int areaIndex, int side)
+{
+    int released = 0;
+    std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < coordinators.size(); ++i)
+    {
+        if (!coordinators[i]->isSquadTakingFlag() && coordinators[i]->isSquadAssignedToArea(areaIndex))
+        {
+            coordinators[i]->unAssignSquad();
+            ++released;
+        }
+    }
+    return released;
+}
+
 // Drops the strategic-area assignment of every squad of a one-based side. PE 1012AC70.
 void SquadManager::unAssignSquads(int side)
 {
