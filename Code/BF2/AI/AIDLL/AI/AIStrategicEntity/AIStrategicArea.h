@@ -89,7 +89,7 @@ public:
     virtual int  getChangedAttackDefence(int side);                // slot 8,
     virtual float getControlPointTakeOverCounter();               // slot 9
     virtual bool isEnemyTakingOverBase(int side);                  // slot 10,
-    virtual int  calculateDefenseNeed(int side);                   // slot 11,
+    virtual float calculateDefenseNeed(int side);                  // slot 11,
     virtual int  calculateAttackValue(int side);                   // slot 12,
     virtual int  calculateAttackCost(int side);                    // slot 13,
     virtual bool isNeighbour(AIStrategicObject* object) const;     // slot 14,
@@ -109,7 +109,7 @@ public:
     virtual int  getTacticalStatus(int side) const;                // slot 21,
     virtual bool isAreaTakeable();                                 // slot 22,
     virtual int  collectSquadResources(int side, ISAI* sai);       // slot 23,
-    virtual int  collectAdditionalSquadResources(int side, int amount, ISAI* sai);
+    virtual int  collectAdditionalSquadResources(int amount, int side, ISAI* sai);
                                                                    // slot 24,
     virtual int  releaseSurplus(int side);                         // slot 25,
     virtual float gravity(const Vec3& position, int side);         // slot 26,

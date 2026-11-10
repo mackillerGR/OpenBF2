@@ -709,9 +709,20 @@ bool AIStrategicArea::isEnemyTakingOverBase(int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isEnemyTakingOverBase");
 }
 
-int AIStrategicArea::calculateDefenseNeed(int)
+// PE 100DEAB0. Zero unless owned; otherwise (2 - SCurve(need input)) times the enemy battle
+// strength plus temperature, raised by 1.5 next to a hostile area or 1.25 next to a neutral one.
+float AIStrategicArea::calculateDefenseNeed(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::calculateDefenseNeed");
+    if (m_status[side - 1] != StatusMap::Owned)
+        return 0.0f;
+
+    const float need = (2.0f - SCurve::calculate(m_needCurveInput[side - 1]))
+                     * (m_enemyBattleStrength[side - 1] + m_f164[side - 1]);
+    if (hasNeighbourWithStatus(StatusMap::Hostile, side))
+        return static_cast<float>(need * 1.5);
+    if (hasNeighbourWithStatus(StatusMap::Neutral, side))
+        return static_cast<float>(need * 1.25);
+    return need;
 }
 
 int AIStrategicArea::calculateAttackValue(int)

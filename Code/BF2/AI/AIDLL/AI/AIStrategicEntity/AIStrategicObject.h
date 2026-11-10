@@ -76,7 +76,7 @@ public:
     virtual int  getChangedAttackDefence(int side) = 0;                                   // slot 8
     virtual float getControlPointTakeOverCounter() = 0;                                  // slot 9; ST0 float chain
     virtual bool isEnemyTakingOverBase(int side) = 0;                                     // slot 10
-    virtual int  calculateDefenseNeed(int side) = 0;                                      // slot 11
+    virtual float calculateDefenseNeed(int side) = 0;                                     // slot 11; x87 float
     virtual int  calculateAttackValue(int side) = 0;                                      // slot 12
     virtual int  calculateAttackCost(int side) = 0;                                       // slot 13
     virtual bool isNeighbour(AIStrategicObject* object) const = 0;                        // slot 14
@@ -92,7 +92,8 @@ public:
     virtual int  getTacticalStatus(int side) const = 0;                                   // slot 21
     virtual bool isAreaTakeable() = 0;                                                    // slot 22
     virtual int  collectSquadResources(int side, ISAI* sai) = 0;                          // slot 23
-    virtual int  collectAdditionalSquadResources(int side, int amount, ISAI* sai) = 0;    // slot 24
+    // PE body reads the first argument as the squad count and the second as the side.
+    virtual int  collectAdditionalSquadResources(int amount, int side, ISAI* sai) = 0;    // slot 24
     virtual int  releaseSurplus(int side) = 0;                                            // slot 25
 
     virtual float gravity(const Vec3& position, int side);             // slot 26,
@@ -138,6 +139,15 @@ public:
     // Bit tests on the two masks constructed as -1 and 0. The shift count is masked to five
     // bits as the x86 instruction does. PE 100E8D20 / 100E8DB0; [INFERRED] names.
     bool allowsVehicleGroup(int group) const { return (m_i244 & (1 << (group & 31))) != 0; }
+    void setAttack(bool attack, int side) { m_attack[side - 1] = attack; }   // PE 100E8AE0
+    // Assigned squad strength per unit of need; 1 when nothing is needed. PE 100E8C40;
+    // [INFERRED] name. The quotient is integer division.
+    float getAssignedRatio(int side) const
+    {
+        if (m_resourceNeed[side - 1] == 0)
+            return 1.0f;
+        return static_cast<float>(m_assignedSquadStrength[side - 1] / m_resourceNeed[side - 1]);
+    }
     bool expelsUnitType(int type) const { return (m_i248 & (1 << (type & 31))) != 0; }
 
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline

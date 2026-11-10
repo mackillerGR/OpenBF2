@@ -4,6 +4,7 @@
 
 #include "SAI.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <list>
@@ -1876,9 +1877,150 @@ void SAI::distributeResources()
     delete[] scratch;
 }
 
+// PE 10144C30. Runs per category when categories exist, otherwise over all objects; nothing
+// happens when the active strategy asks for no defences.
 void SAI::distributeDefence()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeDefence");
+    if (m_activeStrategy->m_strategy->getNumberOfDefences() == 0)
+        return;
+
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    if (manager->getNumberOfCategories() == 0)
+    {
+        distributeDefence(manager->getStrategicObjects());
+        return;
+    }
+    for (int category = 0; category < manager->getNumberOfCategories(); ++category)
+        distributeDefence(manager->getStrategicObjectsOfCategory(category));
+}
+
+namespace {
+
+// Element of distributeDefence's need list; ordered by need alone. [INFERRED] name.
+struct DefenceNeed
+{
+    int index;
+    float need;
+    bool operator<(const DefenceNeed& other) const { return need < other.need; }
+};
+
+// Heap order of distributeDefence: the object with the greater assigned ratio is "less", so the
+// heap top is the object with the lowest ratio.
+struct AssignedRatioLess
+{
+    int side;
+    bool operator()(AIStrategicObject* a, AIStrategicObject* b) const
+    {
+        return a->getAssignedRatio(side) > b->getAssignedRatio(side);
+    }
+};
+
+} // anonymous namespace
+
+// PE 10143ED0. Objects needing defence above 0.1 are ranked by need; objects needing none release
+// their squads unless attacking. The list is cut after twice the strategy's defence count once a
+// need drops below 90 % of that entry, the cut objects releasing squads. If defenders are in
+// excess and nothing was released, squads are released from the least needy until one goes.
+// Otherwise up to the defence count of the neediest objects are marked defending and repeatedly
+// offered one more squad, lowest assigned ratio first, until none accepts.
+void SAI::distributeDefence(const std::vector<AIStrategicObject*>& objects)
+{
+    std::list<DefenceNeed> needs;
+    int released = 0;
+    DefenceNeed entry;
+    entry.index = -1;
+    entry.need = 0.0f;
+
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it)
+            continue;
+        entry.need = (*it)->calculateDefenseNeed(m_side);
+        if (entry.need > 0.1f)
+        {
+            entry.index = (*it)->m_index;
+            needs.push_back(entry);
+        }
+        else if (!(entry.need > 0.0f) && entry.need == entry.need)
+        {
+            if (!(*it)->isAttack(m_side))
+                released += (*it)->releaseAssignedResources(m_side);
+        }
+    }
+
+    needs.sort();
+    needs.reverse();
+    if (needs.empty())
+        return;
+
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    float pivot = 0.0f;
+    unsigned int position = 0;
+    std::list<DefenceNeed>::iterator node = needs.begin();
+    for (; node != needs.end(); ++node)
+    {
+        ++position;
+        const unsigned int limit =
+            static_cast<unsigned int>(m_activeStrategy->m_strategy->getNumberOfDefences()) << 1;
+        if (position == limit)
+            pivot = node->need;
+        else if (position > limit && pivot * 0.9f > node->need)
+            break;
+    }
+    while (node != needs.end())
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(node->index);
+        if (object && !object->isAttack(m_side))
+            released += object->releaseAssignedResources(m_side);
+        node = needs.erase(node);
+    }
+    if (needs.empty())
+        return;
+
+    if (m_flag1CC && !m_flag1CE && released == 0)
+    {
+        needs.reverse();
+        for (node = needs.begin(); node != needs.end(); ++node)
+        {
+            AIStrategicObject* const object = manager->getStrategicObject(node->index);
+            if (!object || object->isAttack(m_side))
+                continue;
+            released += object->releaseAssignedResources(m_side);
+            if (released > 0)
+                return;
+        }
+        return;
+    }
+
+    AssignedRatioLess less;
+    less.side = m_side;
+    std::vector<AIStrategicObject*> heap;
+    unsigned int marked = 0;
+    for (node = needs.begin(); node != needs.end(); ++node)
+    {
+        AIStrategicObject* object = manager->getStrategicObject(node->index);
+        if (!object)
+            continue;
+        object->setAttack(false, m_side);
+        heap.push_back(object);
+        std::push_heap(heap.begin(), heap.end(), less);
+        ++marked;
+        if (static_cast<unsigned int>(m_activeStrategy->m_strategy->getNumberOfDefences())
+            <= marked)
+            break;
+    }
+
+    while (!heap.empty())
+    {
+        AIStrategicObject* const top = heap.front();
+        std::pop_heap(heap.begin(), heap.end(), less);
+        heap.pop_back();
+        if (top->collectAdditionalSquadResources(1, m_side, this) == 0)
+            continue;
+        heap.push_back(top);
+        std::push_heap(heap.begin(), heap.end(), less);
+    }
 }
 
 void SAI::distributeAttack()
