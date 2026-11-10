@@ -1070,6 +1070,8 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\CommunicationHub.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\StrategyManager.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\Strategy.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\AIPathfinding.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\IAIPathfinding.cpp"

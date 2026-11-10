@@ -4,12 +4,14 @@
 
 #include "SAI.h"
 
+#include <cmath>
 #include <string>
 
 #include "../Main/AIDllFrontier.h"
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../Main/AIRandom.h"
+#include "../Main/StrategyManager.h"                       // chooseStrategy
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getMaxNBots
 #include "../Main/BotBehaviourManager.h"                   // getBehaviourId, by name
 #include "../Main/CommonSingletonServer.h"
@@ -354,14 +356,16 @@ SAI::~SAI()
 
 
 // Map-dimension setters intentionally ignore their arguments, matching the shipped bodies.
-// Level reset: clears each strategy's first eight bytes, the strength and count tables and the
+// Level reset: clears each strategy's two heats, the strength and count tables and the
 // pending deny requests, rewinds the resumable update to state 19 at -1000, restarts the timers
 // (three at now + 60, one at now + 10, one at zero) and resets the squads. Always true. PE 1013DFC0.
 bool SAI::reset()
 {
     for (std::vector<StrategyContainer>::iterator it = m_strategies.begin(); it != m_strategies.end(); ++it)
-        for (unsigned int i = 0; i < sizeof(it->m_unresolved00); ++i)
-            it->m_unresolved00[i] = 0;
+    {
+        it->m_heat = 0.0f;
+        it->m_newHeat = 0.0f;
+    }
     for (int i = 0; i < 6; ++i)
     {
         m_enemyStrengths[i] = 0.0f;
@@ -400,9 +404,17 @@ void SAI::setMapYDimension(int)
 }
 
 
-void SAI::addStrategy(Strategy*)
+// PE 10143E70. Appending may reallocate, so the active pointer is reset to the first container.
+void SAI::addStrategy(Strategy* strategy)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::addStrategy");
+    StrategyContainer container;
+    container.m_heat = 0.0f;
+    container.m_newHeat = 0.0f;
+    container.m_startTime = 0.0f;
+    container.m_count = 1;
+    container.m_strategy = strategy;
+    m_strategies.push_back(container);
+    m_activeStrategy = &m_strategies.front();
 }
 
 // One resumable pass, with a budget check after each
@@ -1304,9 +1316,133 @@ bool SAI::updateStrategicObjects()
 }
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// PE 10141C00. A forced strategy is activated outright. Otherwise every heat is re-evaluated;
+// if no heat moved outside [0.83, 1.2) of its previous value the current choice is kept until its
+// time limit (scaled up with each renewal) expires. Then a strategy is drawn with probability
+// proportional to its positive heat. An empty strategy list dereferences the active pointer, as
+// shipped. The pick is evaluated in double where the PE keeps it on the x87 stack.
 void SAI::chooseStrategy()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::chooseStrategy");
+    StrategyManager::getInstance()->isDebugEnabled();
+    float* const friendlyState = m_int1F4 ? m_stateB : m_stateA;
+    float* const enemyState    = m_int1F4 ? m_stateD : m_stateC;
+
+    Strategy* const forced = StrategyManager::getInstance()->getForcedStrategy(m_side);
+    if (forced)
+    {
+        forced->getHeat(friendlyState, enemyState, m_activeStrategy->m_strategy, m_side);
+        for (StrategyContainer* it = m_strategies.empty() ? 0 : &m_strategies.front();
+             it && it != &m_strategies.front() + m_strategies.size(); ++it)
+        {
+            if (it->m_strategy == forced)
+                setActiveStrategy(it);
+        }
+        return;
+    }
+
+    bool changed = false;
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); ++it)
+    {
+        it->m_newHeat = it->m_strategy->getHeat(friendlyState, enemyState,
+                                                m_activeStrategy->m_strategy, m_side);
+        if (it->m_newHeat < 0.0f)
+            it->m_newHeat = 0.0f;
+
+        double ratio;
+        if (it->m_newHeat == 0.0f)
+            ratio = (it->m_heat == 0.0f) ? 1.0 : 0.0;
+        else
+            ratio = it->m_heat / it->m_newHeat;
+
+        if (ratio <= 0.83 || ratio >= 1.2)
+            changed = true;
+    }
+
+    if (!changed)
+    {
+        StrategyContainer* const active = m_activeStrategy;
+        const float count = static_cast<float>(active->m_count);
+        const double duration =
+            ((0.5 - std::pow(0.5, static_cast<double>(count))) * 2.0 + 1.0)
+            * active->m_strategy->m_timeLimit;
+        const double now =
+            static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        if (!(now - active->m_startTime >= duration))
+            return;
+        ++m_activeStrategy->m_count;
+    }
+
+    float sum = 0.0f;
+    for (std::vector<StrategyContainer>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); ++it)
+    {
+        it->m_heat = it->m_newHeat;
+        sum = (0.0f < it->m_newHeat ? it->m_newHeat : 0.0f) + sum;
+    }
+
+    double pick = static_cast<double>(AIRandom::m_instance->next()) * sum
+                * 2.3283064365386963e-10;
+
+    StrategyContainer* chosen = m_strategies.empty() ? 0 : &m_strategies.front();
+    StrategyContainer* const end = chosen ? chosen + m_strategies.size() : 0;
+    for (; chosen != end; ++chosen)
+    {
+        pick -= (0.0f < chosen->m_heat ? chosen->m_heat : 0.0f);
+        if (pick <= 0.0)
+            break;
+    }
+    if (chosen == end)
+        --chosen;
+
+    setActiveStrategy(chosen);
+}
+
+// PE 10141A30. On a change, every strategic object first releases its squads for this side, then
+// each bot in its two per-side sets is removed from the object and from m_setFC and recorded in
+// m_set44. The bot is fetched before the object erases its id. The m_setFC lookup is erased
+// without an end check, as shipped.
+void SAI::setActiveStrategy(StrategyContainer* const& strategy)
+{
+    if (m_activeStrategy == strategy)
+        return;
+
+    m_activeStrategy = strategy;
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator obj = objects.begin();
+         obj != objects.end(); ++obj)
+    {
+        (*obj)->releaseAssignedResources(m_side);
+
+        std::set<int>& first = (*obj)->getBotSet20(m_side);
+        std::set<int>::iterator it = first.begin();
+        while (it != first.end())
+        {
+            BotInfo* const info = m_botInfo[*it];
+            unsigned int botId = info->m_bot->getBotId();
+            (*obj)->eraseFromBotSet20(it, m_side);
+            m_setFC.erase(m_setFC.find(static_cast<int>(botId)));
+            botId = info->m_bot->getBotId();
+            m_set44.insert(static_cast<int>(botId));
+        }
+
+        std::set<int>& second = (*obj)->getBotSet44(m_side);
+        it = second.begin();
+        while (it != second.end())
+        {
+            BotInfo* const info = m_botInfo[*it];
+            unsigned int botId = info->m_bot->getBotId();
+            (*obj)->eraseFromBotSet44(it, m_side);
+            m_setFC.erase(m_setFC.find(static_cast<int>(botId)));
+            botId = info->m_bot->getBotId();
+            m_set44.insert(static_cast<int>(botId));
+        }
+    }
+
+    m_activeStrategy->m_startTime = static_cast<float>(
+        static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+    m_activeStrategy->m_count = 1;
 }
 
 void SAI::modifyStrategicObjectsTemperatures()

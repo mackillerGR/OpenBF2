@@ -10,6 +10,7 @@
 #include <string>
 
 #include "AIDllTypes.h"
+#include "Strategy.h"
 
 namespace dice {
 namespace hfe {
@@ -58,8 +59,11 @@ public:
     void setActiveCondition(std::string);
     void setPrerequisite(std::string);
     void forceStrategy(std::string, int);
-    void createStrategy(std::string);
-    void createPrerequisite(std::string);
+    bool createStrategy(std::string);
+    bool createPrerequisite(std::string);
+    bool createConstantCondition(std::string, StrategyCondition::CompareType,
+                                 StrategyCondition::Compare, StrategyCondition::ConditionSide,
+                                 StrategyCondition::Conditional, float);
     void addCondition(std::string);
     void addCondition(std::string, float);
     void addSpecificObjectModifier(std::string, float);

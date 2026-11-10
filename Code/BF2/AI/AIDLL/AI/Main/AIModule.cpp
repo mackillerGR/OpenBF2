@@ -44,6 +44,8 @@ ConsoleObjects::ConsoleObjectList& aiSettingsConsoleObjects();   // AISettings.c
 ConsoleObjects::ConsoleObjectList& aiStrategicAreaConsoleObjects();
 // Pathfinding console commands for navigation meshes, properties, and the trace map.
 ConsoleObjects::ConsoleObjectList& aiPathfindingConsoleObjects();
+// StrategyManager.cpp - the aiStrategy commands used by the default strategy scripts.
+ConsoleObjects::ConsoleObjectList& aiStrategyConsoleObjects();
 
 // Two stores and nothing else - the vptr, and a refcount of one.
 AIModule::AIModule()
@@ -107,6 +109,7 @@ bool AIModule::init()
     mainConsoleObjects->registerConsoleObjects(aiSettingsConsoleObjects());
     mainConsoleObjects->registerConsoleObjects(aiStrategicAreaConsoleObjects());
     mainConsoleObjects->registerConsoleObjects(aiPathfindingConsoleObjects());
+    mainConsoleObjects->registerConsoleObjects(aiStrategyConsoleObjects());
 
     BF2AI* ai = new BF2AI;
     // Preserves the explicit allocation check even with throwing operator new.
@@ -124,6 +127,7 @@ bool AIModule::close()
     mainConsoleObjects->unregisterConsoleObjects(aiSettingsConsoleObjects());
     mainConsoleObjects->unregisterConsoleObjects(aiStrategicAreaConsoleObjects());
     mainConsoleObjects->unregisterConsoleObjects(aiPathfindingConsoleObjects());
+    mainConsoleObjects->unregisterConsoleObjects(aiStrategyConsoleObjects());
 
     // getSingleton (+0x4C) searches m_normalSingletons. "AI" was registered into
     // m_simpleSingletons. This returns null on every run.

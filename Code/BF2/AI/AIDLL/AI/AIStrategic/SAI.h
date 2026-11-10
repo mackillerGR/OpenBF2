@@ -27,12 +27,15 @@ class Strategy;
 // count that divides by five, so `sizeof(StrategyContainer) == 20`; the destructor also runs
 // `__destroy_aux` over the range, which is what proves the vector holds these by value rather than
 // by pointer. updateStates subtracts the float at +8 from game time.
-// Its name is [INFERRED]; the other sixteen bytes remain [UNRESOLVED].
+// Field roles come from SAI::addStrategy, chooseStrategy and setActiveStrategy (PE 10143E70,
+// 10141C00, 10141A30); the names are [INFERRED].
 struct StrategyContainer
 {
-    unsigned char m_unresolved00[8];
-    float m_startTime; // +8, [INFERRED] name
-    unsigned char m_unresolved0C[8];
+    /* +0x00 */ float m_heat;          // heat used for the last weighted pick
+    /* +0x04 */ float m_newHeat;       // heat from the latest evaluation
+    /* +0x08 */ float m_startTime;     // game time the strategy became active
+    /* +0x0C */ int m_count;           // times the unchanged choice was kept; = 1 on activation
+    /* +0x10 */ Strategy* m_strategy;
 };
 
 // Running weighted averages over a fixed number of strength categories.
@@ -245,6 +248,9 @@ public:
     void handleTeleportingBot(int botId);            // named frontier
     bool updateStrategicObjects();
     void chooseStrategy();
+    // Activates the container, releasing the units every strategic object holds for this side
+    // when the choice changes, then restarts its timer. PE 10141A30.
+    void setActiveStrategy(StrategyContainer* const& strategy);
     void modifyStrategicObjectsTemperatures();
     void updateBotPositions();
     void updateDistribution();

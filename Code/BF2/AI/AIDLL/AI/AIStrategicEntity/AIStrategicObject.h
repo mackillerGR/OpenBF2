@@ -112,6 +112,12 @@ public:
     // Borrowed mutable statistics at m_statistics[side - 1]; reference spelling is [INFERRED].
     EnemyStatistics& getBattleStatistics(int side) const;
     int releaseAssignedResources(int side);
+    // Bot-id sets per one-based side; SAI::setActiveStrategy drains both. [INFERRED] names.
+    std::set<int>& getBotSet20(int side) { return m_set20[side - 1]; }    // PE 100E8BA0
+    std::set<int>& getBotSet44(int side) { return m_set44[side - 1]; }    // PE 100E8BC0
+    // Erase the element at `it`, advancing `it`; false when `it` is already at the end.
+    bool eraseFromBotSet20(std::set<int>::iterator& it, int side);
+    bool eraseFromBotSet44(std::set<int>::iterator& it, int side);
 
     // [INFERRED] accessor names/forms. SAI::updateStates and the area's neighbour scans inline
     // these loads: status is at +0x70 + 4*side and index at +0xF0 in both shipped x86 ports.

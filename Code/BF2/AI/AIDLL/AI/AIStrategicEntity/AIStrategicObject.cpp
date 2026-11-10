@@ -112,6 +112,30 @@ int AIStrategicObject::releaseAssignedResources(int side)
     return sai->releaseSquadsFromObject(m_index, side);
 }
 
+// PE 100E9380.
+bool AIStrategicObject::eraseFromBotSet20(std::set<int>::iterator& it, int side)
+{
+    std::set<int>& set = m_set20[side - 1];
+    if (it == set.end())
+        return false;
+    const std::set<int>::iterator erased = it;
+    ++it;
+    set.erase(erased);
+    return true;
+}
+
+// PE 100E93C0.
+bool AIStrategicObject::eraseFromBotSet44(std::set<int>::iterator& it, int side)
+{
+    std::set<int>& set = m_set44[side - 1];
+    if (it == set.end())
+        return false;
+    const std::set<int>::iterator erased = it;
+    ++it;
+    set.erase(erased);
+    return true;
+}
+
 // The ten accessors. Every one of them is between seven and thirty-three bytes in the image.
 
 // Returns type code 3; AIStrategicArea returns 0.

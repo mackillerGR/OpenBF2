@@ -6,6 +6,8 @@
 #ifndef AI_AIDLL_AI_AISTRATEGIC_STATUSMAP_H      // [INFERRED] guard style
 #define AI_AIDLL_AI_AISTRATEGIC_STATUSMAP_H
 
+#include <istream>
+
 namespace dice {
 namespace hfe {
 namespace ai {
@@ -22,6 +24,10 @@ public:
         Unknown = 3
     };
 };
+
+// Reads one token: "Owned", "Hostile" and "Neutral" map to their values, anything else to
+// Unknown. PE 100DC4B0; defined in Main/Strategy.cpp ([INFERRED] placement).
+std::istream& operator>>(std::istream& stream, StatusMap::Status& status);
 
 } // namespace ai
 } // namespace hfe

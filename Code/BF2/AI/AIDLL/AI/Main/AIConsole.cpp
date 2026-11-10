@@ -8,6 +8,8 @@
 #include "../AIPlanInterpreter/BAPEntries.h"   // the 42 registered primitives
 #include "AIDllFrontier.h"
 #include "AIMain.h"                                // IAIMain::m_instance
+#include "StrategyManager.h"                       // addSAIStrategy lookup
+#include "../AIStrategic/SAI.h"                    // ISAI::addStrategy
 #include "../../../../Core/ConsoleObjectMacro.h"   // the ai.init binding at the tail
 #include "CommonSingletonServer.h"
 
@@ -297,9 +299,17 @@ void AIConsole::activateDefaultInterpreter(std::string, BAPStatementType, BotLod
     BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::activateDefaultInterpreter");
 }
 
-void AIConsole::addSAIStrategy(int, std::string)
+// PE 10071E20. Unknown sides and strategy names are ignored.
+void AIConsole::addSAIStrategy(int side, std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIConsole::addSAIStrategy");
+    if (!IAIMain::m_instance)
+        return;
+    SAI* const sai = IAIMain::m_instance->getSAI(side);
+    if (!sai)
+        return;
+    Strategy* const strategy = StrategyManager::getInstance()->getStrategy(name);
+    if (strategy)
+        sai->addStrategy(strategy);
 }
 
 void AIConsole::addSensingAgentPattern(const std::string&, const std::string&)
@@ -400,10 +410,17 @@ void consoleAiInit(int n)
     AIConsole::m_instance->init(n);
 }
 
+void consoleAiAddSAIStrategy(int side, const std::string& name)
+{
+    AIConsole::m_instance->addSAIStrategy(side, name);
+}
+
 } // anonymous namespace
 
 BF2_CONSOLE_OBJECT("ai", 2, 0)
 BF2_CONSOLE_METHOD_1(init, consoleAiInit, int, kAiConsoleTag)
+BF2_CONSOLE_METHOD_2_ACTIVE(addSAIStrategy, consoleAiAddSAIStrategy, AIConsole::m_instance != 0,
+                            int, std::string, kAiConsoleTag)
 
 // Handed to the console registry by AIModule::init.
 ConsoleObjectList& aiConsoleObjects()

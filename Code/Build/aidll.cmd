@@ -192,6 +192,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\Main\BotBehaviourManager.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\CommunicationHub.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\StrategyManager.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\Main\Strategy.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\AIPathfinding.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\IAIPathfinding.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\UserOrderManager.cpp" ^

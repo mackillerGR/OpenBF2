@@ -209,6 +209,7 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/Main/BotBehaviourManager.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"   # libaidll only - chunk 02
+    "${BF2_ROOT}/AI/AIDLL/AI/Main/Strategy.cpp"          # libaidll only
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIPathfinding.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/IAIPathfinding.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/UserOrderManager.cpp"   # libaidll only - chunk 02
@@ -1173,6 +1174,7 @@ set(bf2_aidll_image_sources
     "${BF2_ROOT}/AI/AIDLL/AI/Main/BotBehaviourManager.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/Main/Strategy.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIPathfinding.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/IAIPathfinding.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/UserOrderManager.cpp"

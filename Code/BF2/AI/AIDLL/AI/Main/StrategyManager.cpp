@@ -3,6 +3,11 @@
 #include "StrategyManager.h"
 
 #include "AIDllFrontier.h"
+#include "../AIStrategic/StatusMap.h"
+#include "../AIStrategicEntity/AIStrategicObject.h"
+#include "../../../../Core/ConsoleObjectMacro.h"
+#include "../AIUtils/checkPointer.h"
+#include "../../../../Core/Debug.h"
 
 namespace dice {
 namespace hfe {
@@ -96,11 +101,10 @@ void StrategyManager::reset()
     BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::reset");
 }
 
+// PE 10095A00. Callers in the strategy evaluators discard the result.
 bool StrategyManager::isDebugEnabled()
 {
-    // twelve bytes, the same size as `getEnableDebug`, so it is almost certainly the identical
-    // body under a second name - but it was not read, and a size coincidence is not a reading.
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::isDebugEnabled");
+    return m_enableDebug;
 }
 
 std::string StrategyManager::getActivePrerequisiteName()
@@ -113,19 +117,25 @@ std::string StrategyManager::getActiveConditionName()
     BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::getActiveConditionName");
 }
 
-Strategy* StrategyManager::getStrategy(std::string)
+// PE 10098400.
+Strategy* StrategyManager::getStrategy(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::getStrategy");
+    const std::map<std::string, Strategy*>::iterator it = m_strategies.find(name);
+    return it == m_strategies.end() ? 0 : it->second;
 }
 
-StrategyCondition* StrategyManager::getCondition(std::string)
+// PE 10098870.
+StrategyCondition* StrategyManager::getCondition(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::getCondition");
+    const std::map<std::string, StrategyCondition*>::iterator it = m_conditions.find(name);
+    return it == m_conditions.end() ? 0 : it->second;
 }
 
-StrategyPrerequisite* StrategyManager::getPrerequisite(std::string)
+// PE 10098780.
+StrategyPrerequisite* StrategyManager::getPrerequisite(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::getPrerequisite");
+    const std::map<std::string, StrategyPrerequisite*>::iterator it = m_prerequisites.find(name);
+    return it == m_prerequisites.end() ? 0 : it->second;
 }
 
 void StrategyManager::setActiveStrategy(std::string)
@@ -143,9 +153,16 @@ void StrategyManager::setActiveCondition(std::string)
     BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::setActiveCondition");
 }
 
-void StrategyManager::setPrerequisite(std::string)
+// PE 10099360. Without an active strategy this reports an error (fatal in this tree).
+void StrategyManager::setPrerequisite(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::setPrerequisite");
+    if (!m_activeStrategy)
+    {
+        Debug(DebugTypeError, __FILE__, 182, "")
+            << "Cannot set prerequisite " << name << " - there is no active strategy.";
+        return;
+    }
+    m_activeStrategy->setPrerequisite(getPrerequisite(name));
 }
 
 void StrategyManager::forceStrategy(std::string, int)
@@ -153,24 +170,66 @@ void StrategyManager::forceStrategy(std::string, int)
     BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::forceStrategy");
 }
 
-void StrategyManager::createStrategy(std::string)
+// PE 1009A250. A duplicate name clears the active strategy.
+bool StrategyManager::createStrategy(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::createStrategy");
+    if (m_strategies.find(name) == m_strategies.end())
+    {
+        Strategy* const strategy = checkPointer(new Strategy(name));
+        m_strategies[name] = strategy;
+        m_activeStrategyName = name;
+        m_activeStrategy = strategy;
+        return true;
+    }
+
+    m_activeStrategyName = "NULL";
+    m_activeStrategy = 0;
+    return false;
 }
 
-void StrategyManager::createPrerequisite(std::string)
+// PE 1009A320. A duplicate name leaves the active prerequisite unchanged.
+bool StrategyManager::createPrerequisite(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::createPrerequisite");
+    if (m_prerequisites.find(name) != m_prerequisites.end())
+        return false;
+
+    StrategyPrerequisite* const prerequisite = checkPointer(new StrategyPrerequisite(name));
+    m_prerequisites[name] = prerequisite;
+    m_activePrerequisiteName = name;
+    m_activePrerequisite = prerequisite;
+    return true;
 }
 
-void StrategyManager::addCondition(std::string)
+// PE 10099550. A duplicate name leaves no condition selected.
+bool StrategyManager::createConstantCondition(std::string name,
+                                              StrategyCondition::CompareType compareType,
+                                              StrategyCondition::Compare compare,
+                                              StrategyCondition::ConditionSide side,
+                                              StrategyCondition::Conditional conditional,
+                                              float value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::addCondition");
+    if (m_conditions.find(name) != m_conditions.end())
+    {
+        m_activeCondition = m_conditions.end();
+        return false;
+    }
+
+    StrategyCondition* const condition = checkPointer(
+        new ConstantCondition(name, compareType, compare, side, conditional, value, 0.0f));
+    m_activeCondition = m_conditions.insert(std::make_pair(name, condition)).first;
+    return true;
 }
 
-void StrategyManager::addCondition(std::string, float)
+// PE 10099510. The active prerequisite is not checked.
+void StrategyManager::addCondition(std::string name)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::addCondition");
+    m_activePrerequisite->addCondition(getCondition(name), 1.0f);
+}
+
+// PE 100994D0. The active prerequisite is not checked.
+void StrategyManager::addCondition(std::string name, float weight)
+{
+    m_activePrerequisite->addCondition(getCondition(name), weight);
 }
 
 void StrategyManager::addSpecificObjectModifier(std::string, float)
@@ -211,6 +270,134 @@ void StrategyManager::listPrerequisites()
 void StrategyManager::listConditions()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::listConditions");
+}
+
+// Console bindings for aiStrategy. Registration order is [CHOSEN, not recovered]; only the
+// commands the shipped default strategy scripts use are bound.
+// [RETIRE-WHEN: aistrategy-console] Bind the remaining aiStrategy commands as their bodies land.
+
+namespace {
+
+const char* const kAiStrategyConsoleTag = "aiStrategy";
+
+StrategyManager* consoleStrategyManager()
+{
+    return StrategyManager::getInstance();
+}
+
+bool consoleStrategyHasActiveStrategy()
+{
+    return StrategyManager::getInstance() != 0
+        && StrategyManager::getInstance()->getActiveStrategy() != 0;
+}
+
+bool consoleStrategyHasActiveCondition()
+{
+    return StrategyManager::getInstance() != 0
+        && StrategyManager::getInstance()->getActiveCondition() != 0;
+}
+
+Strategy* consoleActiveStrategy()
+{
+    return StrategyManager::getInstance()->getActiveStrategy();
+}
+
+bool consoleCreateStrategy(const std::string& name)
+{
+    return consoleStrategyManager()->createStrategy(name);
+}
+
+bool consoleCreatePrerequisite(const std::string& name)
+{
+    return consoleStrategyManager()->createPrerequisite(name);
+}
+
+bool consoleCreateConstantCondition(const std::string& name,
+                                    StrategyCondition::CompareType compareType,
+                                    StrategyCondition::Compare compare,
+                                    StrategyCondition::ConditionSide side,
+                                    StrategyCondition::Conditional conditional, float value)
+{
+    return consoleStrategyManager()->createConstantCondition(name, compareType, compare, side,
+                                                             conditional, value);
+}
+
+void consoleSetConditionStrength(StrategyCondition::ConditionStrength strength)
+{
+    consoleStrategyManager()->getActiveCondition()->setStrength(strength);
+}
+
+void consoleAddCondition(const std::string& name)
+{
+    consoleStrategyManager()->addCondition(name);
+}
+
+void consoleAddCondition(const std::string& name, float weight)
+{
+    consoleStrategyManager()->addCondition(name, weight);
+}
+
+void consoleSetPrerequisite(const std::string& name)
+{
+    consoleStrategyManager()->setPrerequisite(name);
+}
+
+void consoleSetAggression(float value)    { consoleActiveStrategy()->setAggression(value); }
+void consoleSetNumberOfAttacks(int value) { consoleActiveStrategy()->setNumberOfAttacks(value); }
+void consoleSetNumberOfDefences(int value){ consoleActiveStrategy()->setNumberOfDefences(value); }
+
+void consoleSetStrategicObjectsModifier(AIStrategicObject::StrategicObjectType type, float value)
+{
+    consoleActiveStrategy()->setStrategicObjectsModifier(type, value);
+}
+
+void consoleSetStrategicObjectsModifier(AIStrategicObject::StrategicObjectType type, float value,
+                                        StatusMap::Status status)
+{
+    consoleActiveStrategy()->setStrategicObjectsModifier(type, value, status);
+}
+
+} // anonymous namespace
+
+BF2_CONSOLE_OBJECT("aiStrategy", 2, 0)
+BF2_CONSOLE_METHOD_1_RET_ACTIVE(createStrategy, consoleCreateStrategy, bool,
+                                StrategyManager::getInstance() != 0,
+                                std::string, kAiStrategyConsoleTag)
+BF2_CONSOLE_PROPERTY_FN(aggression, float, consoleStrategyHasActiveStrategy(),
+                        consoleActiveStrategy()->getAggression(), consoleSetAggression,
+                        kAiStrategyConsoleTag)
+BF2_CONSOLE_PROPERTY_FN(numberOfAttacks, int, consoleStrategyHasActiveStrategy(),
+                        consoleActiveStrategy()->getNumberOfAttacks(), consoleSetNumberOfAttacks,
+                        kAiStrategyConsoleTag)
+BF2_CONSOLE_PROPERTY_FN(numberOfDefences, int, consoleStrategyHasActiveStrategy(),
+                        consoleActiveStrategy()->getNumberOfDefences(), consoleSetNumberOfDefences,
+                        kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_2_3_ACTIVE(setStrategicObjectsModifier, consoleSetStrategicObjectsModifier,
+                              consoleStrategyHasActiveStrategy(),
+                              AIStrategicObject::StrategicObjectType, float, StatusMap::Status,
+                              kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_1_ACTIVE(setPrerequisite, consoleSetPrerequisite,
+                            StrategyManager::getInstance() != 0,
+                            std::string, kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_1_RET_ACTIVE(createPrerequisite, consoleCreatePrerequisite, bool,
+                                StrategyManager::getInstance() != 0,
+                                std::string, kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_1_2_ACTIVE(addCondition, consoleAddCondition,
+                              StrategyManager::getInstance() != 0,
+                              std::string, float, kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_6_RET_ACTIVE(createConstantCondition, consoleCreateConstantCondition, bool,
+                                StrategyManager::getInstance() != 0,
+                                std::string, StrategyCondition::CompareType,
+                                StrategyCondition::Compare, StrategyCondition::ConditionSide,
+                                StrategyCondition::Conditional, float, kAiStrategyConsoleTag)
+BF2_CONSOLE_METHOD_1_ACTIVE(setConditionStrength, consoleSetConditionStrength,
+                            consoleStrategyHasActiveCondition(),
+                            StrategyCondition::ConditionStrength, kAiStrategyConsoleTag)
+
+// Handed to the console registry by AIModule::init.
+ConsoleObjectList& aiStrategyConsoleObjects()
+{
+    return consoleBindingList(kAiStrategyConsoleTag);
 }
 
 } // namespace ai
