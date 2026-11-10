@@ -3,6 +3,9 @@
 
 #include "PortalManager.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "../../../Core/Ids.h"       // IID_IBase, world::IID_IPortalManager - the two ids
                                      // queryInterface compares against, both loaded from globals in
                                      // the ELF (0x8328616 / 0x8328625), not from immediates.
@@ -241,14 +244,19 @@ PortalManager::PortalCollision* PortalManager::checkAddPortalCollision(
                 // against the real one still behaves sanely against this.
 }
 
-// [CHOSEN, not recovered] portal-transition update; currently performs no work.
-// Required behavior uses frame-to-frame position deltas, ignoring deltaTime, with temporary list/vector
-// storage per call. Portal event, passing, sector and collider operations remain to be connected.
+// Portal transitions run only while showStats is on; nothing in the shipped game turns it on, so
+// retail returns at once (client PE 0x72E9E0 tests the flag first). The enabled arm - portal
+// polygons against each passing object's movement since the last frame, then the three
+// broadcastEvent calls - is unrecovered and stops visibly.
+// [RETIRE-WHEN: portal-update-stats-arm] Recover the arm from client PE 0x72E9F6..0x72EEC2.
 void PortalManager::update(float deltaTime)
 {
     (void)deltaTime;    // unused in the real body too - see above
-    // [CHOSEN, not recovered]. Does nothing, so no sector transitions occur and no PortalEvent is
-    // ever broadcast. This is the single largest behavioural gap in the class.
+    if (!m_showStats)
+        return;
+    std::fprintf(stderr, "[FRONTIER] dice::hfe::world::PortalManager::update (showStats arm) reached\n");
+    std::fflush(stderr);
+    std::abort();
 }
 
 } // namespace world

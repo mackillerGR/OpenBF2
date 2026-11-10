@@ -329,11 +329,19 @@ void AIStrategicObjectManager::clearWaypointToDraw()
     m_wayPointsToDrawFirst = -1;
 }
 
-// [FRONTIER] Waypoint drawing cleanup remains unimplemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AIStrategicObjectManager operation.
+// Undraws every waypoint of both lists of every container. PE 1008F620.
 void AIStrategicObjectManager::undrawWayPoints() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObjectManager::undrawWayPoints");
+    for (std::map<std::pair<int, int>, WPContainer>::const_iterator it = m_wayPoints.begin();
+         it != m_wayPoints.end(); ++it)
+    {
+        const std::vector<SAWayPoint*>& first = it->second.getWayPoints(0);
+        for (std::vector<SAWayPoint*>::const_iterator wp = first.begin(); wp != first.end(); ++wp)
+            (*wp)->undraw();
+        const std::vector<SAWayPoint*>& second = it->second.getWayPoints(1);
+        for (std::vector<SAWayPoint*>::const_iterator wp = second.begin(); wp != second.end(); ++wp)
+            (*wp)->undraw();
+    }
 }
 
 // Returns the category id for an existing name. The caller must ensure that exact

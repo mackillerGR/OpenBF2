@@ -8,6 +8,9 @@
 #include "../../DrawPrimitives/DPManager.h"
 #include "../../Main/AIConsole.h"
 #include "../../Main/AIDllFrontier.h"
+#include "../../AIStrategicEntity/AIStrategicArea.h"
+#include "../../AIBot/BotMain.h"
+#include "../../Main/IBotManager.h"
 #include "../../Main/AISettingsInterfaces.h"
 #include "../../Main/BotManager.h"
 #include "../../Main/CommonSingletonServer.h"
@@ -365,7 +368,7 @@ void AIRenderUtil::addSensingLine(const Vec3& from, const Vec3& to, int side, bo
         ->createStaticLine(0.1f, colour, m_sensingLine, 0.03f);
 }
 
-// Clears debug rendering. The manager null check covers only the two direct calls;
+// Clears debug rendering (PE 10081950). The manager null check covers only the two direct calls;
 // primitive-record cleanup reached afterward still requires a live manager.
 void AIRenderUtil::unrenderAll()
 {
@@ -396,19 +399,30 @@ void AIRenderUtil::unrenderBot(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderBot (Bot::getBotId, botmain-bases)");
 }
 
-// [FRONTIER] Releases every bot's debug primitives once the required bot interfaces are available.
-// [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// Releases every bot's debug primitives, looking each bot up by the loop index as its bot id and
+// indexing the records by that bot's own id. PE 1007D390 inlines deletePrimitives.
 void AIRenderUtil::unrenderAllBots()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderAllBots (IBotManager, botmanager-bases)");
+    IBotManager* const bots = IBotManager::instance;
+    if (!bots)
+        return;
+
+    const int count = bots->getBotCount();
+    for (int i = 0; i < count; ++i)
+        m_botPrimitives[bots->getBotFromId(static_cast<unsigned int>(i))->getBotId()].deletePrimitives();
 }
 
-// [FRONTIER] Area primitive cleanup requires its validated primitive index.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AIRenderUtil operation.
-void AIRenderUtil::unrenderStrategicArea(AIStrategicArea*)
+// Deletes the area's primitives, then each of its landing zones' records. PE 1007FFA0 inlines the
+// landing-zone deletePrimitives.
+void AIRenderUtil::unrenderStrategicArea(AIStrategicArea* area)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderStrategicArea (AIStrategicArea layout)");
+    m_strategicAreaPrimitives[area->getIndex()].deletePrimitives();
+    if (!area->getLandingZones().empty())
+    {
+        // Each zone's record is indexed by AILandingZone +0x30 (PE 100E9EC0); the class is
+        // still undeclared here. [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-landing-zones]
+        BF2_AI_FRONTIER("dice::hfe::ai::AIRenderUtil::unrenderStrategicArea (AILandingZone index)");
+    }
 }
 
 // Copies the strategic-area map before iterating it to remove debug rendering.

@@ -6,6 +6,8 @@
 #include <string>
 
 #include "AIInformationGrid.h"                             // the grids the constructor builds
+#include "Information.h"
+#include "InformationManager.h"
 #include "../AIUtils/checkPointer.h"                       // inlined four times by the constructor
 #include "../../../../Core/ClassManager.h"
 #include "../../../../Core/SmartItf.h"           // the classManager global
@@ -213,24 +215,31 @@ void BFInformationEnvironment::addAndUpdatePosition(int side, bool which, unsign
     getInformationGrid(side, which)->addAndUpdatePosition(handle);
 }
 
-void BFInformationEnvironment::updatePosition(int, bool, unsigned int)
+// The grid's +5 updatePosition (PE +0x10); its result is discarded. PE 10192B40.
+void BFInformationEnvironment::updatePosition(int side, bool which, unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::updatePosition");
+    getInformationGrid(side, which)->updatePosition(handle);
 }
 
-void BFInformationEnvironment::removeInfo(int, bool, unsigned int)
+// The information drops all contacts before the grid forgets the handle. The handle is looked up
+// without a null check, as in retail. PE 10192B80.
+void BFInformationEnvironment::removeInfo(int side, bool which, unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::removeInfo");
+    informationManager->getInformation(handle)->removeAllContacts();
+    getInformationGrid(side, which)->removeInfo(handle);
 }
 
-void BFInformationEnvironment::safeRemoveInfo(int, bool, unsigned int)
+// As removeInfo, through the grid's safe removal with no predicate. PE 10192BF0.
+void BFInformationEnvironment::safeRemoveInfo(int side, bool which, unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::safeRemoveInfo");
+    informationManager->getInformation(handle)->removeAllContacts();
+    getInformationGrid(side, which)->safeRemoveInfo(handle, 0);
 }
 
-void BFInformationEnvironment::destroyRemoveInfo(int, bool, unsigned int)
+// The grid's safe removal alone: the information may already be gone. PE 10192C60.
+void BFInformationEnvironment::destroyRemoveInfo(int side, bool which, unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::destroyRemoveInfo");
+    getInformationGrid(side, which)->safeRemoveInfo(handle, 0);
 }
 
 // Selects one of two grid sets by which, then indexes it by side.

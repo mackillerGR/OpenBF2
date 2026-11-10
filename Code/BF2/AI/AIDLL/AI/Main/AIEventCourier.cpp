@@ -12,6 +12,9 @@
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // postLoadInitAreas
 #include "AIMain.h"                                            // IAIMain::spawnBots
 #include "../AIBot/SquadManager.h"                              // squad notification forwarders
+#include "../AIUtils/DebugRendering/AIRenderUtil.h"            // event_worldReset
+#include "../DrawPrimitives/DPManager.h"                       // event_worldReset
+#include "CommunicationHub.h"                                  // event_worldReset
 
 namespace dice {
 namespace hfe {
@@ -100,14 +103,23 @@ int AIEventCourier::eventGameStart()
     return 0;   // [CHOSEN, not recovered] - see above
 }
 
+// Empty in retail: PE 100BF3A0 is a lone ret.
 void AIEventCourier::event_roundEnd()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_roundEnd");
 }
 
+// Each owner present resets in this order: the debug renderer, the draw primitives, the AI main
+// object's level state and the communication hub. PE 100BF3B0.
 void AIEventCourier::event_worldReset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_worldReset");
+    if (AIRenderUtil::m_instance)
+        AIRenderUtil::m_instance->unrenderAll();
+    if (CommonSingletonServer::m_iDPManager)
+        static_cast<IDPManager*>(CommonSingletonServer::m_iDPManager)->deleteAll();
+    if (IAIMain::m_instance)
+        IAIMain::m_instance->resetLevel();
+    if (CommunicationHub::m_instance)
+        CommunicationHub::m_instance->reset();
 }
 
 int AIEventCourier::eventManDown(int, IAIObject *)

@@ -82,6 +82,8 @@ public:
     virtual bool hasNeighbouringObjectWithStatus(StatusMap::Status status,
                                                  int side) const;  // slot 17,
     virtual int  getObjectTypeFlags() const;                       // slot 18,
+    // Borrowed; non-virtual. PE 100DECF0.
+    const std::vector<AILandingZone*>& getLandingZones() const { return m_landingZones; }
     // Tests a StrategicObjectType bit position, not a mask.
     virtual bool hasObjectTypeFlag(StrategicObjectType type) const;       // slot 19,
     virtual bool hasObjectTypeFlags(int flags) const;              // slot 20,
