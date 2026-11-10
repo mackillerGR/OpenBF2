@@ -71,7 +71,7 @@ public:
     // and parameter list below is taken from the matching slot of `AIStrategicArea`'s vtable; the
     // return types are [INFERRED] from whether the override leaves its result in eax or in st0.
     virtual Vec3 getOrderPos(int a, int b) const = 0;                  // slot 5
-    virtual void updateTemperature(const Strategy* strategy, int side) = 0;               // slot 6
+    virtual float updateTemperature(const Strategy* strategy, int side) = 0;               // slot 6
     virtual void update(int side, ISAI* sai, bool& changed) = 0;                          // slot 7; paired Area body has no return
     virtual int  getChangedAttackDefence(int side) = 0;                                   // slot 8
     virtual float getControlPointTakeOverCounter() = 0;                                  // slot 9; ST0 float chain

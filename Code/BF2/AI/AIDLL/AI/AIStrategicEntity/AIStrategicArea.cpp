@@ -9,6 +9,8 @@
 #include "../Main/AISettingsInterfaces.h"                  // IAISettings::getNumberOfVehicleGroups
 #include "../Main/CommonSingletonServer.h"
 #include "../Main/IAIPathfinding.h"
+#include "../Main/Strategy.h"                               // updateTemperature modifiers
+#include "AIStrategicObjectManager.h"
 #include "../AIBot/SquadManager.h"
 #include "../AIBotBehaviour/CustomCurve.h"
 #include "../AIStrategic/SAI.h"
@@ -426,9 +428,50 @@ bool AIStrategicArea::hasObjectTypeFlag(StrategicObjectType type) const
 // later dirty/assignment/lifetime behavior remains separately bounded.
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 
-void AIStrategicArea::updateTemperature(const Strategy*, int)
+// PE 100E18F0. Scales both temperatures for the side by the strategy's modifier for every type
+// flag the area carries among the first 21, then by the status modifier (an owned area counts as
+// Front when a hostile neighbour exists, otherwise Safe) and by its specific-object modifier.
+// The scaling compounds on every call. Returns the first temperature.
+float AIStrategicArea::updateTemperature(const Strategy* strategy, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::updateTemperature");
+    const StatusMap::Status status = m_status[side - 1];
+    const float* const modifiers = strategy->getStrategicObjectsModifiers(status);
+
+    for (int type = 0; type < 21; ++type)
+    {
+        if (hasObjectTypeFlag(static_cast<StrategicObjectType>(type)))
+        {
+            m_f164[side - 1]     = m_f164[side - 1]     * modifiers[type];
+            m_f164[side - 1 + 2] = m_f164[side - 1 + 2] * modifiers[type];
+        }
+    }
+
+    switch (status)
+    {
+    case StatusMap::Owned:
+    {
+        const int type = hasNeighbourWithStatus(StatusMap::Hostile, side) ? Front : Safe;
+        m_f164[side - 1]     = m_f164[side - 1]     * modifiers[type];
+        m_f164[side - 1 + 2] = m_f164[side - 1 + 2] * modifiers[type];
+        break;
+    }
+    case StatusMap::Hostile:
+        m_f164[side - 1]     = m_f164[side - 1]     * modifiers[Enemy];
+        m_f164[side - 1 + 2] = modifiers[Enemy] * m_f164[side - 1 + 2];
+        break;
+    case StatusMap::Neutral:
+        m_f164[side - 1]     = m_f164[side - 1]     * modifiers[NeutralType];
+        m_f164[side - 1 + 2] = modifiers[NeutralType] * m_f164[side - 1 + 2];
+        break;
+    default:
+        break;
+    }
+
+    m_f164[side - 1]     = strategy->getSpecificObjectModifier(m_index) * m_f164[side - 1];
+    m_f164[side - 1 + 2] = strategy->getSpecificObjectModifier(m_index) * m_f164[side - 1 + 2];
+
+    AIStrategicObjectManager::getInstance();
+    return m_f164[side - 1];
 }
 
 // Parameter types

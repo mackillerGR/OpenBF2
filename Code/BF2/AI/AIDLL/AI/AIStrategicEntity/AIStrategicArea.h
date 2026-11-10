@@ -82,7 +82,7 @@ public:
     // slots 3 and 4 are AIStrategicObject::getPosition / ::setPosition - not overridden
 
     virtual Vec3 getOrderPos(int a, int b) const;                  // slot 5,
-    virtual void updateTemperature(const Strategy* strategy, int side);   // slot 6,
+    virtual float updateTemperature(const Strategy* strategy, int side);   // slot 6,
     virtual void update(int side, ISAI* sai, bool& changed);        // slot 7
     virtual int  getChangedAttackDefence(int side);                // slot 8,
     virtual float getControlPointTakeOverCounter();               // slot 9

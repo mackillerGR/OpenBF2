@@ -301,6 +301,14 @@ void Strategy::setStrategicObjectsModifier(int type, float value, int status)
     m_objectsModifier[status][type] = value;
 }
 
+// PE 100DD8B0.
+float Strategy::getSpecificObjectModifier(int index) const
+{
+    if (index >= 0 && index < static_cast<int>(m_specificObjectModifiers.size()))
+        return m_specificObjectModifiers[index];
+    return 1.0f;
+}
+
 // PE 100DD130.
 void Strategy::clearAllStrategicObjectsModifiers()
 {

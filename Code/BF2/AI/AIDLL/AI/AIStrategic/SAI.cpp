@@ -1445,9 +1445,15 @@ void SAI::setActiveStrategy(StrategyContainer* const& strategy)
     m_activeStrategy->m_count = 1;
 }
 
+// PE 1013DDC0. Applies the active strategy's modifiers to every strategic object; the returned
+// temperatures are discarded.
 void SAI::modifyStrategicObjectsTemperatures()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::modifyStrategicObjectsTemperatures");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+        (*it)->updateTemperature(m_activeStrategy->m_strategy, m_side);
 }
 
 void SAI::updateBotPositions()

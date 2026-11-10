@@ -137,6 +137,10 @@ public:
     // Writes the modifier for all three statuses.
     void setStrategicObjectsModifier(int type, float value);
     void setStrategicObjectsModifier(int type, float value, int status);
+    // The 27 per-type modifiers for one status. PE 100DD110.
+    const float* getStrategicObjectsModifiers(int status) const { return m_objectsModifier[status]; }
+    // Modifier for one strategic-object index; 1 outside the list. PE 100DD8B0.
+    float getSpecificObjectModifier(int index) const;
     // Resets every strategic-object modifier to 1.
     void clearAllStrategicObjectsModifiers();
 
