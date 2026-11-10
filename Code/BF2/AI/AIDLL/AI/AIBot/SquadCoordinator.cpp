@@ -15,6 +15,7 @@
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIUnit.h"
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../Main/CommonSingletonServer.h"
@@ -589,15 +590,14 @@ int SquadCoordinator::getStrategicStrength(StrategicStrengthType type)
         if (!vehicle)
             continue;
 
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // Both ports next call vehicle's unknown slot (ELF +0xB8 / PE +0xB4), passing
-        // m_side + 1, then resolve its unsigned handle and sum unit strategic strengths[type].
-        // ELF captures informationManager before that call; PE captures it afterwards for a
-        // nonzero low handle word. Stop before the untyped call; do not invent an owner ABI.
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::getStrategicStrength (IAIObject information query)");
+        // PE 101A3680: the object's information handle for this side resolves to a unit whose
+        // strategic strength of the requested type is added.
+        Information* const information =
+            informationManager->getInformation(vehicle->getInformation(m_side + 1));
+        if (!information || !information->getUnit())
+            continue;
+        total = total + information->getUnit()->getStrategicStrengths()[type];
     }
-    // The shipped empty/filtered paths reach this rounding tail with the unchanged zero sum.
-    // Every possible contributor above still stops before its unrecovered object query.
     return static_cast<int>(total + 0.5f);
 }
 
@@ -612,7 +612,7 @@ SquadCoordinator::SquadCoordinator(int side, int squadIndex)
     , m_i40(4)
     , m_i44(0)
     , m_d48(-20.0)
-    , m_i60(0)
+    , m_pendingArea(0)
     , m_i76(4)
     , m_i80(0)
     , m_i96(-1)
@@ -751,7 +751,7 @@ void SquadCoordinator::reset()
     m_i40 = 4;
     m_i44 = 0;
     m_i76 = 4;
-    m_i60 = 0;
+    m_pendingArea = 0;
     m_i80 = 0;
     m_i120 = 0;
     m_formation->joinSquadLeader();
@@ -915,6 +915,18 @@ bool SquadCoordinator::hasMemberWithKit(KitType type)
 
 // Only pointer presence is tested;
 // there is no area validity, membership, side or mission-state query.
+// PE 101A12B0.
+bool SquadCoordinator::hasNoMission()
+{
+    return m_i120 == 0;
+}
+
+// PE 101A1280. The pending twin of isSquadAssignedToArea.
+bool SquadCoordinator::isSquadPendingAssignedToArea(int areaIndex)
+{
+    return m_pendingArea && m_pendingArea->getIndex() == areaIndex;
+}
+
 bool SquadCoordinator::isSquadAssignedToAnyArea()
 {
     return m_strategicAreaAssignment != 0;

@@ -13,6 +13,7 @@
 #include "../AIKnowledge/Information.h"
 
 #include "SquadCoordinator.h"                        // the constructor builds two per squad
+#include "../AIStrategicEntity/AIStrategicObject.h"
 #include "BotMain.h"
 #include "BotSquad.h"
 #include "../Main/AIDllFrontier.h"
@@ -423,6 +424,48 @@ float SquadManager::getArtilleryRadius() const
 
 // True when a player of the side sits in a vehicle whose information is of type bit 5, or lacks
 // type bit 4, strictly inside the radius. PE 1012BB20 sums dz^2 + dy^2 + dx^2.
+// PE 1012AF50.
+SquadCoordinator* SquadManager::getClosestAvailableSquad(AIStrategicObject* object,
+                                                         const Vec3& position, int side,
+                                                         bool attack, int* strength)
+{
+    SquadCoordinator* best = 0;
+    float bestDistance = 3.40282347e+38f;
+    Vec3 squadPosition;
+    squadPosition.x = 0.0f;
+    squadPosition.y = 0.0f;
+    squadPosition.z = 0.0f;
+    *strength = 0;
+    std::vector<SquadCoordinator*>& squads = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < squads.size(); ++i)
+    {
+        SquadCoordinator* const squad = squads[i];
+        if (!squad->hasNoMission())
+            continue;
+        if (squad->getNumberOfSquadMembers() <= 0)
+            continue;
+        if (squad->isSquadPendingAssignedToArea(object->m_index)
+            && !squad->getSquadLeader()->hasBot())
+            continue;
+        const int squadStrength = squad->getStrategicStrength(
+            static_cast<StrategicStrengthType>(attack ? 0 : 1)) << 1;
+        if (squadStrength <= 0)
+            continue;
+        squad->getSquadPosition(squadPosition);
+        const float dx = position.x - squadPosition.x;
+        const float dy = position.y - squadPosition.y;
+        const float dz = position.z - squadPosition.z;
+        const float distance = dz * dz + dy * dy + dx * dx;
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            *strength = squadStrength;
+            best = squad;
+        }
+    }
+    return best;
+}
+
 // PE 1012AD80. Squads without members are skipped; the size is re-read every iteration.
 float SquadManager::getDistanceToClosestSquad(const Vec3& position, int side)
 {

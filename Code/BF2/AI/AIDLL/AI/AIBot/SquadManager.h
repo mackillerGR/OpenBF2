@@ -15,6 +15,7 @@ namespace ai {
 
 class SquadCoordinator;   // (`operator new(0xE0)`); held only by pointer here
 class SquadMember;
+class AIStrategicObject;
 class IAIPlayer;
 // Attested enum name in both squad-strength ELF manglings. Enumerator names are not recovered.
 enum StrategicStrengthType : int;
@@ -52,6 +53,11 @@ public:
     // Distance to the nearest squad leader with a valid position; sqrt(FLT_MAX) when none.
     // PE 1012AD80; [INFERRED] name.
     float getDistanceToClosestSquad(const Vec3& position, int side);
+    // Nearest idle squad with members and a positive doubled strength for the role (defence
+    // strength when not attacking); a squad already pending for the object needs a bot-backed
+    // leader. Writes the doubled strength. PE 1012AF50; [INFERRED] name.
+    SquadCoordinator* getClosestAvailableSquad(AIStrategicObject* object, const Vec3& position,
+                                               int side, bool attack, int* strength);
     void incomingArtillery(const Vec3& position, int side); // PE 10128C80, one-based side
     bool getArtilleryTarget(int side, Vec2& target);        // [INFERRED] name; PE 10129BE0
     SquadMember* getSquadMember(int playerId, int side);

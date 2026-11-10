@@ -77,6 +77,8 @@ public:
     SquadMember* getSquadMember(int playerId, int& index);
     bool hasMemberWithKit(KitType type);
     bool isSquadAssignedToAnyArea();
+    bool hasNoMission();                         // mission status 0; [INFERRED] name
+    bool isSquadPendingAssignedToArea(int areaIndex); // [INFERRED] name
     AIStrategicArea* getSquadStrategicAreaAssignment(); // borrowed
     void resetNeedOrderMessageTimer(double now);
 
@@ -92,7 +94,8 @@ public:
     /*  +44 */ int m_i44;                      // = 0 [UNRESOLVED]
     /*  +48 */ double m_d48;                   // = -20.0 a "never happened" sentinel, not a time
     /*  +56 */ char m_gap56[4];                // never written by the constructor
-    /*  +60 */ int m_i60;                      // = 0 [UNRESOLVED]
+    // Twin of m_strategicAreaAssignment read at PE +0x50 by 101A1280. [INFERRED] name.
+    /*  +60 */ AIStrategicArea* m_pendingArea;  // = 0, borrowed
     /*  +64 */ Vec3 m_v64;                     // zeroed [UNRESOLVED]
     /*  +76 */ int m_i76;                      // = 4 [UNRESOLVED] - the twin of m_i40
     /*  +80 */ int m_i80;                      // = 0 [UNRESOLVED]

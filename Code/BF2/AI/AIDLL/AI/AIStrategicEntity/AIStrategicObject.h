@@ -91,7 +91,7 @@ public:
 
     virtual int  getTacticalStatus(int side) const = 0;                                   // slot 21
     virtual bool isAreaTakeable() = 0;                                                    // slot 22
-    virtual int  collectSquadResources(int side, ISAI* sai) = 0;                          // slot 23
+    virtual bool collectSquadResources(int side, ISAI* sai) = 0;                          // slot 23
     // PE body reads the first argument as the squad count and the second as the side.
     virtual int  collectAdditionalSquadResources(int amount, int side, ISAI* sai) = 0;    // slot 24
     virtual int  releaseSurplus(int side) = 0;                                            // slot 25

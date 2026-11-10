@@ -2188,9 +2188,49 @@ void SAI::distributeAttack(const std::vector<AIStrategicObject*>& objects)
     }
 }
 
+// PE 10142840. Runs per category when categories exist, otherwise over all objects.
 void SAI::distributeWithNoAreas()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::distributeWithNoAreas");
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    if (manager->getNumberOfCategories() == 0)
+    {
+        distributeWithNoAreas(manager->getStrategicObjects());
+        return;
+    }
+    for (int category = 0; category < manager->getNumberOfCategories(); ++category)
+        distributeWithNoAreas(manager->getStrategicObjectsOfCategory(category));
+}
+
+// PE 1013FF10. Every object is marked attacking unless the side owns it and is offered two more
+// squads. A second local list is created and released without use.
+void SAI::distributeWithNoAreas(const std::vector<AIStrategicObject*>& objects)
+{
+    std::list<DefenceNeed> entries;
+    std::list<int> unused;                                   // [UNRESOLVED] element type
+    DefenceNeed entry;
+    entry.index = -1;
+    entry.need = 0.0f;
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it)
+            continue;
+        entry.need = 1.0f;
+        entry.index = (*it)->m_index;
+        entries.push_back(entry);
+    }
+    if (entries.empty())
+        return;
+
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    for (std::list<DefenceNeed>::iterator node = entries.begin(); node != entries.end(); ++node)
+    {
+        AIStrategicObject* const object = manager->getStrategicObject(node->index);
+        if (!object)
+            continue;
+        object->setAttack(object->getStatus(m_side) != StatusMap::Owned, m_side);
+        object->collectAdditionalSquadResources(2, m_side, this);
+    }
 }
 
 // Recovered empty helper: , (frame prologue/epilogue and return only).

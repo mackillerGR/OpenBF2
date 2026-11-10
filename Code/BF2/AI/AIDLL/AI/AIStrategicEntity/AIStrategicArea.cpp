@@ -821,14 +821,111 @@ bool AIStrategicArea::isAreaTakeable()
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isAreaTakeable");
 }
 
-int AIStrategicArea::collectSquadResources(int, ISAI*)
+// PE 100E7DC0. The dirty flag is left as found.
+void AIStrategicArea::updateDistances(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::collectSquadResources");
+    if (!m_distancesDirty[side - 1])
+        return;
+    m_distances[side - 1].clear();
+    const int groups =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNumberOfVehicleGroups();
+    if (groups == 0)
+        return;
+    for (int group = 0; group < groups; ++group)
+    {
+        updateDistancesForGroup(side, group);
+        updateRoutesForGroup(side, group);
+    }
 }
 
-int AIStrategicArea::collectAdditionalSquadResources(int, int, ISAI*)
+// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: area-distance-groups] Recover PE 100E7C60.
+void AIStrategicArea::updateDistancesForGroup(int, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::collectAdditionalSquadResources");
+    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::updateDistancesForGroup");
+}
+
+// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: area-distance-groups] Recover PE 100E4980.
+void AIStrategicArea::updateRoutesForGroup(int, int)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::updateRoutesForGroup");
+}
+
+namespace {
+
+// Shared squad-collection step: an owned area (or, with an enemy takeover under way, an owned or
+// neutral one) is defended; anything else is attacked.
+void orderCollectedSquad(AIStrategicArea* area, ISAI* sai, const Vec3& position,
+                         SquadCoordinator* squad, StatusMap::Status status, bool takeover)
+{
+    CommanderInterface* const commander = sai->getCommanderInterface();
+    if ((status == StatusMap::Owned && !takeover)
+        || (takeover && (status == StatusMap::Owned || status == StatusMap::Neutral)))
+        commander->giveDefendOrder(position, squad);
+    else
+        commander->giveAttackOrder(position, squad);
+    (void)area;
+}
+
+} // anonymous namespace
+
+// PE 100E8600. Collects the nearest available squads until the side's assigned strength exceeds
+// its need; true when the need is met.
+bool AIStrategicArea::collectSquadResources(int side, ISAI* sai)
+{
+    if (m_assignedSquadStrength[side - 1] >= m_resourceNeed[side - 1])
+        return true;
+
+    int strength = 0;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    vec2ToVec3XZ(getPosition(side), position);
+    position.y = m_f148;
+    SquadManager* const squads = SquadManager::m_instance;
+    updateDistances(side);
+
+    while (m_assignedSquadStrength[side - 1] <= m_resourceNeed[side - 1])
+    {
+        SquadCoordinator* const squad =
+            squads->getClosestAvailableSquad(this, position, side, m_attack[side - 1], &strength);
+        if (!squad)
+            break;
+        orderCollectedSquad(this, sai, position, squad, m_status[side - 1],
+                            m_enemyTakeover[side - 1]);
+        m_assignedSquadStrength[side - 1] += strength;
+    }
+    return m_assignedSquadStrength[side - 1] >= m_resourceNeed[side - 1];
+}
+
+// PE 100E8740. Collects up to `amount` more squads regardless of need; returns how many came.
+int AIStrategicArea::collectAdditionalSquadResources(int amount, int side, ISAI* sai)
+{
+    int collected = 0;
+    int strength = 0;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    vec2ToVec3XZ(getPosition(side), position);
+    SquadManager* const squads = SquadManager::m_instance;
+    position.y = m_f148;
+    updateDistances(side);
+    if (amount <= 0)
+        return 0;
+
+    while (collected < amount)
+    {
+        SquadCoordinator* const squad =
+            squads->getClosestAvailableSquad(this, position, side, m_attack[side - 1], &strength);
+        if (!squad)
+            break;
+        orderCollectedSquad(this, sai, position, squad, m_status[side - 1],
+                            m_enemyTakeover[side - 1]);
+        m_assignedSquadStrength[side - 1] += strength;
+        ++collected;
+    }
+    return collected;
 }
 
 int AIStrategicArea::releaseSurplus(int)

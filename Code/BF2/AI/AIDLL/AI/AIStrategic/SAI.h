@@ -275,6 +275,8 @@ public:
     void distributeAttack(const std::vector<AIStrategicObject*>& objects);
     void distributeAttack();
     void distributeWithNoAreas();
+    // No-owned-area distribution over one category's objects. PE 1013FF10; [INFERRED] overload.
+    void distributeWithNoAreas(const std::vector<AIStrategicObject*>& objects);
     void distributeArtillery();                     // genuinely empty, PE update elides it
 
 private:

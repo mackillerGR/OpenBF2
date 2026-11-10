@@ -58,6 +58,11 @@ public:
     // Stores a per-map order position. Before initOrderPoses it is kept absolute; afterwards it is
     // converted to an area-relative offset and its navmesh island is cached. Always returns true.
     bool setOrderPosition(int map, const Vec3& position);
+    // Rebuilds the side's distance records when they are marked dirty. PE 100E7DC0.
+    void updateDistances(int side);
+    // Per-vehicle-group steps of updateDistances. PE 100E7C60 / 100E4980; [FRONTIER].
+    void updateDistancesForGroup(int side, int group);
+    void updateRoutesForGroup(int side, int group);
     // Bit test on m_i340 with the x86 five-bit shift mask. PE 100DED40; [UNRESOLVED] role.
     bool hasFlag340(int bit) const { return (m_i340 & (1 << (bit & 31))) != 0; }
     // Appends an area once to the neighbour list. [INFERRED] name.
@@ -108,7 +113,7 @@ public:
     virtual bool hasObjectTypeFlags(int flags) const;              // slot 20,
     virtual int  getTacticalStatus(int side) const;                // slot 21,
     virtual bool isAreaTakeable();                                 // slot 22,
-    virtual int  collectSquadResources(int side, ISAI* sai);       // slot 23,
+    virtual bool collectSquadResources(int side, ISAI* sai);       // slot 23,
     virtual int  collectAdditionalSquadResources(int amount, int side, ISAI* sai);
                                                                    // slot 24,
     virtual int  releaseSurplus(int side);                         // slot 25,

@@ -27,6 +27,7 @@ public:
     int getPlayerId();
     bool isBot();
     Bot* getBot();                           // borrowed
+    bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name
     int getMemberIndex();
     void setMemberIndex(int index);          // PE 1017BCA0
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
