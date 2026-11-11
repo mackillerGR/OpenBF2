@@ -1,10 +1,7 @@
 // [INFERRED] Source placement.
-// [FRONTIER] Remaining methods stop by name until implemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining UrgencyMerger operations.
 
 #include "UrgencyMerger.h"
 
-#include "../Main/AIDllFrontier.h"
 
 namespace dice {
 namespace hfe {
@@ -27,58 +24,103 @@ UrgencyMerger::UrgencyMerger(int count, float* weights, UrgencyGenerator** gener
 {
 }
 
+// PE 101DAF50. Neither array is released.
 UrgencyMerger::~UrgencyMerger()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::~UrgencyMerger");
 }
 
-// [FRONTIER] Bot-specific urgency and modifier operations remain unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace each stop when the corresponding merger behavior is recovered.
-
-float UrgencyMerger::getUrgency(Bot*)
+// PE 101DAD10.
+float UrgencyMerger::getUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getUrgency");
+    if (m_chosen)
+        return m_chosen->getUrgency(bot);
+    return 0.0f;
 }
 
-float UrgencyMerger::getActiveUrgency(Bot*)
+// PE 101DAD40.
+float UrgencyMerger::getActiveUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getActiveUrgency");
+    if (m_chosen)
+        return m_chosen->getActiveUrgency(bot);
+    return 0.0f;
 }
 
-void UrgencyMerger::updateActiveUrgency(Bot*)
+// PE 101DAD60. A missing generator counts as zero; ties keep the earlier generator.
+float UrgencyMerger::updateActiveUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::updateActiveUrgency");
+    float best = 0.0f;
+    m_chosen = 0;
+    for (int i = 0; i < m_count; ++i)
+    {
+        const float urgency = m_generators[i] ? m_generators[i]->updateActiveUrgency(bot) : 0.0f;
+        if (urgency > best)
+        {
+            best = urgency;
+            m_chosen = m_generators[i]->getChosenGenerator();
+        }
+    }
+    return best;
 }
 
-bool UrgencyMerger::hasChangedTarget(Bot*)
+// PE 101DADD0.
+bool UrgencyMerger::hasChangedTarget(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::hasChangedTarget");
+    bool result = true;
+    for (int i = 0; i < m_count && result; ++i)
+    {
+        if (m_generators[i])
+            result = m_generators[i]->hasChangedTarget(bot);
+    }
+    return result;
 }
 
-bool UrgencyMerger::quotientChanged(Bot*, float, float)
+// PE 101DAE20.
+bool UrgencyMerger::quotientChanged(Bot* bot, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::quotientChanged");
+    bool result = true;
+    for (int i = 0; i < m_count && result; ++i)
+    {
+        if (m_generators[i])
+            result = m_generators[i]->quotientChanged(bot, low, high);
+    }
+    return result;
 }
 
-bool UrgencyMerger::hasChanged(Bot*, float, float)
+// PE 101DAE70.
+bool UrgencyMerger::hasChanged(Bot* bot, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::hasChanged");
+    bool result = false;
+    for (int i = 0; i < m_count && !result; ++i)
+    {
+        if (m_generators[i])
+        {
+            result = m_generators[i]->quotientChanged(bot, low, high)
+                     || m_generators[i]->hasChangedTarget(bot);
+        }
+    }
+    return result;
 }
 
+// PE 101DAF40.
 UrgencyGenerator* UrgencyMerger::getChosenGenerator()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getChosenGenerator");
+    return m_chosen;
 }
 
-void UrgencyMerger::reset(Bot*)
+// PE 101DAED0.
+void UrgencyMerger::reset(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::reset");
+    for (int i = 0; i < m_count; ++i)
+    {
+        if (m_generators[i])
+            m_generators[i]->reset(bot);
+    }
 }
 
+// PE 101DAD30.
 int UrgencyMerger::getSize()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::UrgencyMerger::getSize");
+    return m_count;
 }
 
 } // namespace ai

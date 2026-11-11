@@ -1,5 +1,4 @@
 // Combines per-behavior urgency generators for a bot.
-// [FRONTIER] Remaining merger behavior requires implementation.
 // [INFERRED] Source placement.
 
 #ifndef AI_AIDLL_AI_AIBOTBEHAVIOUR_URGENCYMERGER_H       // [INFERRED] guard style
@@ -11,49 +10,57 @@ namespace ai {
 
 class Bot;
 
-// UrgencyGenerator - the abstract base. vtable off_4B6E88: , , then nine pure virtuals.
-// Its destructor body is one instruction - the vptr store C++ emits - so the class
-// owns nothing. It is an interface with a virtual destructor and no state.
+// Source of a behaviour urgency for one bot. The PE vtable 10282A00 holds the destructor and
+// eight pure virtuals; the class owns nothing.
 class UrgencyGenerator
 {
 public:
     virtual ~UrgencyGenerator();
 
-    virtual float getUrgency(Bot* bot) = 0;                         // +0x08
-    virtual float getActiveUrgency(Bot* bot) = 0;                   // +0x0C
-    virtual void  updateActiveUrgency(Bot* bot) = 0;                // +0x10
-    virtual bool  hasChangedTarget(Bot* bot) = 0;                   // +0x14
-    virtual bool  quotientChanged(Bot* bot, float a, float b) = 0;  // +0x18
-    virtual bool  hasChanged(Bot* bot, float a, float b) = 0;       // +0x1C
-    virtual UrgencyGenerator* getChosenGenerator() = 0;             // +0x20
-    virtual void  reset(Bot* bot) = 0;                              // +0x24
-    virtual int   getSize() = 0;                                    // +0x28
+    // The urgency last computed for the bot.
+    virtual float getUrgency(Bot* bot) = 0;
+    // The urgency in force when the bot last committed to this generator.
+    virtual float getActiveUrgency(Bot* bot) = 0;
+    // Commits the computed urgency as the active one and returns it.
+    virtual float updateActiveUrgency(Bot* bot) = 0;
+    virtual bool  hasChangedTarget(Bot* bot) = 0;
+    // True when computed / active urgency left the range [low, high].
+    virtual bool  quotientChanged(Bot* bot, float low, float high) = 0;
+    virtual bool  hasChanged(Bot* bot, float low, float high) = 0;
+    virtual UrgencyGenerator* getChosenGenerator() = 0;
+    virtual void  reset(Bot* bot) = 0;
 };
 
-// UrgencyMerger - (`operator new(0x14)` in BotManager's loop).
+// Picks the generator with the highest urgency among a bot's behaviours. PE vtable 10285218.
+// The generator array may hold null entries; the merger owns neither array.
 class UrgencyMerger : public UrgencyGenerator
 {
 public:
-    // Combines count generators with an optional weight array; BotManager passes null weights.
+    // BotManager's pool passes null weights; no recovered method reads them.
     UrgencyMerger(int count, float* weights, UrgencyGenerator** generators);
     virtual ~UrgencyMerger();
 
+    // Both forward to the chosen generator and yield zero without one.
     virtual float getUrgency(Bot* bot);
     virtual float getActiveUrgency(Bot* bot);
-    virtual void  updateActiveUrgency(Bot* bot);
+    // Commits every generator, chooses the one with the highest positive urgency and returns
+    // that urgency; zero and no choice when none is positive.
+    virtual float updateActiveUrgency(Bot* bot);
+    // True when every present generator reports it.
     virtual bool  hasChangedTarget(Bot* bot);
-    virtual bool  quotientChanged(Bot* bot, float a, float b);
-    virtual bool  hasChanged(Bot* bot, float a, float b);
+    virtual bool  quotientChanged(Bot* bot, float low, float high);
+    // True when any present generator's quotient or target changed.
+    virtual bool  hasChanged(Bot* bot, float low, float high);
     virtual UrgencyGenerator* getChosenGenerator();
     virtual void  reset(Bot* bot);
+    // The merger's own virtual, after the interface's eight.
     virtual int   getSize();
 
 private:
-    /*  0 */ // vptr - off_4B6E48
-    /*  4 */ int                m_count;         // the generator count; getSize returns it
-    /*  8 */ float*             m_weights;       // null from BotManager's pool
+    /*  4 */ int                m_count;
+    /*  8 */ float*             m_weights;
     /* 12 */ UrgencyGenerator** m_generators;
-    /* 16 */ void*              m_chosen;        // = 0 [INFERRED] from getChosenGenerator's offset
+    /* 16 */ UrgencyGenerator*  m_chosen;        // = 0
 };
 
 } // namespace ai

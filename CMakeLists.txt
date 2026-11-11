@@ -196,6 +196,8 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotMemory.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotSubObjects.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgencyMerger.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/BotBehaviour.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/PlanGenerator.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIConsole.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgeCurve.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/CoverPosition/CPNodeManager.cpp"   # libaidll only - chunk 02
@@ -210,6 +212,7 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/Strategy.cpp"          # libaidll only
+    "${BF2_ROOT}/AI/AIDLL/AI/AIPlanInterpreter/PlanInterpreter.cpp"   # libaidll only
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIPathfinding.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/IAIPathfinding.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/Main/UserOrderManager.cpp"   # libaidll only - chunk 02
@@ -1161,6 +1164,8 @@ set(bf2_aidll_image_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotMemory.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotSubObjects.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgencyMerger.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/BotBehaviour.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/PlanGenerator.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIConsole.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgeCurve.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIStrategicEntity/CoverPosition/CPNodeManager.cpp"
@@ -1175,6 +1180,7 @@ set(bf2_aidll_image_sources
     "${BF2_ROOT}/AI/AIDLL/AI/Main/CommunicationHub.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/StrategyManager.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/Strategy.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIPlanInterpreter/PlanInterpreter.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/AIPathfinding.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/IAIPathfinding.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/Main/UserOrderManager.cpp"

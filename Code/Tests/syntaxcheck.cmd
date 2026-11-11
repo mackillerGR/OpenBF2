@@ -1049,6 +1049,10 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\BotMemory.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\BotSubObjects.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\PlanGenerator.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\AIConsole.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\UrgeCurve.cpp"
@@ -1071,6 +1075,8 @@ if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\StrategyManager.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\Strategy.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIPlanInterpreter\PlanInterpreter.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\AIPathfinding.cpp"
 if errorlevel 1 set /a RC+=1

@@ -179,6 +179,8 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\PlanGenerator.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\AIConsole.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgeCurve.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\CoverPosition\CPNodeManager.cpp" ^
@@ -193,6 +195,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\Main\CommunicationHub.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\StrategyManager.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\Strategy.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIPlanInterpreter\PlanInterpreter.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\AIPathfinding.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\IAIPathfinding.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\UserOrderManager.cpp" ^
