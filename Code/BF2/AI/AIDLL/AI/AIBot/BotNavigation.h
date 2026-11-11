@@ -114,7 +114,8 @@ private:
     /*  68 */ char  m_gap68[4];            // [UNRESOLVED] - never written
     /*  72 */ QTPath* m_polygonPath;       // new(0x18) - the fine path
     /*  76 */ int   m_int76;               // = -1
-    /*  80 */ char  m_gap80[8];            // [UNRESOLVED] - never written
+    /*  80 */ int   m_vehicleNumber;       // reset: the equipment's vehicle number. [INFERRED] name
+    /*  84 */ char  m_gap84[4];            // [UNRESOLVED] - never written
     /*  88 */ int   m_zero88[3];           // +88, +92, +96
     // the walkable result - see the header note. The constructor's dead resize targets this.
     /* 100 */ std::vector<NavigationPoint> m_points;

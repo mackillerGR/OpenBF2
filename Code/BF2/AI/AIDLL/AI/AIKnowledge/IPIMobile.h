@@ -58,6 +58,8 @@ public:
     float getSprintStamina() const;
 
     const ValidPos& getLastValidPosition() const;
+    // [INFERRED] inline accessor; BotNavigation::reset reads the field directly.
+    const ValidPos& getLastValidInfantryPos() const { return m_lastValidInfantryPos; }
     const ValidPos& getLastValidPosition(int vehicleNumber) const;
     void setLastValidInfantryPosInternal(const ValidPos& position);
     void setLastValidVehiclePosInternal(const ValidPos& position);

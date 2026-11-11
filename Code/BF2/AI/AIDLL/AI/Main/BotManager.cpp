@@ -916,9 +916,21 @@ Bot* BotManager::getLastCreatedBot() const
     return m_lastCreatedBot;
 }
 
-void BotManager::updateBotVehicle(Bot*, IAIObject*)
+// PE 1018EE50. Moves the bot's vehicle record to `vehicle`; a vehicle already recorded for
+// another bot keeps that bot.
+void BotManager::updateBotVehicle(Bot* bot, IAIObject* vehicle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::updateBotVehicle");
+    const int botId = static_cast<int>(bot->getBotId());
+    for (std::map<IAIObject*, int>::iterator it = m_botVehicles.begin(); it != m_botVehicles.end();
+         ++it)
+    {
+        if (it->second == botId)
+        {
+            m_botVehicles.erase(it);
+            break;
+        }
+    }
+    m_botVehicles.insert(std::make_pair(vehicle, botId));
 }
 
 // PE 1018C5B0. Indexed by player id. A physical vehicle gets physics for its side; a living bot
@@ -951,11 +963,12 @@ void BotManager::setBotIsDead(int playerId)
     if (!bot)
         return;
 
-    for (std::map<int, int>::iterator it = m_map204.begin(); it != m_map204.end(); ++it)
+    for (std::map<IAIObject*, int>::iterator it = m_botVehicles.begin(); it != m_botVehicles.end();
+         ++it)
     {
         if (it->second == playerId)
         {
-            m_map204.erase(it);
+            m_botVehicles.erase(it);
             break;
         }
     }

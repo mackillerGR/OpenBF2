@@ -22,6 +22,10 @@
 #include "../AIKnowledge/Information.h"      // updatePlayerAction: the equipment's mobile plug-in
 #include "../AIKnowledge/IPIMobile.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"   // updateBotVehicle
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../Main/IBotManager.h"
+#include "../Main/CommonSingletonServer.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include <cfloat>       // DBL_MAX - the two 'never happened' timestamps
 
@@ -486,10 +490,56 @@ void BotMain::updatePathfinding(bool& a, bool* b)
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updatePathfinding");
 }
 
-// +0x02C
-void BotMain::updateBotVehicle(bool* out)
+// +0x02C, PE 10180FB0. Re-reads the player's current vehicle. Without one the bot drops its
+// equipment. An unchanged equipment handle returns false unless the bot is man down; otherwise
+// the bot manager is told, the old equipment's strength is scaled by 3/4 and the new one's by 4/3,
+// and the bot's plan, navigation, take-off position and controls are reset. The plan getter's
+// result is discarded, as shipped.
+bool BotMain::updateBotVehicle(bool* changed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateBotVehicle");
+    IAIObject* const vehicle = m_player->getCurrentVehicle();
+    getPlan();
+    m_gap88[2] = 1;
+    m_planInvalid = true;
+    m_hasDefaultPlan = false;
+    if (!vehicle)
+    {
+        m_navigation->reset();
+        setCurrentEquipment(static_cast<unsigned int>(-1));
+        if (changed)
+            *changed = false;
+        return true;
+    }
+    if (changed)
+        *changed = true;
+
+    const unsigned int handle = vehicle->getInformation(m_side);
+    if (handle != static_cast<unsigned int>(-1) && getCurrentEquipment() == handle && !m_manDown)
+        return false;
+
+    IBotManager::instance->updateBotVehicle(this, vehicle);
+    m_airBorn = false;
+    Information* const previous = informationManager->getInformation(getCurrentEquipment());
+    m_lastChangeTime = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const unsigned int current = vehicle->getInformation(getSide());
+    Information* const information = informationManager->getInformation(current);
+    if (previous)
+        previous->setStrength(previous->getStrength() * 0.75f);
+    if (!information)
+    {
+        setCurrentEquipment(static_cast<unsigned int>(-1));
+        return true;
+    }
+    m_sensingAgent->deletePlan();
+    information->setStrength(information->getStrength() * 1.3333334f);
+    setCurrentEquipment(current);
+    setPlanLock(false);
+    m_navigation->reset();
+    m_takeOffPosition[0] = 0.0f;
+    m_takeOffPosition[1] = 0.0f;
+    m_takeOffPosition[2] = 0.0f;
+    resetAllControls(true, true, true);
+    return true;
 }
 
 // +0x030
@@ -738,16 +788,78 @@ void BotMain::updatePlayerAction(bool stalled)
     resetAllControls(true, true, true);
 }
 
-// read in outline only. Its effect depends on the
-// equipment's flag word, Information::getFaceing (slot 16), the mobile speed and a function-static
-// `minThrottle`. The first gate releases sprint, yaw, pitch and roll and sets the throttle against
-// the speed along the facing (clamped by minThrottle) or to zero; the second releases both look
-// axes; the third releases fire, alt-fire, the nine weapon and eight position selects, flares
-// crouch and lie (conditionally), use and reload.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-void BotMain::resetAllControls(bool, bool, bool)
+namespace {
+
+// PE 1006ED90: clamps to [low, high]; an unordered value yields low.
+float clampToRange(float value, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::resetAllControls");
+    if (value >= high)
+        value = high;
+    if (!(value >= low))
+        value = low;
+    return value;
+}
+
+} // anonymous namespace
+
+// PE 10180C10. Releases the bot's controls in three groups: movement (sprint, yaw, pitch, roll and
+// a throttle that brakes against the equipment's speed along its facing), mouse look, and
+// actions (fire, weapon and position selects, flares, stance, use and reload). Every write is
+// dropped for an input the control map leaves unbound. The movement group dereferences the
+// equipment information without a null check, as shipped. Bit 21 of the equipment's type flags
+// keeps stance alone for a living bot; bit 4 leaves the throttle untouched.
+void BotMain::resetAllControls(bool movement, bool look, bool actions)
+{
+    static float minThrottle = 0.4f;
+
+    Information* const information = informationManager->getInformation(m_currentEquipment);
+    const bool flag21 = information && ((information->getObjectTypeFlags() >> 21) & 1) != 0;
+
+    if (movement)
+    {
+        m_playerInput->setInput(io::PISprint, 0.0f);
+        m_playerInput->setInput(io::PIYaw, 0.0f);
+        m_playerInput->setInput(io::PIPitch, 0.0f);
+        m_playerInput->setInput(io::PIRoll, 0.0f);
+        if (((information->getObjectTypeFlags() >> 4) & 1) == 0)
+        {
+            IPIMobile* const mobile = information->getMobile();
+            if (mobile && !flag21)
+            {
+                const Vec3& speed = mobile->getSpeed();
+                const Vec3 facing = information->getFaceing();
+                const float along = facing.z * speed.z + facing.y * speed.y + speed.x * facing.x;
+                const float throttle = -clampToRange(along * 0.5f, -minThrottle, minThrottle);
+                m_playerInput->setInput(io::PIThrottle, throttle);
+            }
+            else
+            {
+                m_playerInput->setInput(io::PIThrottle, 0.0f);
+            }
+        }
+    }
+
+    if (look)
+    {
+        m_playerInput->setInput(io::PIMouseLookX, 0.0f);
+        m_playerInput->setInput(io::PIMouseLookY, 0.0f);
+    }
+
+    if (actions)
+    {
+        m_playerInput->setInput(io::PIFire, 0.0f);
+        m_playerInput->setInput(io::PIAltFire, 0.0f);
+        for (int input = io::PIWeaponSelect1; input <= io::PIPositionSelect8; ++input)
+            m_playerInput->setInput(static_cast<io::PlayerInputMap>(input), 0.0f);
+        m_playerInput->setInput(io::PIFlareFire, 0.0f);
+        if (isDead() || !flag21)
+        {
+            m_playerInput->setInput(io::PICrouch, 0.0f);
+            m_playerInput->setInput(io::PILie, 0.0f);
+        }
+        m_playerInput->setInput(io::PIUse, 0.0f);
+        m_playerInput->setInput(io::PIReload, 0.0f);
+    }
 }
 
 // deactivated bots are dead without consulting the player.

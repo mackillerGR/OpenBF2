@@ -62,7 +62,8 @@ public:
     virtual void updateSensing(const double& dt) = 0;                                             // +0x020 [FRONTIER]
     virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024 [FRONTIER]
     virtual void reset() = 0;                                                                     // +0x028
-    virtual void updateBotVehicle(bool* out) = 0;                                                 // +0x02C [FRONTIER]
+    // True when the bot's equipment was re-evaluated; *changed reports whether it has a vehicle.
+    virtual bool updateBotVehicle(bool* changed) = 0;                                             // +0x02C
     virtual void updateBot() = 0;                                                                 // +0x030 [FRONTIER]
     virtual BotSquad* getBotSquad() const = 0;                                                    // +0x034
     virtual float getObedience() = 0;                                                             // +0x038
@@ -216,7 +217,7 @@ public:
     virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
     virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
     virtual void reset();                                                                         // +0x028
-    virtual void updateBotVehicle(bool* out);                                                     // +0x02C [FRONTIER]
+    virtual bool updateBotVehicle(bool* changed);                                                 // +0x02C
     virtual void updateBot();                                                                     // +0x030 [FRONTIER]
     virtual BotSquad* getBotSquad() const;                                                        // +0x034
     virtual float getObedience();                                                                 // +0x038
@@ -413,7 +414,7 @@ public:
     float getHarmlessThrsh();                               // no setter, dice's spelling
     void  setPlayer(IAIPlayer* p);
     void  setPlayerInput();
-    void  resetAllControls(bool a, bool b, bool c);         // [FRONTIER]
+    void  resetAllControls(bool movement, bool look, bool actions);
     void  validateDataStructures();
     // A class static, shared by every bot. See the header - the constructor reads it three times.
     static unsigned char mu8NBehaviours;

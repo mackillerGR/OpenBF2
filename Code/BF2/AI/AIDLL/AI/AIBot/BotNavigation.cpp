@@ -7,6 +7,8 @@
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"   // IBFTimer::getGameTime
 #include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 
@@ -140,13 +142,17 @@ void BotNavigation::reset()
     // Resolves the bot's current equipment handle; skips equipment work when it has no object.
     const unsigned int equipment = m_bot->getCurrentEquipment();
     Information* const info = informationManager->getPool()->get(equipment);
-    if (info)
+    // PE 10174EB7: a mobile equipment seeds the last valid positions for its vehicle number and
+    // for infantry.
+    if (info && info->getMobile())
     {
-        // Retail: `IPIMobile* m = info->m_mobile56; if (m) { m_int80 = m->getVehicleNumber;
-        // const Vec* p = m->getLastValidPosition(m_int80); m_int200 = p[0]; ... }`
-        // `Information` and `IPIMobile` are both unrecovered - `Information` is a forward
-        // declaration behind the handle pool and `IPIMobile` is not in this tree at all.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (the bot has equipment)");
+        IPIMobile* const mobile = info->getMobile();
+        m_vehicleNumber = mobile->getVehicleNumber();
+        const IPIMobile::ValidPos& last = mobile->getLastValidPosition(m_vehicleNumber);
+        m_int204 = static_cast<int>(last.quadTree);
+        m_int200 = static_cast<int>(last.polygon);
+        m_int212 = static_cast<int>(mobile->getLastValidInfantryPos().quadTree);
+        m_int208 = static_cast<int>(mobile->getLastValidInfantryPos().polygon);
     }
 
     // The sentinel is the interesting one - see the block above.
