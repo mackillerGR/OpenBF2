@@ -730,6 +730,44 @@ class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                   
 static BF2_CC_NAME BF2_CC_INSTANCE;                                                          \
 }
 
+// Seven-argument void method with a receiver-availability check.
+#define BF2_CONSOLE_METHOD_7(fnName, target, activeExpr, A0, A1, A2, A3, A4, A5, A6, listTag) \
+namespace {                                                                                  \
+class BF2_CC_NAME : public ::dice::hfe::ConsoleObjectBaseImpl                                \
+{                                                                                            \
+    BF2_CC_HEAD(fnName, 0, 7, 7, "void", true)                                               \
+            m_argTypes[0] = #A0;                                                             \
+            m_argTypes[1] = #A1;                                                             \
+            m_argTypes[2] = #A2;                                                             \
+            m_argTypes[3] = #A3;                                                             \
+            m_argTypes[4] = #A4;                                                             \
+            m_argTypes[5] = #A5;                                                             \
+            m_argTypes[6] = #A6;                                                             \
+    BF2_CC_TAIL(7, listTag)                                                                  \
+    virtual bool isObjectActive() const { return (activeExpr); }                             \
+    virtual void executeObjectMethod()                                                       \
+    {                                                                                        \
+        if (m_argCount != 7) return;                                                         \
+        m_hasReturnValue = false;                                                            \
+        target(BF2_CC_ARG(A0, 0), BF2_CC_ARG(A1, 1), BF2_CC_ARG(A2, 2), BF2_CC_ARG(A3, 3),   \
+               BF2_CC_ARG(A4, 4), BF2_CC_ARG(A5, 5), BF2_CC_ARG(A6, 6));                     \
+    }                                                                                        \
+    virtual void setArgFromString(int index, const std::string& value)                       \
+    {                                                                                        \
+        BF2_CC_CONVERT(A0, 1)                                                                \
+        BF2_CC_CONVERT(A1, 2)                                                                \
+        BF2_CC_CONVERT(A2, 3)                                                                \
+        BF2_CC_CONVERT(A3, 4)                                                                \
+        BF2_CC_CONVERT(A4, 5)                                                                \
+        BF2_CC_CONVERT(A5, 6)                                                                \
+        BF2_CC_CONVERT(A6, 7)                                                                \
+    }                                                                                        \
+    BF2_CC_NO_RETURN_AS_STRING                                                               \
+    BF2_CC_COMMON_HOOKS                                                                      \
+};                                                                                           \
+static BF2_CC_NAME BF2_CC_INSTANCE;                                                          \
+}
+
 // Registers a two-argument command with a typed result, formatted through an output stream.
 // Pointer results use the host standard library's pointer formatting.
 #define BF2_CONSOLE_METHOD_2_RET(fnName, target, RET, A0, A1, listTag)                             \

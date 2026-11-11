@@ -17,6 +17,7 @@ namespace hfe {
 namespace ai {
 
 class BAPEntry;
+class PlanInterpreter;
 class BotBehaviour;
 class BotMoralAdmin;
 class ISensingAgentPattern;
@@ -128,6 +129,10 @@ public:
     virtual void setOverrideMenuSettings(bool);
 
 private:
+    void ensureBehaviourSlot(int vehicle, int behaviour);
+    void ensureGeneratorSlot(int vehicle, int behaviour);
+    void ensurePlanInterpreter(int vehicle);
+
     // Field offsets describe retail x86 layout; native STL sizes may differ.
     /*   8 */ int    m_maxNBots;                  // = -1 getMaxNBots / setMaxNBots
     /*  12 */ int    m_numberOfBehaviours;        // = 0 getNumberOfBehaviours
@@ -154,7 +159,7 @@ private:
     /*  60 */ std::vector<std::vector<BotBehaviour*> > m_behaviours;
     /*  72 */ std::vector<int> m_defaultBehaviour;          // index into m_behaviours[v]; -1 = none
     /*  84 */ std::vector<std::vector<PlanGenerator*> > m_planGenerators;
-    /*  96 */ std::vector<void*> m_planInterpreters;        // [UNRESOLVED] element type - placeholder
+    /*  96 */ std::vector<PlanInterpreter*> m_planInterpreters;   // one per vehicle, 45 types each
     /* 108 */ std::map<int, ISensingAgentPattern*> m_sensingAgentPatterns;
     /* 120 */ std::vector<MaterialManager*> m_vehicleMaterialManagers;
 
@@ -178,7 +183,8 @@ private:
     // Six zero-based armor-class weights, initialized to 1, 3, 8, 15, 10, and 12.
     /* 240 */ float m_armourClassValues[6];
 
-    /* 264 */ std::map<int, void*> m_tree264;               // [UNRESOLVED] Key and mapped types are placeholders.
+    // Pattern name to id, assigned in registration order by setSensingAgentPatternName.
+    /* 264 */ std::map<std::string, int> m_sensingAgentPatternIds;
     // Mutable because getBotName rotates the list while satisfying the const interface.
     /* 276 */ mutable std::list<std::pair<float, std::string> > m_botNames;   // addBotName / getBotName
     /* 280 */ bool m_overrideMenuSettings;         // = false overrideMenuSettings + getOverrideMenuSettings

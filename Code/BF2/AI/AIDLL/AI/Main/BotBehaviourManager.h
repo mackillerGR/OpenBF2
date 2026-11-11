@@ -14,12 +14,13 @@ namespace hfe {
 namespace ai {
 
 class UrgeCurve;
+class BotBehaviour;
 
 // Factory interface for constructing bot behaviors.
 class BBCreateFunction
 {
 public:
-    virtual int operator()(int behaviourId, std::string& name, int mode,
+    virtual BotBehaviour* operator()(int behaviourId, std::string& name, int mode,
                            UrgeCurve* urgeCurve, float* weights) = 0;
 };
 
@@ -41,7 +42,7 @@ public:
 
     // the factory dispatch
     // Called by `AIConsole::setVehicleBehaviour` , which is the `.ai` script binding.
-    int create(std::string behaviourName, std::string createFunctionName, std::string name,
+    BotBehaviour* create(std::string behaviourName, std::string createFunctionName, std::string name,
                int mode, std::string urgeCurveName, float* weights, std::string& message);
 
     // the urge-curve factories
