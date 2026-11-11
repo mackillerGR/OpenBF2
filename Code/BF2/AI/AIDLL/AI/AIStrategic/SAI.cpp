@@ -627,19 +627,77 @@ void SAI::addBot(Bot* bot)
     bot->setSpawnCallBack(checkPointer(new SAIBotSCB(bot, this)));
 }
 
-void SAI::setBotIsDead(int)
+// PE 10142EA0. Remembers the bot's target area and kit for the respawn choice, removes it from
+// every strategic set, and resets its spawn group to zero.
+void SAI::setBotIsDead(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotIsDead");
+    if (!m_botInfo[botId])
+        return;
+    const int kit = m_botInfo[botId]->m_bot->getSpawnKit();
+    const int area = m_botInfo[botId]->m_int04;
+    m_botInfo[botId]->remove(this);
+    m_map5C.insert(std::make_pair(botId, std::make_pair(area, kit)));
+    m_botInfo[botId]->m_bot->getPlayer()->setSpawnGroup(0);
+    BotInfo* const info = m_botInfo[botId];
+    info->m_int04 = -1;
+    info->m_int08 = -1;
+    info->m_int0C = -1;
+    info->m_float10 = 0.0f;
 }
 
-void SAI::setBotIsAlive(int)
+// PE 10141760. Places a live bot at the strategic object closest to its equipment and drops its
+// pending respawn record. The first call after a bridge change resets the bridges. As shipped,
+// a null closest object is passed on to assignTo unchecked.
+void SAI::setBotIsAlive(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotIsAlive");
+    if (!m_botInfo[botId])
+        return;
+    if (m_flagAC)
+    {
+        AIStrategicObjectManager::getInstance()->resetBridges();
+        m_flagAC = false;
+    }
+    if (m_botInfo[botId]->m_bot->isDead())
+        return;
+
+    Information* const information =
+        informationManager->getInformation(m_botInfo[botId]->m_bot->getCurrentEquipment());
+    if (!information || !information->getUnit())
+        return;
+    const int vehicleNumber =
+        information->getMobile() ? information->getMobile()->getVehicleNumber() : -1;
+    AIStrategicObject* const object = AIStrategicObjectManager::getInstance()->getClosestObject(
+        information->getPosition(), information->getUnit()->getEquipmentType(), vehicleNumber,
+        m_side);
+    m_botInfo[botId]->assignTo(object, this);
+
+    for (std::map<int, std::pair<int, int> >::iterator it = m_map5C.begin(); it != m_map5C.end();
+         ++it)
+    {
+        if (it->first == botId)
+        {
+            m_map5C.erase(it);
+            return;
+        }
+    }
 }
 
-void SAI::removeBot(Bot*)
+// PE 10142FE0. A bot with a pending respawn record is no longer in any strategic set, so only the
+// record is dropped; otherwise the bot is removed from its sets. The info is then freed.
+void SAI::removeBot(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::removeBot");
+    const int botId = static_cast<int>(bot->getBotId());
+    if (!m_botInfo[botId])
+        return;
+    std::map<int, std::pair<int, int> >::iterator it = m_map5C.begin();
+    while (it != m_map5C.end() && it->first != botId)
+        ++it;
+    if (it != m_map5C.end())
+        m_map5C.erase(it);
+    else
+        m_botInfo[botId]->remove(this);
+    delete m_botInfo[botId];
+    m_botInfo[botId] = 0;
 }
 
 // Both test the requested bit; x86 masks shift count.
@@ -1280,14 +1338,61 @@ void SAI::clearSpawnsToPoints()
         it->second = 0;
 }
 
-// Remaining direct SAI::update dependencies. Paired callers and helper return paths establish
-// these signatures; the strategic work behind them remains unrecovered.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// BotInfo::remove: / , paired callers discard
-// the result and neither body materializes a return. Assigned/free/present-unit removal is absent.
-void SAI::BotInfo::remove(SAI*)
+// PE 10142A40. The position object is dereferenced after the target-object branch without a null
+// check, as shipped.
+void SAI::BotInfo::remove(SAI* sai)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::BotInfo::remove");
+    const int botId = static_cast<int>(m_bot->getBotId());
+    AIStrategicObject* const position =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_int0C);
+    AIStrategicObject* const target =
+        AIStrategicObjectManager::getInstance()->getStrategicObject(m_int04);
+    if (target)
+    {
+        leaveAssigned(target, true, sai);
+        position->eraseIdFromBotSet92(botId, sai->m_side);
+    }
+    else if (position)
+    {
+        if (sai->m_setFC.find(botId) != sai->m_setFC.end())
+            release(true, sai);
+        position->eraseIdFromBotSet92(botId, sai->m_side);
+    }
+    const std::set<int>::iterator it = sai->m_set44.find(botId);
+    if (it != sai->m_set44.end())
+        sai->m_set44.erase(it);
+}
+
+// PE 10140DD0.
+void SAI::BotInfo::leaveAssigned(AIStrategicObject* object, bool release, SAI* sai)
+{
+    const int botId = static_cast<int>(m_bot->getBotId());
+    std::set<int>::iterator it = object->getBotSet68(sai->m_side).find(botId);
+    leaveAssigned(object, it, release, sai);
+}
+
+// PE 1013F210. The busy-set entry is erased without an end check, as shipped.
+void SAI::BotInfo::leaveAssigned(AIStrategicObject* object, std::set<int>::iterator& it,
+                                 bool release, SAI* sai)
+{
+    const std::set<int>::iterator erased = it;
+    ++it;
+    object->getBotSet68(sai->m_side).erase(erased);
+    if (release)
+    {
+        sai->m_setFC.erase(sai->m_setFC.find(static_cast<int>(m_bot->getBotId())));
+    }
+    else
+    {
+        AIStrategicObject* const position =
+            AIStrategicObjectManager::getInstance()->getStrategicObject(m_int0C);
+        if (object->isAttack(sai->m_side))
+            position->insertBotSet20(static_cast<int>(m_bot->getBotId()), sai->m_side);
+        else
+            position->insertBotSet44(static_cast<int>(m_bot->getBotId()), sai->m_side);
+    }
+    m_double14 = 0.0;
+    m_int04 = -1;
 }
 
 // PE 10140F60. The busy-set entry is erased without an end check, as shipped.

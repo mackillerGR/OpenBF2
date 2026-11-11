@@ -134,6 +134,8 @@ public:
     // Remove one id; false when absent. PE 100E98B0 / 100E9900.
     bool eraseIdFromBotSet20(int id, int side);
     bool eraseIdFromBotSet44(int id, int side);
+    // Remove one id; returns the position after it, or the end when absent. PE 100E9850.
+    std::set<int>::iterator eraseIdFromBotSet92(int id, int side);
     // Erase at `it` after advancing it; no end check. PE 100E9350.
     void eraseFromBotSet92(std::set<int>::iterator& it, int side);
     // Bit tests on the two masks constructed as -1 and 0. The shift count is masked to five

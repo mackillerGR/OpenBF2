@@ -117,8 +117,8 @@ public:
     virtual double getTimeOfGrenadeThrown(int i) const = 0;                                       // +0x0F8
     virtual BotNavigation* getBotNavigation() = 0;                                                // +0x0FC
     virtual int getSpawnPoint() const = 0;                                                        // ELF +0x100 / PE +0xFC
-    virtual int getSpawnKit() const = 0;                                                          // +0x104 [FRONTIER]
-    virtual void getSpawnTarget(int& a, int& b) const = 0;                                        // +0x108 [FRONTIER]
+    virtual int getSpawnKit() const = 0;                                                          // +0x104
+    virtual void getSpawnTarget(int& spawnGroup, int& kit) const = 0;                            // +0x108
     virtual void setSpawnTarget(int spawnGroup, int kit) = 0;                                    // ELF +0x10C / PE +0x10C (overload order)
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit) = 0;                 // +0x110
     virtual int getSpawnToStrategicAreaId() = 0;                                                  // +0x114
@@ -270,8 +270,8 @@ public:
     virtual double getTimeOfGrenadeThrown(int i) const;                                           // +0x0F8
     virtual BotNavigation* getBotNavigation();                                                    // +0x0FC
     virtual int getSpawnPoint() const;
-    virtual int getSpawnKit() const;                                                              // +0x104 [FRONTIER]
-    virtual void getSpawnTarget(int& a, int& b) const;                                            // +0x108 [FRONTIER]
+    virtual int getSpawnKit() const;                                                              // +0x104
+    virtual void getSpawnTarget(int& spawnGroup, int& kit) const;                                // +0x108
     virtual void setSpawnTarget(int spawnGroup, int kit);
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit);                     // +0x110
     virtual int getSpawnToStrategicAreaId();                                                      // +0x114

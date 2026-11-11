@@ -158,6 +158,19 @@ bool AIStrategicObject::eraseIdFromBotSet44(int id, int side)
     return true;
 }
 
+// PE 100E9850.
+std::set<int>::iterator AIStrategicObject::eraseIdFromBotSet92(int id, int side)
+{
+    std::set<int>& set = m_set92[side - 1];
+    std::set<int>::iterator it = set.find(id);
+    if (it == set.end())
+        return it;
+    const std::set<int>::iterator erased = it;
+    ++it;
+    set.erase(erased);
+    return it;
+}
+
 // PE 100E9350.
 void AIStrategicObject::eraseFromBotSet92(std::set<int>::iterator& it, int side)
 {

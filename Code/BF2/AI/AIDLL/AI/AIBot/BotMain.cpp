@@ -856,16 +856,17 @@ int BotMain::getSpawnPoint() const
     return m_player->getSpawnGroup();
 }
 
-// +0x104
+// +0x104. No player null guard.
 int BotMain::getSpawnKit() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSpawnKit");
+    return m_player->getSpawnKit();
 }
 
-// +0x108
-void BotMain::getSpawnTarget(int& a, int& b) const
+// +0x108. Group first, then kit; no player null guard.
+void BotMain::getSpawnTarget(int& spawnGroup, int& kit) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSpawnTarget");
+    spawnGroup = m_player->getSpawnGroup();
+    kit = m_player->getSpawnKit();
 }
 
 // Keep fresh player/side/id reads
