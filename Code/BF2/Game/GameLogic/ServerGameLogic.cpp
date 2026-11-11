@@ -105,6 +105,7 @@
 #include "../Objects/Game/CommanderToolsManager.h"    // commander tool state / lifecycle
 #include "../Objects/Game/UAVVehicleManager.h"        // UAV object lifecycle
 #include "../Objects/Game/SupplyDropManager.h"        // TU-static manager tick
+#include "../../AI/AIInterface/Main/AIEventPayloads.h"  // the ecai payloads AIEventListener reads
 
 namespace dice {
 namespace hfe {
@@ -123,25 +124,10 @@ extern IBase* materialManager;                    // ds:0x8AD2820 - Core/Globals
 
 namespace {
 
-// [CHOSEN, not recovered] native carriers for the existing synchronous ecai notifications.
-// These are process-local event data, not wire records: the IDs remain int, while the vehicle's
-// AI object is an address. x86 retains the observed two-/three-dword layouts; the native-x64
+// Carriers for the synchronous ecai notifications, shared with AIEventListener. The native-x64
 // no-bot image must never exchange these payloads with the shipped x86 AI DLL.
-struct AiPlayerExitPayload
-{
-    int playerId;
-    void* aiObject;
-};
-struct AiPlayerVehiclePayload
-{
-    int team;
-    int playerId;
-    void* aiObject;
-};
-#if !defined(_WIN64) && !defined(__LP64__)
-static_assert(sizeof(AiPlayerExitPayload) == 8, "retail AI exit payload");
-static_assert(sizeof(AiPlayerVehiclePayload) == 12, "retail AI vehicle payload");
-#endif
+typedef ai::AIEventPlayerExitPayload AiPlayerExitPayload;
+typedef ai::AIEventPlayerKilledPayload AiPlayerVehiclePayload;
 
 
 } // namespace
@@ -1906,7 +1892,7 @@ bool ServerGameLogic::reSpawnPlayer(world::IPlayer* player)
         AiPlayerVehiclePayload payload;
         payload.team = player->getTeam();                          // vt +0xE8
         payload.playerId = player->getId();                        // vt +0x54
-        payload.aiObject = world::object_detail::LayoutAccess::aiObject(vehicle); // +0x34, unchecked
+        payload.vehicleAiObject = world::object_detail::LayoutAccess::aiObject(vehicle); // +0x34, unchecked
         eventManager->postEvent(ECAI, 0, &payload, 0.0f);
     }
 
@@ -3514,7 +3500,7 @@ bool ServerGameLogic::killPlayer(world::IPlayer* player, bool a, bool b)
         AiPlayerVehiclePayload payload;
         payload.team = player->getTeam();                                  // +0xE8
         payload.playerId = player->getId();                                // +0x54
-        payload.aiObject = L::aiObject(vehicle);                           // vehicle +0x34, unchecked
+        payload.vehicleAiObject = L::aiObject(vehicle);                    // vehicle +0x34, unchecked
         eventManager->postEvent(ECAI, 0, &payload, 0.0f);                    // +0x14
     }
 

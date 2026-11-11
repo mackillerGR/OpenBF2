@@ -122,8 +122,9 @@ BotMain::BotMain(IAIPlayer* player,
     for (int k = 0; k < 4; ++k)
         m_flag300[k] = false;           // +300..+303
     m_airBorn = false;                  // +312
-    for (int k = 0; k < 3; ++k)
-        m_ptr316[k] = 0;                // +316..+324
+    m_spawnCoord.x = 0.0f;              // +316..+324
+    m_spawnCoord.y = 0.0f;
+    m_spawnCoord.z = 0.0f;
     m_deathCallBack = 0;                // +328
     m_spawnCallBack = 0;                // +332
     m_squadMember = 0;
@@ -854,6 +855,18 @@ BotNavigation* BotMain::getBotNavigation()
 int BotMain::getSpawnPoint() const
 {
     return m_player->getSpawnGroup();
+}
+
+// PE 1017F1E0.
+const Vec3& BotMain::getSpawnCoord() const
+{
+    return m_spawnCoord;
+}
+
+// PE 10180630.
+void BotMain::setSpawnCoord(const Vec3& v)
+{
+    m_spawnCoord = v;
 }
 
 // +0x104. No player null guard.

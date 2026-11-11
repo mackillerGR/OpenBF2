@@ -31,6 +31,8 @@ public:
     int getMemberIndex();
     void setMemberIndex(int index);          // PE 1017BCA0
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
+    // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.
+    void leaveFormation();
     void setIsSquadLeader(bool leader);
     bool isSquadLeader();
     bool isMoving();                         // returns m_moved

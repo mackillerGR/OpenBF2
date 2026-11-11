@@ -8,6 +8,9 @@
 #include "AIMain.h"                  // IAIMain::m_instance - cached at +60
 #include "AISettingsInterfaces.h"    // IAISettings::getMaxNBots
 #include "../AIBot/BotMain.h"          // the preallocated pool
+#include "../AIBot/BotCallBack.h"      // setBotIsDead / setBotIsAlive report through these
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"          // setBotChangedVehicle
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
 #include "../AIBot/BotMemory.h"
 #include "../AIBot/BotOrder.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
@@ -918,24 +921,103 @@ void BotManager::updateBotVehicle(Bot*, IAIObject*)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::updateBotVehicle");
 }
 
-void BotManager::setBotChangedVehicle(int, IAIObject*)
+// PE 1018C5B0. Indexed by player id. A physical vehicle gets physics for its side; a living bot
+// outside its transition phase refreshes its vehicle state, drops its plan and, with the
+// strategic AI enabled, tells its side's SAI that its equipment changed.
+void BotManager::setBotChangedVehicle(int playerId, IAIObject* vehicle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotChangedVehicle");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+    if (vehicle && vehicle->isPhysical())
+        vehicle->getPhysical()->enablePhysics(vehicle->getSide());
+    if (bot->isInTransitionPhase() || bot->isDead())
+        return;
+    bot->updateBotVehicle(0);
+    bot->updateBot();
+    bot->invalidatePlan();
+    if (m_aiMain->getSAIEnable())
+        m_aiMain->getSAI(bot->getSide())->setBotHasChangedEquipment(static_cast<int>(bot->getBotId()));
 }
 
-void BotManager::setBotIsDead(int)
+// PE 1018E620. Indexed by player id. Puts the bot into its transition phase, resets its
+// navigation, assigned areas and per-life state, drops its equipment and any placed C4, and
+// reports the death. The side's SAI is looked up and discarded, as shipped.
+void BotManager::setBotIsDead(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsDead");
+    // resetAssignedAreas is a BotMain virtual beyond the Bot interface; every pooled bot is a
+    // BotMain.
+    BotMain* const bot = static_cast<BotMain*>(getBotFromPlayerId(playerId));
+    if (!bot)
+        return;
+
+    for (std::map<int, int>::iterator it = m_map204.begin(); it != m_map204.end(); ++it)
+    {
+        if (it->second == playerId)
+        {
+            m_map204.erase(it);
+            break;
+        }
+    }
+
+    bot->setManDown(false);
+    bot->setIsInTransitionPhase(true);
+    bot->getBotNavigation()->resetAll();
+    bot->resetAssignedAreas();
+
+    BotInfo* const info = m_botInfos[bot->getBotId()];
+    IAIMain::m_instance->getSAI(info->m_bot->getSide());
+    info->m_word4 = 1;
+    info->m_bot->reset();
+
+    bot->setCurrentEquipment(static_cast<unsigned int>(-1));
+    if (bot->isC4Placed())
+        bot->removeC4();
+    IBotDeathCallBack* const callBack = bot->getDeathCallBack();
+    if (callBack)
+        callBack->reportDeath();
 }
 
-void BotManager::setBotIsAlive(int)
+// PE 1018D7C0. Indexed by player id; acts only on a bot in its transition phase. Ends the phase,
+// refreshes the bot's vehicle state, stamps the change time, clears the per-life manager state,
+// records the spawn position from the equipment and reports the spawn.
+void BotManager::setBotIsAlive(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsAlive");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot || !bot->isInTransitionPhase())
+        return;
+
+    bot->setIsInTransitionPhase(false);
+    bot->updateBotVehicle(0);
+    bot->updateBot();
+    bot->setLastChangeTime(-1000000.0);
+
+    BotInfo* const info = m_botInfos[bot->getBotId()];
+    info->m_double24 = 0.0;
+    info->m_priority = 0;
+    info->m_word4 = 0;
+    info->m_flag20 = false;
+
+    Information* const information = informationManager->getInformation(bot->getCurrentEquipment());
+    if (information)
+        static_cast<BotMain*>(bot)->setSpawnCoord(information->getPosition());   // non-virtual
+
+    IBotSpawnCallBack* const callBack = bot->getSpawnCallBack();
+    if (callBack)
+        callBack->reportSpawn();
 }
 
-void BotManager::setBotIsManDown(int, IAIObject*)
+// PE 1018AA20. Indexed by player id; the soldier object is not used.
+void BotManager::setBotIsManDown(int playerId, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsManDown");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+    bot->setManDown(true);
+    bot->updateBot();
+    bot->updateBotVehicle(0);
+    bot->invalidatePlan();
+    bot->getBotNavigation()->resetAll();
 }
 
 void BotManager::setBotIsRevived(int, IAIObject*)

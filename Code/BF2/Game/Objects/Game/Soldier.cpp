@@ -46,6 +46,7 @@
 #include "../GameLogicComp/ArmorGLComp.h"        // handleMessage reads the armor status
 #include "../../../AI/AIInterface/AIInstance.h"  // the AI singleton, ds:0x8AC37F8
 #include "../../../AI/AIInterface/BFKnowledge/IAIObject.h"   // init()'s lock bracket, the revive's init()
+#include "../../../AI/AIInterface/Main/AIEventPayloads.h"   // the ecai payloads posted below
 #include "../../GameServer/ServerSettings.h"     // serverSettings - the man-down time
 #include "../../GameLogic/ServerGameLogic.h"     // the kit handout on revive
 #include "../../../Scene/Object/PlayerManager.h" // playerManager - the medic call
@@ -381,14 +382,6 @@ void geometrySlot7C(void* geometry, int a)                                      
 inline bool aiConnectionIsUp()
 {
     return ai::g_aiInstance != 0 && ai::aiInstance()->isBotsGame();
-}
-
-// Object +0x34, read raw. It is the handle the AI event carries for this body, and this tree
-// has not yet named the base-class field it lives in - so it is a documented offset rather than
-// an invented member. [UNRESOLVED] name.
-inline int objectAiHandle(const void* object)
-{
-    return *reinterpret_cast<const int*>(static_cast<const char*>(object) + 0x34);
 }
 
 // Retail Object +0x3C, read directly by handleMessage and enter. LayoutAccess names the same
@@ -752,13 +745,13 @@ void Soldier::exit()
 
     if (aiConnectionIsUp() && getOccupingPlayer())
     {
-        int payload[5];
-        payload[0] = objectAiHandle(this);                                   // +0x34
-        payload[1] = 0;
-        payload[2] = getOccupingPlayer()->getTeam();                         // +0xE8
-        payload[3] = getOccupingPlayer()->getId();                           // +0x54
-        payload[4] = 0;                                                      // the trailing byte
-        eventManager->postEvent(ECAI, 2, payload, 0.0f);                    // +0x14
+        ai::AIEventOccupancyPayload payload;
+        payload.object = object_detail::LayoutAccess::aiObject(this);        // +0x34
+        payload.other = 0;
+        payload.team = getOccupingPlayer()->getTeam();                       // +0xE8
+        payload.playerId = getOccupingPlayer()->getId();                     // +0x54
+        payload.specialContainer = false;                                    // the trailing byte
+        eventManager->postEvent(ECAI, 2, &payload, 0.0f);                   // +0x14
     }
 
     if (getOccupingPlayer())
@@ -3052,13 +3045,13 @@ bool Soldier::enter(IPlayer* player)
     // 7. tell the AI, if there is one listening.
     if (aiConnectionIsUp() && getOccupingPlayer())
     {
-        int payload[5];
-        payload[0] = objectAiHandle(this);
-        payload[1] = 0;
-        payload[2] = getOccupingPlayer()->getTeam();
-        payload[3] = getOccupingPlayer()->getId();
-        payload[4] = 0;                             // a trailing byte in the ELF
-        eventManager->postEvent(static_cast<EventCategory>(3), 1, payload, 0.0f);
+        ai::AIEventOccupancyPayload payload;
+        payload.object = object_detail::LayoutAccess::aiObject(this);
+        payload.other = 0;
+        payload.team = getOccupingPlayer()->getTeam();
+        payload.playerId = getOccupingPlayer()->getId();
+        payload.specialContainer = false;           // a trailing byte in the ELF
+        eventManager->postEvent(static_cast<EventCategory>(3), 1, &payload, 0.0f);
     }
 
     // 8. reset the per-body input latches. Backwards, 1 then 0 - dice's.
@@ -3129,10 +3122,10 @@ void Soldier::handleMessage(TemplateMessage message, IPlayer* player, bool remot
                                      + WorldPref::getTickCount()));
                 if (aiConnectionIsUp())
                 {
-                    int payload[2];
-                    payload[0] = objectAiHandle(this);
-                    payload[1] = getOccupingPlayer()->getId();
-                    eventManager->postEvent(static_cast<EventCategory>(3), 6, payload, 0.0f);
+                    ai::AIEventSoldierStatePayload payload;
+                    payload.soldierAiObject = object_detail::LayoutAccess::aiObject(this);
+                    payload.playerId = getOccupingPlayer()->getId();
+                    eventManager->postEvent(static_cast<EventCategory>(3), 6, &payload, 0.0f);
                 }
             }
 
@@ -3175,10 +3168,10 @@ void Soldier::handleMessage(TemplateMessage message, IPlayer* player, bool remot
 
             if (getOccupingPlayer() && aiConnectionIsUp())
             {
-                int payload[2];
-                payload[0] = objectAiHandle(this);
-                payload[1] = getOccupingPlayer()->getId();
-                eventManager->postEvent(static_cast<EventCategory>(3), 7, payload, 0.0f);
+                ai::AIEventSoldierStatePayload payload;
+                payload.soldierAiObject = object_detail::LayoutAccess::aiObject(this);
+                payload.playerId = getOccupingPlayer()->getId();
+                eventManager->postEvent(static_cast<EventCategory>(3), 7, &payload, 0.0f);
             }
         }
         break;

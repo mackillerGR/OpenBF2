@@ -254,8 +254,9 @@ private:
     /* 192 */ void*  m_ptr192;               // = 0
     /* 196 */ void*  m_ptr196;               // = 0
     /* 200 */ void*  m_ptr200;               // = 0
-    // [UNRESOLVED] Map key and value types; the declarations preserve the observed storage width.
-    /* 204 */ std::map<int, void*> m_map204;  // +204 node, +208 count, +212 comparator
+    // [UNRESOLVED] Key role. setBotIsDead erases the entry whose value is the dead bot's player id,
+    // so the mapped type is a 4-byte integer.
+    /* 204 */ std::map<int, int> m_map204;    // +204 node, +208 count, +212 comparator
     // [INFERRED] Shared scratch selection, cleared and filled from queues by decision-making
     // and sensing passes before they process the selected bots.
     /* 216 */ std::vector<BotInfo*> m_selectedBots;

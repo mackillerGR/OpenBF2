@@ -18,6 +18,10 @@
 #include "../../../Game/GameServer/ServerSettings.h"  // the team-ratio inversion below
 #include "../../../Scene/Object/PlayerManager.h"      // the three lookups it needs
 #include "../../AIDLL/AI/DrawPrimitives/DPManager.h"// IDPManager::drawAll / nodrawUpdate
+#include "../../AIDLL/AI/AIKnowledge/BFInformationCourier.h"  // armament borrow/release by handle
+#include "../BFKnowledge/IAIObject.h"
+#include "../BFKnowledge/IAIObjectPlugIn.h"
+#include "AIEventPayloads.h"
 
 namespace dice {
 namespace hfe {
@@ -269,12 +273,62 @@ void AIEventListener::handleEvent(EventCategory category,
         // and +296). Naming them is a `world::IObject` slot-map job, not an AI one, and guessing
         // them would put ten wrong method names in the tree. Each stop below says which arm it is.
         case 0u:
-            unwrittenArm("category 3 id 0 - player killed, plus the vehicle's armament release",
-                         (int)category, id);
+            {
+                // PE 00814E9B. The vehicle releases any armament it borrowed from its occupant.
+                const AIEventPlayerKilledPayload* const p =
+                    static_cast<const AIEventPlayerKilledPayload*>(userData);
+                courier->eventPlayerKilled(p->playerId, p->team);
+                IAIObject* const vehicle = static_cast<IAIObject*>(p->vehicleAiObject);
+                if (!vehicle || !vehicle->isUnit() || !vehicle->getUnit()->mustBorrowArmament(vehicle))
+                    return;
+                vehicle->resetArmament();
+                IAIInformationCourier* const information = static_cast<IAIInformationCourier*>(
+                    CommonSingletonServer::m_iaiInformationCourier);
+                information->resetArmament(vehicle->getHandle(1));
+                information->resetArmament(vehicle->getHandle(2));
+            }
             return;
         case 1u:
-            unwrittenArm("category 3 id 1 - player entered vehicle (and the 'not prepared for use"
-                         " with AI' Debug at line 166)", (int)category, id);
+            {
+                // PE 00814F28. A seat without an AI object is reported and then used anyway, as
+                // shipped; the error report aborts in this tree before the null dereference.
+                const AIEventOccupancyPayload* const p =
+                    static_cast<const AIEventOccupancyPayload*>(userData);
+                IAIObject* const entered = static_cast<IAIObject*>(p->object);
+                IAIObject* primary = entered;
+                if (entered)
+                {
+                    primary = entered->getPrimaryObject();
+                }
+                else
+                {
+                    if (p->specialContainer)
+                        return;
+                    Debug(DebugTypeError, __FILE__, 166, "")
+                        << "You have tried to enter a vehicle that is not prepared for use with AI."
+                           " Game will crash.";
+                }
+
+                IAIObject* const left = static_cast<IAIObject*>(p->other);
+                entered->setSide(p->team);
+                if (primary)
+                {
+                    if (IAIObjectPhysical* const physical = primary->getPhysical())
+                        physical->enablePhysics(p->team);
+                }
+                if (left && entered->getUnit() && entered->getUnit()->mustBorrowArmament(entered))
+                {
+                    entered->borrowArmament(static_cast<IAIObject*>(p->other));
+                    IAIInformationCourier* const information = static_cast<IAIInformationCourier*>(
+                        CommonSingletonServer::m_iaiInformationCourier);
+                    information->borrowArmament(left->getHandle(1), entered->getHandle(1));
+                    information->borrowArmament(left->getHandle(2), entered->getHandle(2));
+                }
+                if (p->other)
+                    static_cast<IAIObject*>(p->other)->removeFromGrid();
+                courier->eventPlayerEnterVehicle(p->playerId, static_cast<IAIObject*>(p->object),
+                                                 static_cast<IAIObject*>(p->other));
+            }
             return;
         case 2u:
             unwrittenArm("category 3 id 2 - player exited vehicle", (int)category, id);
@@ -283,13 +337,25 @@ void AIEventListener::handleEvent(EventCategory category,
             unwrittenArm("category 3 id 3 - eventPlayerExitVehicle", (int)category, id);
             return;
         case 5u:
-            unwrittenArm("category 3 id 5 - object slot +76", (int)category, id);
+            // PE 00815248. A soldier picked up a kit; its AI object refreshes.
+            static_cast<IAIObject*>(userData)->update();
             return;
         case 6u:
-            unwrittenArm("category 3 id 6 - man down", (int)category, id);
+            {
+                // PE 00815259.
+                const AIEventSoldierStatePayload* const p =
+                    static_cast<const AIEventSoldierStatePayload*>(userData);
+                courier->eventManDown(p->playerId, static_cast<IAIObject*>(p->soldierAiObject));
+            }
             return;
         case 7u:
-            unwrittenArm("category 3 id 7 - revived", (int)category, id);
+            {
+                // PE 00815277. The soldier's AI object refreshes before the courier is told.
+                const AIEventSoldierStatePayload* const p =
+                    static_cast<const AIEventSoldierStatePayload*>(userData);
+                static_cast<IAIObject*>(p->soldierAiObject)->update();
+                courier->eventRevived(p->playerId, static_cast<IAIObject*>(p->soldierAiObject));
+            }
             return;
         case 0xAu:
             unwrittenArm("category 3 id 10 - radio message (needs BFConsole::getAIMessageSettings,"

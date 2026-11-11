@@ -25,19 +25,21 @@ public:
     IAIEventCourier();
     virtual ~IAIEventCourier();
     virtual void eventMissileLock(IAIObject *, world::MissileLockMessage *) = 0;
-    virtual int eventPlayerSpawned(int) = 0;
+    // Both return void: the shipped bodies tail-call void bot-manager slots. PE 100BF270 / 100BF340.
+    virtual void eventPlayerSpawned(int) = 0;
     virtual void eventPlayerKilled(int, int) = 0;
     virtual void eventPlayerCreated(bool) = 0;
     virtual void eventChangedKit(KitType) = 0;
     virtual void eventPlayerDisconnect(int) = 0;
-    virtual int eventPlayerEnterVehicle(int, IAIObject *, IAIObject *) = 0;
+    virtual void eventPlayerEnterVehicle(int, IAIObject *, IAIObject *) = 0;
     virtual int eventPlayerExitVehicle(IAIObject *, int) = 0;
     virtual void eventDrawDebug() = 0;
     virtual int eventGameStart() = 0;
     virtual void event_roundEnd() = 0;
     virtual void event_worldReset() = 0;
-    virtual int eventManDown(int, IAIObject *) = 0;
-    virtual int eventRevived(int, IAIObject *) = 0;
+    // Void: no shipped body materializes a result. PE 100BF980 / 100BF3F0.
+    virtual void eventManDown(int, IAIObject *) = 0;
+    virtual void eventRevived(int, IAIObject *) = 0;
     virtual int eventRadioMessage(const AIRadioMessageSettings&, int, int) = 0;
     virtual int event_mineRemoved(unsigned int) = 0;
     virtual int event_enemySpotted(IAIObject *, unsigned char) = 0;
@@ -90,19 +92,19 @@ public:
 
     // IAIEventCourier
     virtual void eventMissileLock(IAIObject *, world::MissileLockMessage *);
-    virtual int eventPlayerSpawned(int);
+    virtual void eventPlayerSpawned(int);
     virtual void eventPlayerKilled(int, int);
     virtual void eventPlayerCreated(bool);
     virtual void eventChangedKit(KitType);
     virtual void eventPlayerDisconnect(int);
-    virtual int eventPlayerEnterVehicle(int, IAIObject *, IAIObject *);
+    virtual void eventPlayerEnterVehicle(int, IAIObject *, IAIObject *);
     virtual int eventPlayerExitVehicle(IAIObject *, int);
     virtual void eventDrawDebug();
     virtual int eventGameStart();
     virtual void event_roundEnd();
     virtual void event_worldReset();
-    virtual int eventManDown(int, IAIObject *);
-    virtual int eventRevived(int, IAIObject *);
+    virtual void eventManDown(int, IAIObject *);
+    virtual void eventRevived(int, IAIObject *);
     virtual int eventRadioMessage(const AIRadioMessageSettings&, int, int);
     virtual int event_mineRemoved(unsigned int);
     virtual int event_enemySpotted(IAIObject *, unsigned char);

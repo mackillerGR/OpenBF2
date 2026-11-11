@@ -179,6 +179,13 @@ void SquadMember::resetMember()
     m_vector54.x = m_vector54.y = m_vector54.z = 0.0f;
     m_vector60.x = m_vector60.y = m_vector60.z = 0.0f;
 }
+void SquadMember::leaveFormation()
+{
+    SquadFormation* const formation = m_squad->getSquadFormation();
+    if (formation->isInFormation(m_memberIndex))
+        formation->leaveFormation(m_memberIndex);
+}
+
 void SquadMember::setIsSquadLeader(bool leader) { m_isSquadLeader = leader; }
 bool SquadMember::isSquadLeader() { return m_isSquadLeader; }
 

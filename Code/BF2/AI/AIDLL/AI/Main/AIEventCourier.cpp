@@ -12,6 +12,12 @@
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // postLoadInitAreas
 #include "AIMain.h"                                            // IAIMain::spawnBots
 #include "../AIBot/SquadManager.h"                              // squad notification forwarders
+#include "../AIBot/SquadMember.h"                               // eventPlayerKilled
+#include "IBotManager.h"                                        // the bot lifecycle forwarders
+#include "../AIKnowledge/Information.h"                          // eventManDown
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"            // event_worldReset
 #include "../DrawPrimitives/DPManager.h"                       // event_worldReset
 #include "CommunicationHub.h"                                  // event_worldReset
@@ -51,14 +57,23 @@ void AIEventCourier::eventMissileLock(IAIObject *, world::MissileLockMessage *)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventMissileLock");
 }
 
-int AIEventCourier::eventPlayerSpawned(int)
+// PE 100BF270. No bot-manager null guard.
+void AIEventCourier::eventPlayerSpawned(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerSpawned");
+    IBotManager::instance->setBotIsAlive(playerId);
 }
 
-void AIEventCourier::eventPlayerKilled(int, int)
+// PE 100BF2B0. The bot manager learns of the death first; a squad member then leaves its
+// formation when a squad manager exists.
+void AIEventCourier::eventPlayerKilled(int playerId, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerKilled");
+    IBotManager::instance->setBotIsDead(playerId);
+    if (SquadManager::m_instance)
+    {
+        SquadMember* const member = SquadManager::m_instance->getSquadMember(playerId, side);
+        if (member)
+            member->leaveFormation();
+    }
 }
 
 // Notifies the active AI runtime that a player was created, if the runtime exists.
@@ -78,9 +93,10 @@ void AIEventCourier::eventPlayerDisconnect(int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerDisconnect");
 }
 
-int AIEventCourier::eventPlayerEnterVehicle(int, IAIObject *, IAIObject *)
+// PE 100BF340. The vehicle that was left is not used.
+void AIEventCourier::eventPlayerEnterVehicle(int playerId, IAIObject* vehicle, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerEnterVehicle");
+    IBotManager::instance->setBotChangedVehicle(playerId, vehicle);
 }
 
 int AIEventCourier::eventPlayerExitVehicle(IAIObject *, int)
@@ -122,14 +138,24 @@ void AIEventCourier::event_worldReset()
         CommunicationHub::m_instance->reset();
 }
 
-int AIEventCourier::eventManDown(int, IAIObject *)
+// PE 100BF980. After the bot manager is told, the soldier's information on the opposing side
+// is marked dead; a side-less soldier has none.
+void AIEventCourier::eventManDown(int playerId, IAIObject* soldier)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventManDown");
+    IBotManager::instance->setBotIsManDown(playerId, soldier);
+    const int side = soldier->getSide();
+    if (!side)
+        return;
+    Information* const information =
+        informationManager->getInformation(soldier->getInformation(side == 1 ? 2 : 1));
+    if (information)
+        information->getPhysical()->setHealth(0.0f);
 }
 
-int AIEventCourier::eventRevived(int, IAIObject *)
+// PE 100BF3F0. No bot-manager null guard.
+void AIEventCourier::eventRevived(int playerId, IAIObject* soldier)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventRevived");
+    IBotManager::instance->setBotIsRevived(playerId, soldier);
 }
 
 int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings&, int, int)

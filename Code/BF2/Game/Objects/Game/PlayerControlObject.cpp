@@ -64,6 +64,7 @@
 #include "../../../AI/AIInterface/AIInstance.h"     // g_aiInstance - the ECAI notify gate
 #include "../../../AI/AIInterface/BFKnowledge/IAIObject.h"   // init()'s lock bracket, the revive's init()
 #include "RotationalBundle.h"                       // restore the exiting soldier camera's rotation
+#include "../../../AI/AIInterface/Main/AIEventPayloads.h"   // the ecai occupancy payload
 
 namespace dice {
 namespace hfe {
@@ -2367,21 +2368,14 @@ bool PlayerControlObject::enter(IPlayer* player)
         }
 
         // 20 bytes on the stack: this seat's AI object, the body's AI object, team, id, the flag.
-        struct AiEnterNote
-        {
-            void* seatAiObject;
-            void* bodyAiObject;
-            int   team;
-            int   id;
-            bool  specialContainer;
-        } note;
-        note.seatAiObject = L::aiObject(this);                           // IObject +0x34
-        note.bodyAiObject = getOccupingObject() ? L::aiObject(getOccupingObject()) : 0;
+        ai::AIEventOccupancyPayload note;
+        note.object       = L::aiObject(this);                           // IObject +0x34
+        note.other        = getOccupingObject() ? L::aiObject(getOccupingObject()) : 0;
         note.team         = player->getTeam();                           // IPlayer +0xE8
-        note.id           = player->getId();                             // IPlayer +0x54
+        note.playerId     = player->getId();                             // IPlayer +0x54
         note.specialContainer = specialContainer;
 
-        if (!specialContainer && !note.seatAiObject)
+        if (!specialContainer && !note.object)
         {
             Debug(DEBUGTYPE_6, "Game/Objects/Game/PlayerControlObject.cpp", 771, __FILE__)
                 << "You have tried to enter a vehicle that is not prepared for use with AI: "
@@ -2494,18 +2488,11 @@ void PlayerControlObject::internalExit(bool byPlayer)
             specialContainer = true;
         }
 
-        struct AiExitNote
-        {
-            void* bodyAiObject;
-            void* seatAiObject;
-            int   team;
-            int   id;
-            bool  specialContainer;
-        } note;
-        note.bodyAiObject = occupyingObject ? L::aiObject(occupyingObject) : 0;
-        note.seatAiObject = L::aiObject(this);
+        ai::AIEventOccupancyPayload note;
+        note.object = occupyingObject ? L::aiObject(occupyingObject) : 0;
+        note.other = L::aiObject(this);
         note.team = pcoWeakTarget<IPlayer>(m_occupyingPlayer)->getTeam();
-        note.id = pcoWeakTarget<IPlayer>(m_occupyingPlayer)->getId();
+        note.playerId = pcoWeakTarget<IPlayer>(m_occupyingPlayer)->getId();
         note.specialContainer = specialContainer;
         eventManager->postEvent(ECAI, 2, &note, 0.0f);
     }
