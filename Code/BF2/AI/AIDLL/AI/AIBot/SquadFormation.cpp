@@ -2,6 +2,7 @@
 
 #include "SquadFormation.h"
 
+#include <cmath>
 #include <list>
 
 #include "SquadCoordinator.h"
@@ -710,19 +711,166 @@ void SquadFormation::updateClosestSlots()
     }
 }
 
-// The slot/member read precedes
-// the first getSlotWorldPos call; no argument or null guard is added.
+// PE 101A0510. The occupied slot (other than zero) whose member stands closest to this slot's
+// world position, or -1 when that position is unknown.
 int SquadFormation::getClosestSlotIndex(int slotIndex)
 {
-    int best = -1;
-    float minimum = 3.402823466e+38F;
     Vec3 target = {};
     Vec3 position = {};
-    const int memberIndex = m_slots[slotIndex]->m_memberIndex;
-    (void)best; (void)minimum; (void)target; (void)position; (void)memberIndex;
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-    // The bool getSlotWorldPos(int,Vec3&) movement/position chain remains unwritten.
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::getClosestSlotIndex (getSlotWorldPos)");
+    int best = -1;
+    float minimum = 3.402823466e+38F;
+    if (!getSlotWorldPos(m_slots[slotIndex]->m_memberIndex, target))
+        return best;
+    for (unsigned int slot = 1; slot < m_maxSquadMembers; ++slot)
+    {
+        if (!m_slots[slot]->m_occupied)
+            continue;
+        if (!m_coordinator->getSquadMember(m_slots[slot]->m_memberIndex)->getPosition(position))
+            continue;
+        const float dx = target.x - position.x;
+        const float dy = target.y - position.y;
+        const float dz = target.z - position.z;
+        const float distanceSq = dx * dx + dy * dy + dz * dz;
+        if (distanceSq < minimum)
+        {
+            minimum = distanceSq;
+            best = static_cast<int>(slot);
+        }
+    }
+    return best;
+}
+
+namespace {
+
+// PE 100E9DE0, the conditional normaliser for Vec2: unit vectors are left alone, near-zero ones
+// are zeroed with -20001, anything else is scaled by 1/sqrt.
+int normalise(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return 0;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return -20001;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    return 0;
+}
+
+// PE 1006ED90: clamps to [low, high]; an unordered value yields low.
+float clampToRange(float value, float low, float high)
+{
+    if (value >= high)
+        value = high;
+    if (!(value >= low))
+        value = low;
+    return value;
+}
+
+} // anonymous namespace
+
+// PE 1019FBE0. Without a squad position the leader's own position stands in. A member with no
+// slot leaves `position` untouched and still answers true, as shipped.
+bool SquadFormation::getSlotWorldPos(int memberIndex, Vec3& position)
+{
+    bool result = true;
+    Vec3 anchor = {};
+    m_coordinator->getSquadPosition(anchor);
+    const float ax = -anchor.x;
+    const float ay = -anchor.y;
+    const float az = -anchor.z;
+    if (!(az * az + ay * ay + ax * ax > 0.001f))
+    {
+        result = false;
+        if (m_coordinator->getSquadLeader()->getPosition(position))
+            result = true;
+        return result;
+    }
+
+    Vec2 forward = m_forward;
+    unsigned int slotIndex = 0;
+    Slot* slot = 0;
+    for (; slotIndex < m_maxSquadMembers; ++slotIndex)
+    {
+        if (m_slots[slotIndex]->m_memberIndex == memberIndex)
+        {
+            slot = m_slots[slotIndex];
+            break;
+        }
+    }
+    if (!slot)
+        return result;
+
+    const Vec3 offset = slot->m_offset;
+    normalise(forward);
+    float angle = std::acos(clampToRange(forward.y, -1.0f, 1.0f));
+    if (forward.x > 0.0f)
+        angle = -angle;
+    const float sine = std::sin(angle);
+    const float x = forward.y * offset.x - offset.z * sine;
+    const float z = forward.y * offset.z + offset.x * sine;
+    position.x = x + anchor.x;
+    position.y = offset.y + anchor.y;
+    position.z = z + anchor.z;
+    if (slotIndex == 0)
+        return result;
+
+    SquadMember* const member = m_coordinator->getSquadMember(slot->m_memberIndex);
+    if (m_coordinator->isPositionValidForMember(member, position) &&
+        !m_coordinator->isMaterialFourAt(member, position))
+    {
+        slot->m_i20 = -1;
+        return result;
+    }
+    if (slot->m_i20 != -1)
+    {
+        position = m_slotTargets[slot->m_i20].second;
+        return result;
+    }
+    const int target = findFreeSlotTarget(member);
+    if (target != -1)
+    {
+        slot->m_i20 = target;
+        position = m_slotTargets[target].second;
+        return result;
+    }
+    if (m_coordinator->isMissionStatusTwo())
+    {
+        if (!m_coordinator->getSquadGotoPos(position))
+            result = false;
+        return result;
+    }
+    result = false;
+    SquadMember* const first = m_coordinator->getSquadMember(m_slots[0]->m_memberIndex);
+    if (first && first->getPosition(position))
+        result = true;
+    return result;
+}
+
+// PE 1019F7F0. The reachability query runs for every breadcrumb, valid or not.
+int SquadFormation::findFreeSlotTarget(SquadMember* member)
+{
+    for (unsigned int target = 0; target < m_maxSquadMembers; ++target)
+    {
+        bool claimed = false;
+        for (unsigned int slot = 0; slot < m_maxSquadMembers; ++slot)
+        {
+            if (m_slots[slot]->m_i20 == static_cast<int>(target))
+            {
+                claimed = true;
+                break;
+            }
+        }
+        const bool reachable =
+            m_coordinator->isPositionValidForMember(member, m_slotTargets[target].second);
+        if (m_slotTargets[target].first && !claimed && reachable)
+            return static_cast<int>(target);
+    }
+    return -1;
 }
 
 // Keep the real allocation and captured pointers;
@@ -750,8 +898,7 @@ SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     : m_slots()
     , m_coordinator(coordinator)
     , m_formation(0)
-    , m_i48(0)
-    , m_f52(0.0f)
+    , m_forward()
     , m_i88(0)
     , m_d92(0.0)
     , m_slotTargets()
@@ -792,8 +939,8 @@ SquadFormation::SquadFormation(SquadCoordinator* coordinator)
     setFormation();
 
     m_b36 = false;
-    m_i48 = 0;
-    m_f52 = 1.0f;
+    m_forward.x = 0.0f;
+    m_forward.y = 1.0f;
     m_v60.x = 0.0f;
     m_v60.y = 0.0f;
     m_v60.z = 0.0f;
@@ -866,15 +1013,10 @@ void SquadFormation::updateMovementFlag(bool force)
 }
 
 // Preserve both guards.
-// The positioned-squad arm calls getSlotWorldPos(getSquadMemberIndexAtSlot(0), m_v72).
-// Its navigation/position dependencies are not recovered here.
-// [FRONTIER, narrow] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 void SquadFormation::updateSlotZeroPos()
 {
     if (m_slots[0]->m_occupied && m_coordinator->squadHasPosition())
-    {
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateSlotZeroPos (getSlotWorldPos)");
-    }
+        getSlotWorldPos(getSquadMemberIndexAtSlot(0), m_v72);
 }
 
 // Only the target-valid flags and slot indices are

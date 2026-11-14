@@ -368,10 +368,9 @@ bool SquadMember::isAllowedInFormation()
     return allowed;
 }
 
-// The getter occurs before either flag is cleared. A null current
-// vehicle leaves the prior position untouched. The nonnull arm needs the same unknown IAIObject
-// slot, Information::getPrimaryObject(side+1), and the primary object's position/physics record.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// PE 1017BDF0. The getter occurs before either flag is cleared. A null current vehicle leaves
+// the prior position untouched; the vehicle's information is not null-checked, as shipped.
+// The member counts as moved once its primary object shifts by more than ten centimetres.
 void SquadMember::updateMemberPos()
 {
     IAIObject* const vehicle = m_player->getCurrentVehicle();
@@ -380,7 +379,21 @@ void SquadMember::updateMemberPos()
     if (!vehicle)
         return;
 
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::updateMemberPos (IAIObject information handle)");
+    Information* const information =
+        informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    Information* const primary =
+        informationManager->getInformation(information->getPrimaryObject(m_side + 1));
+    if (!primary || !primary->getUnit())
+        return;
+
+    const Vec3 previous = m_position;
+    m_position = primary->getPosition();
+    m_positionValid = true;
+    const float dx = previous.x - m_position.x;
+    const float dy = previous.y - m_position.y;
+    const float dz = previous.z - m_position.z;
+    if (dx * dx + dy * dy + dz * dz > 0.01f)
+        m_moved = true;
 }
 
 // Retain

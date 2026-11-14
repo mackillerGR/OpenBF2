@@ -15,6 +15,7 @@ namespace hfe {
 namespace ai {
 
 class SquadCoordinator;
+class SquadMember;
 
 class SquadFormation
 {
@@ -46,7 +47,7 @@ public:
         /*  +0 */ bool m_occupied;       // the flag every deep branch in this class is guarded by
         /*  +4 */ int  m_memberIndex;    // = -1; indexes the coordinator's squad-member vector
         /*  +8 */ Vec3 m_offset;         // the position the formation setters compute
-        /* +20 */ int  m_i20;            // = -1 [UNRESOLVED]
+        /* +20 */ int  m_i20;            // = -1; the m_slotTargets index the slot fell back to, or -1
         /* +24 */ bool m_b24;            // = false [UNRESOLVED]
         /* +28 */ float m_i28;           // legacy inferred name; float proved by leaveFormation's x87 loads/stores
         /* +32 */ int  m_referenceSlot;  // the slot this one is measured from [INFERRED]
@@ -87,7 +88,12 @@ public:
     void rebuildSlots();                      // [INFERRED] name; PE 1019F3F0
     void resetSlot(int slotIndex);            // inlined
     void updateClosestSlots();
-    int getClosestSlotIndex(int slotIndex);    // world-position seam
+    int getClosestSlotIndex(int slotIndex);
+    // World position of the member's slot: the squad position plus the slot offset turned to the
+    // formation's forward vector, replaced by a breadcrumb or fallback where the member cannot go.
+    bool getSlotWorldPos(int memberIndex, Vec3& position);
+    // First valid breadcrumb no slot has claimed that the member can reach, or -1. [INFERRED] name.
+    int findFreeSlotTarget(SquadMember* member);
     void swapSlots(int first, int second);    // three payload fields only
     void updateMovementFlag(bool force);
     void updateSlotZeroPos();                 // inlined
@@ -107,8 +113,7 @@ public:
     // `vec3ToVec2XZ(const Vec3&, Vec2&)`; getSlotWorldPos is the only other reader. The split
     // below predates that evidence and stays until the occupied projection lands, so that the
     // retyping and its first writer arrive together.
-    /*  +48 */ int m_i48;                             // = 0 Vec2 x (0.0f bits)
-    /*  +52 */ float m_f52;                           // = 1.0f Vec2 y
+    /*  +48 */ Vec2 m_forward;                        // = (0, 1)
     /*  +56 */ bool m_b56;                            // = false; hasFormationMoved returns it
     /*  +60 */ Vec3 m_v60;                            // zeroed; anchor position at the last movement stamp
     /*  +72 */ Vec3 m_v72;                            // zeroed; slot-zero world position (updateSlotZeroPos)

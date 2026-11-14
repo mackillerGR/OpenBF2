@@ -10,6 +10,7 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../Main/AIDllFrontier.h"
+#include "../Main/IAIPathfinding.h"
 #include "../Main/AIMain.h"
 #include "../AIStrategic/SAI.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
@@ -944,6 +945,73 @@ AIStrategicArea* SquadCoordinator::getSquadStrategicAreaAssignment()
 void SquadCoordinator::resetNeedOrderMessageTimer(double now)
 {
     m_needOrderMessageTimer = now;
+}
+
+// PE 101A1DA0. The vehicle is not null-checked, as shipped.
+bool SquadCoordinator::isPositionValidForMember(SquadMember* member, const Vec3& position)
+{
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    Information* const vehicle = informationManager->getInformation(
+        member->getPlayer()->getCurrentVehicle()->getInformation(m_side + 1));
+    IPIMobile* mobile = vehicle->getMobile();
+    unsigned int polygon;
+    unsigned int quadTree;
+    if (mobile)
+    {
+        mobile->getLastValidPosition();
+        const int equipmentType = vehicle->getUnit()->getEquipmentType();
+        const int map = mobile->getVehicleNumber();
+        if (!pathfinding->getPolygon(position, map, polygon, quadTree, equipmentType))
+            return false;
+        const int equipmentType2 = vehicle->getUnit()->getEquipmentType();
+        const int map2 = mobile->getVehicleNumber();
+        return pathfinding->isValidPosition(map2, equipmentType2, position, quadTree, true);
+    }
+
+    Information* const soldier = informationManager->getInformation(
+        member->getPlayer()->getSoldier()->getInformation(m_side + 1));
+    mobile = soldier->getMobile();
+    const unsigned int lastQuadTree = mobile->getLastValidPosition().quadTree;
+    const int equipmentType = soldier->getUnit()->getEquipmentType();
+    const int map = mobile->getVehicleNumber();
+    if (!pathfinding->getPolygon(position, map, polygon, quadTree, equipmentType))
+        return false;
+    if (lastQuadTree == static_cast<unsigned int>(-1) || quadTree != lastQuadTree)
+        return false;
+    const int equipmentType2 = soldier->getUnit()->getEquipmentType();
+    const int map2 = mobile->getVehicleNumber();
+    return pathfinding->isValidPosition(map2, equipmentType2, position, lastQuadTree, true);
+}
+
+// PE 101A17A0. The material query's own result is ignored.
+bool SquadCoordinator::isMaterialFourAt(SquadMember* member, const Vec3& position)
+{
+    IAIObject* const vehicleObject = member->getPlayer()->getCurrentVehicle();
+    if (!vehicleObject)
+        return true;
+    Information* const vehicle =
+        informationManager->getInformation(vehicleObject->getInformation(m_side + 1));
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    IPIMobile* const mobile = vehicle->getMobile();
+    unsigned char material;
+    const int equipmentType = vehicle->getUnit()->getEquipmentType();
+    pathfinding->getMaterial(position, mobile->getVehicleNumber(), equipmentType, material);
+    return material == 4;
+}
+
+// PE 101A1230.
+bool SquadCoordinator::isMissionStatusTwo()
+{
+    return m_i120 == 2;
+}
+
+// PE 101A1930.
+bool SquadCoordinator::getSquadGotoPos(Vec3& position)
+{
+    if (m_i44 != 0)
+        return false;
+    position = m_v28;
+    return true;
 }
 
 } // namespace ai

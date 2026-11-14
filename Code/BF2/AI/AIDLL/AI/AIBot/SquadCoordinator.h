@@ -81,6 +81,14 @@ public:
     bool isSquadPendingAssignedToArea(int areaIndex); // [INFERRED] name
     AIStrategicArea* getSquadStrategicAreaAssignment(); // borrowed
     void resetNeedOrderMessageTimer(double now);
+    // Whether the member's vehicle, or on foot its soldier, can stand at the position on the
+    // navigation mesh. [INFERRED] name.
+    bool isPositionValidForMember(SquadMember* member, const Vec3& position);
+    // Whether the member's vehicle finds material 4 at the position; true without a vehicle.
+    // [INFERRED] name.
+    bool isMaterialFourAt(SquadMember* member, const Vec3& position);
+    bool isMissionStatusTwo();                   // [INFERRED] name
+    bool getSquadGotoPos(Vec3& position);        // only while m_i44 is zero; [INFERRED] spelling
 
     // layout, on the ELF, read store by store out of the constructor
     // The [UNRESOLVED] gaps hold position and claim nothing; the constructor never writes them.
