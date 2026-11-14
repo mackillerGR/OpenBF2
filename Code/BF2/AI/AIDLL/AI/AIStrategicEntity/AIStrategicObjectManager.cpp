@@ -47,6 +47,28 @@ AIStrategicObject* AIStrategicObjectManager::getClosestObject(
     return closest;
 }
 
+// PE 1008E6A0. As above, among the objects whose status for the side is zero when `neutral`
+// is set, or non-zero when it is clear. [INFERRED] parameter name.
+AIStrategicObject* AIStrategicObjectManager::getClosestObject(const Vec3& position, int side,
+                                                              bool neutral) const
+{
+    AIStrategicObject* closest = 0;
+    float best = -1.0f;
+    for (std::vector<AIStrategicObject*>::const_iterator it = m_strategicObjects.begin();
+         it != m_strategicObjects.end(); ++it)
+    {
+        const float gravity = (*it)->gravity(position, side);
+        const int status = static_cast<int>((*it)->getStatus(side));
+        const bool candidate = neutral ? status == 0 : status != 0;
+        if (candidate && gravity > best)
+        {
+            best = gravity;
+            closest = *it;
+        }
+    }
+    return closest;
+}
+
 // WPContainer - , each.
 // mov eax, this
 // test a2, a2

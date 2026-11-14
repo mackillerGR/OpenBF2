@@ -5,6 +5,7 @@
 #define AI_AIDLL_AI_AIPLANINTERPRETER_PLANINTERPRETER_H
 
 #include "../AIBot/BotMain.h"   // BotLodLevel
+#include <iosfwd>
 
 namespace dice {
 namespace hfe {
@@ -47,6 +48,8 @@ private:
     /* +0x08 */ unsigned long long* m_handled;   // one mask per level
     /* +0x0C */ BAPEntry*** m_entries;           // [type][level]
 };
+
+std::ostream& operator<<(std::ostream& stream, BotLodLevel level);
 
 } // namespace ai
 } // namespace hfe

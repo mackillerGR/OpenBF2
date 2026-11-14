@@ -114,7 +114,7 @@ public:
     virtual int getBotType() const;                                                               // +0x0E4
     virtual unsigned int getBotId() const = 0;                                                    // +0x0E8
     virtual BotMemory* getMemory() = 0;                                                           // +0x0EC
-    virtual const std::string& getName() const = 0;                                               // +0x0F0 [FRONTIER]
+    virtual const std::string& getName() const = 0;                                               // +0x0F0
     virtual void setTimeOfLastGrenadeThrown(double t) = 0;                                        // +0x0F4 [FRONTIER]
     virtual double getTimeOfGrenadeThrown(int i) const = 0;                                       // +0x0F8
     virtual BotNavigation* getBotNavigation() = 0;                                                // +0x0FC
@@ -124,7 +124,7 @@ public:
     virtual void setSpawnTarget(int spawnGroup, int kit) = 0;                                    // ELF +0x10C / PE +0x10C (overload order)
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit) = 0;                 // +0x110
     virtual int getSpawnToStrategicAreaId() = 0;                                                  // +0x114
-    virtual bool isJustSpawned() = 0;                                                             // +0x118 [FRONTIER]
+    virtual bool isJustSpawned() = 0;                                                             // +0x118
     virtual IBotDeathCallBack* getDeathCallBack() const = 0;                                      // +0x11C
     virtual void setDeathCallBack(IBotDeathCallBack* cb) = 0;                                     // +0x120
     virtual IBotSpawnCallBack* getSpawnCallBack() const = 0;                                      // +0x124
@@ -180,6 +180,10 @@ public:
     friend class BotManager;
     // [INFERRED] likewise: CommunicationAgent's fire release (PE 10147840) writes +4 inline.
     friend class CommunicationAgent;
+
+public:
+    // [INFERRED] accessor: the plan entries read +4 inline.
+    io::PlayerInput* playerInput() const { return m_playerInput; }
 
 protected:
     // Base construction leaves both pointers uninitialized. Player input is borrowed and
@@ -269,7 +273,7 @@ public:
     virtual int getBotType() const;                                                               // +0x0E4
     virtual unsigned int getBotId() const;                                                        // +0x0E8
     virtual BotMemory* getMemory();                                                               // +0x0EC
-    virtual const std::string& getName() const;                                                   // +0x0F0 [FRONTIER]
+    virtual const std::string& getName() const;                                                   // +0x0F0
     virtual void setTimeOfLastGrenadeThrown(double t);                                            // +0x0F4 [FRONTIER]
     virtual double getTimeOfGrenadeThrown(int i) const;                                           // +0x0F8
     virtual BotNavigation* getBotNavigation();                                                    // +0x0FC
@@ -279,7 +283,7 @@ public:
     virtual void setSpawnTarget(int spawnGroup, int kit);
     virtual void setSpawnTarget(int strategicArea, int spawnGroup, int kit);                     // +0x110
     virtual int getSpawnToStrategicAreaId();                                                      // +0x114
-    virtual bool isJustSpawned();                                                                 // +0x118 [FRONTIER]
+    virtual bool isJustSpawned();                                                                 // +0x118
     virtual IBotDeathCallBack* getDeathCallBack() const;                                          // +0x11C
     virtual void setDeathCallBack(IBotDeathCallBack* cb);                                         // +0x120
     virtual IBotSpawnCallBack* getSpawnCallBack() const;                                          // +0x124
@@ -523,7 +527,10 @@ private:
     /* 304 */ int          m_int304;                // = -1
     /* 308 */ unsigned int m_unresolvedCollision;   // = -1
     /* 312 */ bool         m_airBorn;               // = false isAirBorn
-    /* 313 */ char         m_pad313[3];
+    // Raised while the player is dead and consumed by the first isJustSpawned after the respawn.
+    // Neither constructor nor reset writes it, as shipped.
+    /* 313 */ bool         m_justSpawned;
+    /* 314 */ char         m_pad314[2];
     // PE +0x164..+0x16C: zeroed by the constructor, returned by address by getSpawnCoord and
     // written from the equipment position when the bot spawns. [INFERRED] name.
     /* 316 */ Vec3         m_spawnCoord;

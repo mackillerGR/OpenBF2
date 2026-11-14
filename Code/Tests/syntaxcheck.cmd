@@ -1049,6 +1049,12 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\BotMemory.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\WaypointList.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BotScript.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPConditions.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotActionPlan\BAPStatements.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBot\BotSubObjects.cpp"
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp"
 if errorlevel 1 set /a RC+=1

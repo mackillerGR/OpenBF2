@@ -2,6 +2,8 @@
 
 #include "../AIBotBehaviourPattern/PlanGenerator.h"
 #include "../AIBot/BotMain.h"
+#include "../AIBot/SensingAgent.h"
+#include "../AIBotActionPlan/BotScript.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 
@@ -100,29 +102,23 @@ BotScript* BotBehaviour::getPlan(Bot* bot)
     if (m_generator->hasPlan(bot))
     {
         if (bot->getPlan())
-        {
-            // Retail stores the generator into the plan's owner word (+4).
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
-            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript owner)");
-        }
+            bot->getPlan()->m_owner = m_generator;
         BotScript* const script = m_generator->generate(bot);
         if (script)
         {
-            // Retail: script owner = this; a different current plan also gets owner = this and
-            // the sensing agent's +120 flag (PE +0x88) is raised.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
-            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript owner)");
+            script->m_owner = this;
+            if (bot->getPlan() && bot->getPlan() != script)
+            {
+                bot->getPlan()->m_owner = this;
+                bot->getSensingAgent()->setPlanReplaced();
+            }
         }
         return script;
     }
     if (bot->getPlan())
     {
         if (bot->getPlan())
-        {
-            // Retail: delete bot->getPlan() through the deleting destructor.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
-            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript delete)");
-        }
+            delete bot->getPlan();
         bot->setPlan(0);
     }
     return 0;

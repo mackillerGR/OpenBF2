@@ -4,10 +4,24 @@
 #include "PlanGeneratorSupport.h"
 #include "../AIBot/BotMain.h"
 #include "../Main/AIDllFrontier.h"
+#include "../AIBotActionPlan/BAPConditions.h"
+#include "../AIBotActionPlan/BAPStatements.h"
+#include "../AIBot/SquadMember.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIPlanInterpreter/BAPContext.h"
+#include "../AIStrategicEntity/AIStrategicObject.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"
+#include "../AIUtils/checkPointer.h"
 
 namespace dice {
 namespace hfe {
 namespace ai {
+
+static void releaseScriptState(Bot* bot);
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-plan-generators] Each generate
 // body below stops by name until its retail body is recovered and a bot runs the plan it builds.
@@ -586,9 +600,100 @@ int BBPIdleInfantery::getIdleType()
     return 3;
 }
 
-BotScript* BBPIdleInfantery::generate(Bot*)
+// PE 100F5510. A bot standing at its strategic object zooms its active weapon (when it has a
+// zoom input) and, with equipment type flag 21, takes stance 2; it then idles with its controls
+// released, forever. The plan is reused while it is this behaviour's.
+BotScript* BBPIdleInfantery::generate(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPIdleInfantery::generate");
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        releaseScriptState(bot);
+        if (bot->getPlan())
+        {
+            if (bot->getPlan())
+                delete bot->getPlan();
+            bot->setPlan(0);
+        }
+        return 0;
+    }
+    releaseScriptState(bot);
+    Information* const equipment =
+        informationManager->getInformation(bot->getCurrentEquipment());
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId)
+        return bot->getPlan();
+    if (bot->getPlan())
+    {
+        if (bot->getPlan())
+            delete bot->getPlan();
+        bot->setPlan(0);
+    }
+    bot->getSquadMember()->clearRequest();
+
+    BAPParallel* const root = checkPointer(new BAPParallel(m_behaviourId, false, 99, false));
+    root->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+
+    const Vec3& position = equipment->getPosition();
+    AIStrategicObject* const object =
+        AIStrategicObjectManager::getInstance()->getClosestObject(position, bot->getSide(), false);
+    if (object)
+    {
+        const float radius = object->m_size[bot->getSide()];
+        Vec3 centre = {};
+        vec2ToVec3XZ(object->getPosition(bot->getSide()), centre);
+        centre.y = position.y;
+        const float dx = centre.x - position.x;
+        const float dy = centre.y - position.y;
+        const float dz = centre.z - position.z;
+        const float reach = radius + 2.0f;
+        if (dz * dz + dy * dy + dx * dx < reach * reach)
+        {
+            IPIArmament* const armament = equipment->getArmament();
+            if (armament && armament->getActiveWeapon() != -1)
+            {
+                WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+                    armament->getWeapon(armament->getActiveWeapon()));
+                if (weapon && weapon->getWeaponZoom() != 64)
+                {
+                    BAPConFalse* const release = new BAPConFalse;
+                    BAPConTrue* const until = new BAPConTrue;
+                    const unsigned long long mask = 1ULL << (weapon->getWeaponZoom() & 63);
+                    BAPTrigger* const zoom = new BAPTrigger(
+                        weapon->getWeaponZoom(), checkPointer(until), checkPointer(release), mask,
+                        m_behaviourId, 0.0, false);
+                    BAPConNot* const notZoomed = new BAPConNot(checkPointer(new BAPConZoomed));
+                    root->addStatement(checkPointer(new BAPIf(
+                        checkPointer(notZoomed), checkPointer(zoom), 0, m_behaviourId, true, false)));
+                }
+            }
+            if ((equipment->getObjectTypeFlags() >> 21) & 1)
+            {
+                // Retail adds a stance-2 SoldierPose statement (PE vtable 102835AC, constructor
+                // 101A9130) whose second base is not yet recovered.
+                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-soldier-pose]
+                BF2_AI_FRONTIER("dice::hfe::ai::BBPIdleInfantery::generate (SoldierPose statement)");
+            }
+        }
+    }
+
+    BAPWhile* const loop =
+        checkPointer(new BAPWhile(checkPointer(new BAPConTrue), root, m_behaviourId));
+    BAPInfoWrapper* const script = checkPointer(
+        new BAPInfoWrapper(equipment->getPosition(), loop, m_behaviourId, bot));
+    script->m_owner = this;
+    return script;
+}
+
+// Shared opening of the generators: resets the bot's script debugger and clears the script
+// variables. [CHOSEN, not recovered] Retail inlines this into each generate.
+static void releaseScriptState(Bot* bot)
+{
+    if (bot->getDebugger())
+    {
+        // Retail calls the debugger's third slot; the debugger type is not recovered.
+        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-debugger]
+        BF2_AI_FRONTIER("dice::hfe::ai::PlanGenerator (script debugger reset)");
+    }
+    bot->getScriptContext()->clear();
 }
 
 // ---- Fire family base ----------------------------------------------------------------------

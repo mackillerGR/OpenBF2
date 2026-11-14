@@ -13,6 +13,7 @@
 #include "BotSquad.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "SensingAgent.h"
+#include "../AIBotActionPlan/BotScript.h"
 #include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"
 #include "BotSenses.h"
 #include "CommunicationAgent.h"
@@ -271,8 +272,7 @@ void BotMain::reset()
 
     if (m_activePlan)
     {
-        // Retail destroys the plan through byte-slot +8. See the block above.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotMain::reset (active plan present)");
+        delete m_activePlan;
         m_activePlan = 0;
         m_planInvalid = true;
         m_sensingAgent->setOverride(false);
@@ -425,6 +425,8 @@ float* BotMain::getBasicWeights() { return maBasicWeights; }
 
 // per-bot accessors, unlike getBasicWeights above.
 float* BotMain::getBasicBehaviourMods() { return m_basicWeights; }
+// PE 1017ED20.
+PlanInterpreter* BotMain::getPlanInterpreter() { return m_planInterpreter; }
 float* BotMain::getCurrentBehaviourMods() { return m_behaviourUrgencies; }
 void BotMain::setTakingOrders(bool taking) { m_takingOrders = taking; }
 
@@ -502,9 +504,7 @@ bool BotMain::planExecution(const double&)
     {
         if (m_activePlan)
         {
-            // Retail destroys the plan through its deleting destructor.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
-            BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution (active plan present)");
+            delete m_activePlan;
             m_activePlan = 0;
             m_sensingAgent->setOverride(false);
         }
@@ -524,9 +524,7 @@ bool BotMain::planExecution(const double&)
                 m_activePlan = behaviour->getPlan(this);
                 if (m_activePlan)
                 {
-                    // Retail: plan owner word (+4) = this, then the flags below.
-                    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
-                    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution (BotScript owner)");
+                    m_activePlan->m_owner = this;
                     m_hasDefaultPlan = true;
                     m_planInvalid = false;
                 }
@@ -1120,9 +1118,10 @@ BotMemory* BotMain::getMemory()
 }
 
 // +0x0F0
+// PE 1017F420.
 const std::string& BotMain::getName() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getName");
+    return m_player->getName();
 }
 
 // +0x0F4
@@ -1203,9 +1202,20 @@ int BotMain::getSpawnToStrategicAreaId()
 }
 
 // +0x118
+// PE 1017F1A0. True while dead, and once more on the first call after coming back to life.
 bool BotMain::isJustSpawned()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::isJustSpawned");
+    if (!m_player->getIsAlive())
+    {
+        m_justSpawned = true;
+        return true;
+    }
+    if (m_justSpawned)
+    {
+        m_justSpawned = false;
+        return true;
+    }
+    return false;
 }
 
 // +0x11C

@@ -5,6 +5,9 @@
 
 #include <string>
 #include "../Main/AIDllFrontier.h"
+#include "../AIBotActionPlan/BotScript.h"
+#include "../../../../Core/Debug.h"
+#include <ostream>
 
 namespace dice {
 namespace hfe {
@@ -45,11 +48,32 @@ PlanInterpreter::~PlanInterpreter()
     m_handled = 0;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-plan-execution] Replace with
-// the PE 10184940 body once BotScript's statement accessors are recovered.
-bool PlanInterpreter::execute(BotScript*, Bot*, bool&, bool&)
+// PE 10184940. A bot that has just spawned (or is dead) finishes its plan at once. Otherwise the
+// statement runs through the entry installed for its type at the bot's level of detail, or its
+// own execute when the type is only marked handled. An unhandled type is an error.
+bool PlanInterpreter::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::PlanInterpreter::execute");
+    if (bot->isJustSpawned())
+    {
+        failed = false;
+        finished = true;
+        return true;
+    }
+    const BAPStatementType type = script->getType();
+    const BotLodLevel level = bot->getLodLevel();
+    if (m_handled[level] & (1ULL << (static_cast<int>(type) & 63)))
+    {
+        BAPEntry* const entry = m_entries[type][level];
+        if (!entry)
+            return script->execute(bot, finished, failed);
+        return entry->execute(script, bot, finished, failed);
+    }
+    Debug(DebugTypeError, __FILE__, __LINE__, "")
+        << bot->getName() << " " << bot->getBotId() << " lod level " << level
+        << " cannot interpret \n" << " (" << type << ") " << type << ".";
+    failed = true;
+    finished = false;
+    return false;
 }
 
 bool PlanInterpreter::addEntry(BotLodLevel level, BAPEntry* entry)
@@ -194,6 +218,16 @@ std::istream& operator>>(std::istream& stream, BotLodLevel& level)
         level = static_cast<BotLodLevel>(2);
     else
         level = static_cast<BotLodLevel>(3);
+    return stream;
+}
+
+// PE 100D85B0. Values outside the table print nothing. [INFERRED] placement.
+std::ostream& operator<<(std::ostream& stream, BotLodLevel level)
+{
+    static const char* const names[] = { "BLLFull", "BLLMedium", "BLLLight", "BLLNone" };
+    const unsigned int index = static_cast<unsigned int>(level);
+    if (index < 4)
+        stream << names[index];
     return stream;
 }
 

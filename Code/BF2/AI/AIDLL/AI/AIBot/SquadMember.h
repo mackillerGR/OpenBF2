@@ -31,6 +31,10 @@ public:
     int getMemberIndex();
     void setMemberIndex(int index);          // PE 1017BCA0
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
+    // PE 1017BB00. Plan roots raise this while they live. [INFERRED] name.
+    void setFlag49(bool value) { m_flag49 = value; }
+    // PE 1017BB70: no action, no handle. [INFERRED] name.
+    void clearRequest() { m_request->m_action = 0; m_request->m_handle = static_cast<unsigned int>(-1); }
     // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.
     void leaveFormation();
     void setIsSquadLeader(bool leader);

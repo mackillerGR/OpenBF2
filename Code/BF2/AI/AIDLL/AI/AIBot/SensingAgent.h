@@ -14,7 +14,7 @@ namespace ai {
 class BAPContext;
 // the plan'S base class. `SensingAgent` holds one `BAPStatement*` and nothing else about the
 // statement tree; see the deletePlan block in the .cpp for how far the evidence goes.
-class BAPStatement;
+class BotScript;
 class BotMain;
 class BotSenses;
 class Information;
@@ -34,7 +34,7 @@ public:
     // Called by `BotMain::reset` when a bot loses its active plan - losing a plan releases the
     // bot's aim override.
     void setOverride(bool);
-    void deletePlan();                          // - (one arm frontier)
+    void deletePlan();
     void clearPlanTargetInformation();
     // Sets the flag that makes setOverride refuse, and drops the override. [INFERRED] name.
     void setOverrideLock(bool locked);
@@ -43,6 +43,8 @@ public:
     // Rebuilds the agent's plan for the current equipment. [INFERRED] name. [FRONTIER]
     void updatePlan();
     bool hasPlan() const { return m_plan != 0; }
+    // BotBehaviour::getPlan raises +120 when it replaces a bot's plan. [INFERRED] name.
+    void setPlanReplaced() { m_flag120 = true; }
     // attested as a nested type by `std::vector<SensingAgent::FocusInformation>`; its members are
     // [UNRESOLVED] - nothing recovered so far constructs one.
     struct FocusInformation;
@@ -79,7 +81,7 @@ private:
     /* 134 */ bool m_flag134;              // ctor: false
     /* 135 */ char m_pad135;
     // the plan itself - one owned statement, guarded everywhere it is touched.
-    /* 136 */ BAPStatement* m_plan;        // ctor: 0
+    /* 136 */ BotScript* m_plan;        // ctor: 0
     // Set true by `reset` and again by `deletePlan`, and nothing recovered so far reads it.
     // Meaning [UNRESOLVED]; the name stays neutral rather than guess at `m_planInvalid`.
     /* 140 */ bool m_flag140;              // reset: true, deletePlan: true

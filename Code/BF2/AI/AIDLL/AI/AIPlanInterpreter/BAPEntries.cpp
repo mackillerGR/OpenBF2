@@ -3,10 +3,61 @@
 #include "BAPEntries.h"
 
 #include "../Main/AIDllFrontier.h"
+#include "PlanInterpreter.h"
+#include "../AIBot/BotMain.h"
+#include "../AIBotActionPlan/BAPStatements.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../../../../IO/Input/PlayerInput.h"
+#include "../../../../Math/Mat4.h"
 
 namespace dice {
 namespace hfe {
 namespace ai {
+
+namespace {
+
+// PE 101C4530, a free helper ([INFERRED] name). Releases the soldier's movement group (action,
+// sprint, yaw, pitch, roll, throttle and both mouse-look axes), points the vertical look along the
+// equipment's transform, and releases the action group. Writes to unbound inputs are dropped.
+// The equipment is not null-checked, as shipped.
+bool resetSoldierControls(Bot* bot, io::PlayerInput* input, bool movement, bool look, bool actions)
+{
+    if (movement)
+    {
+        input->setInput(io::PIAction, 0.0f);
+        input->setInput(io::PISprint, 0.0f);
+        input->setInput(io::PIYaw, 0.0f);
+        input->setInput(io::PIRoll, 0.0f);
+        input->setInput(io::PIPitch, 0.0f);
+        input->setInput(io::PIThrottle, 0.0f);
+        input->setInput(io::PIMouseLookX, 0.0f);
+        input->setInput(io::PIMouseLookY, 0.0f);
+    }
+    if (look)
+    {
+        Information* const equipment =
+            informationManager->getInformation(bot->getCurrentEquipment());
+        const Mat4& transform = equipment->getTransformation();
+        input->setInput(io::PIMouseLookX, 0.0f);
+        input->setInput(io::PIMouseLookY, -transform.m[9]);
+    }
+    if (actions)
+    {
+        input->setInput(io::PIFire, 0.0f);
+        input->setInput(io::PIAltFire, 0.0f);
+        for (int each = io::PIWeaponSelect1; each <= io::PIWeaponSelect8; ++each)
+            input->setInput(static_cast<io::PlayerInputMap>(each), 0.0f);
+        for (int each = io::PIPositionSelect1; each <= io::PIPositionSelect8; ++each)
+            input->setInput(static_cast<io::PlayerInputMap>(each), 0.0f);
+        input->setInput(io::PIUse, 0.0f);
+        input->setInput(io::PIReload, 0.0f);
+        input->setInput(io::PIFlareFire, 0.0f);
+    }
+    return true;
+}
+
+} // anonymous namespace
 
 // Action-plan primitives return their statement type for registry dispatch.
 
@@ -435,9 +486,22 @@ int EntryInfanteryResetControls::getTargetId()
     return 14;
 }
 
-bool EntryInfanteryResetControls::execute(BotScript *, Bot *, bool&, bool&)
+// PE 101345A0. A statement with an input mask releases its one input; any other releases the
+// groups it names through the soldier helper above.
+bool EntryInfanteryResetControls::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfanteryResetControls::execute");
+    BAPResetControls* const reset = static_cast<BAPResetControls*>(script);
+    if (reset->hasInputMask())
+    {
+        bot->playerInput()->setInput(static_cast<io::PlayerInputMap>(reset->m_input), false);
+        finished = true;
+        failed = true;
+        return true;
+    }
+    resetSoldierControls(bot, bot->playerInput(), reset->m_movement, reset->m_look, reset->m_actions);
+    finished = true;
+    failed = true;
+    return true;
 }
 
 
@@ -701,9 +765,11 @@ int EntryInfoWrapper::getTargetId()
     return 15;
 }
 
-bool EntryInfoWrapper::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10130860. Runs the wrapped statement.
+bool EntryInfoWrapper::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfoWrapper::execute");
+    return static_cast<BotMain*>(bot)->getPlanInterpreter()->execute(
+        static_cast<BAPWrapper*>(script)->m_child, bot, finished, failed);
 }
 
 

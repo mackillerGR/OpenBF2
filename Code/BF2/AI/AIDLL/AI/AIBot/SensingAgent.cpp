@@ -2,6 +2,9 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SensingAgent operations.
 
 #include "SensingAgent.h"
+#include "BotMain.h"
+#include "../AIBotActionPlan/BotScript.h"
+#include "../AIPlanInterpreter/PlanInterpreter.h"
 
 #include "BotSenses.h"
 #include "../AIPlanInterpreter/BAPContext.h"
@@ -57,15 +60,11 @@ SensingAgent::~SensingAgent()
 }
 
 // Deletes the owned plan and marks planning state for refresh.
-// [FRONTIER] Plan destruction stops until the required statement type is implemented.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 void SensingAgent::deletePlan()
 {
     if (m_plan)
     {
-        // Retail here is `delete m_plan;` - vtable byte-slot +8, the deleting destructor. See the
-        // block above for why this tree cannot write it yet.
-        BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::deletePlan (non-null plan)");
+        delete m_plan;
         m_plan = 0;
     }
     m_flag140 = true;
@@ -147,14 +146,15 @@ void SensingAgent::setOverrideLock(bool locked)
     m_flag122 = false;
 }
 
-// PE 101AE340: execute(m_plan, m_bot, finished, failed) with both flags false, then
-// m_flag140 = failed || !finished, clearing the plan targets when set.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] m_plan is typed BAPStatement* here while the
-// interpreter takes the BotScript it really is. [RETIRE-WHEN: botscript-type] Recover BotScript
-// and retype m_plan, then write the body above.
+// PE 101AE340. A failed or unfinished run marks the plan stale and clears its targets.
 void SensingAgent::executePlan()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::executePlan");
+    bool finished = false;
+    bool failed = false;
+    m_bot->getPlanInterpreter()->execute(m_plan, m_bot, finished, failed);
+    m_flag140 = failed || !finished;
+    if (m_flag140)
+        clearPlanTargetInformation();
 }
 
 // PE 101B14F0. [FRONTIER] [TEMP] [CHOSEN, not recovered]
