@@ -39,8 +39,9 @@ public:
     // Resets the generator and the bot's urgency, target-changed flag and target. PE 10198720.
     virtual void  reset(Bot* bot);
 
-    // Recomputes the bot's urgency. [UNRESOLVED] the flag's meaning; [INFERRED] name.
-    virtual void  calculateUrgency(Bot* bot, bool flag) = 0;
+    // Recomputes and returns the bot's urgency. [INFERRED] name and the meaning of `elapsed`;
+    // [UNRESOLVED] the flag's meaning.
+    virtual float calculateUrgency(Bot* bot, bool flag, float elapsed) = 0;
     // The plan the bot should run: its current one while it is locked, otherwise a freshly
     // generated one stamped with this behaviour. Without a plan to offer, the bot's current plan
     // is deleted and null returned. PE 101988E0.

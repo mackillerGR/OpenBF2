@@ -1,6 +1,6 @@
 #include "BotBehaviour.h"
 
-#include "PlanGenerator.h"
+#include "../AIBotBehaviourPattern/PlanGenerator.h"
 #include "../AIBot/BotMain.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"

@@ -180,7 +180,14 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp" ^
- "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\PlanGenerator.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviours.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BBTakeCoverInfantry.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\PlanGenerator.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\PlanGenerators.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire2d.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire2dDriver.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFireInfantery.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotBehaviourPattern\BBPHeliFire3d.cpp" ^
  "%ROOT%\AI\AIDLL\AI\Main\AIConsole.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgeCurve.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIStrategicEntity\CoverPosition\CPNodeManager.cpp" ^

@@ -1,8 +1,9 @@
 // Builds the action plan a behaviour hands to a bot.
-// [INFERRED] placement and member names: the image carries no __FILE__ string for this class.
+// [INFERRED] placement and member names: the image carries no __FILE__ string for this class; the
+// attested generator sources live in AIBotBehaviourPattern.
 
-#ifndef AI_AIDLL_AI_AIBOTBEHAVIOUR_PLANGENERATOR_H
-#define AI_AIDLL_AI_AIBOTBEHAVIOUR_PLANGENERATOR_H
+#ifndef AI_AIDLL_AI_AIBOTBEHAVIOURPATTERN_PLANGENERATOR_H
+#define AI_AIDLL_AI_AIBOTBEHAVIOURPATTERN_PLANGENERATOR_H
 
 namespace dice {
 namespace hfe {
@@ -30,12 +31,15 @@ public:
     // Sets the bot's flag. PE 100EE9F0.
     virtual void setHasPlan(Bot* bot);
 
+    int getBehaviourId() const { return m_behaviourId; }
+
 protected:
     /* +0x04 */ bool* m_hasPlan;
+    /* +0x08 */ int   m_behaviourId;     // set by the derived constructor
 };
 
 } // namespace ai
 } // namespace hfe
 } // namespace dice
 
-#endif // AI_AIDLL_AI_AIBOTBEHAVIOUR_PLANGENERATOR_H
+#endif // AI_AIDLL_AI_AIBOTBEHAVIOURPATTERN_PLANGENERATOR_H

@@ -1051,7 +1051,21 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp"
 if errorlevel 1 set /a RC+=1
-cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\PlanGenerator.cpp"
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\BotBehaviours.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviour\BBTakeCoverInfantry.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\PlanGenerator.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\PlanGenerators.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire2d.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFire2dDriver.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\BBPFireInfantery.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIBotBehaviourPattern\BBPHeliFire3d.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\Main\AIConsole.cpp"
 if errorlevel 1 set /a RC+=1
