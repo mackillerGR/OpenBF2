@@ -20,6 +20,8 @@ class Information;
 class BotNavigation
 {
 public:
+    float getFloat292() const { return m_float292; }   // [INFERRED] accessors
+    float getFloat296() const { return m_float296; }
     explicit BotNavigation(BotMain* owner);
     ~BotNavigation();                           // [FRONTIER]
 
@@ -155,7 +157,11 @@ private:
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false
     /* 277 */ char  m_pad277[3];
-    /* 280 */ int   m_zero280[5];          // +280..+296
+    /* 280 */ int   m_zero280[3];          // +280..+288
+    // Read as floats against 0.5 by BotMain::afterPlanInterpreted to steer around friends in the
+    // line of fire (PE +0x130 / +0x134). [UNRESOLVED] what writes them.
+    /* 292 */ float m_float292;
+    /* 296 */ float m_float296;
     /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
     /* 308 */ int   m_zero308[2];          // +308, +312
     // `reset`'s first statement clears the byte here.

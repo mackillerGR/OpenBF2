@@ -159,7 +159,7 @@ BotMain::BotMain(IAIPlayer* player,
     m_avoidSide = 0;
     for (int k = 0; k < 3; ++k)
         (&m_wantsToSimulateArtillery)[k] = false;   // +500..+502
-    m_gap512[0] = 0;                    // +512
+    m_avoidSideFlipped = false;                    // +512
     m_collidedObject = -1;
     m_double516 = 0.0;
     for (int k = 0; k < 3; ++k)
@@ -305,7 +305,7 @@ void BotMain::reset()
     m_wantsToSimulateArtillery = false;
     m_isSimulatingArtillery = false;
     m_flag502 = false;
-    m_gap512[0] = 0;
+    m_avoidSideFlipped = false;
     m_collidedObjectPosition[0] = 0;
     m_collidedObjectPosition[1] = 0;
     m_collidedObjectPosition[2] = 0;
@@ -462,11 +462,38 @@ BotLodLevel BotMain::getLodLevel() const
     return m_lodLevel;
 }
 
-// PE 10180AB0. [FRONTIER] [TEMP] [CHOSEN, not recovered]
-// [RETIRE-WHEN: plan-execution-steps] Recover the body and validate a bot executing a plan.
+// PE 10180AB0. For equipment with type flag 21, while friends were in the line of fire within
+// the last second the bot turns away on its avoid side, switching sides when the other one
+// is freer; otherwise the avoid side is cleared. The equipment is not null-checked.
 void BotMain::afterPlanInterpreted()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::afterPlanInterpreted");
+    Information* const equipment = informationManager->getInformation(getCurrentEquipment());
+    if (!((equipment->getObjectTypeFlags() >> 21) & 1))
+        return;
+    const double time = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (time - getFriendsInLineOfFireTime() > 1.0)
+    {
+        setAvoidSide(0);
+        return;
+    }
+    if (m_avoidSide == 1)
+    {
+        if (getBotNavigation()->getFloat292() > 0.5f)
+        {
+            m_playerInput->setInput(io::PIYaw, -1.0f);
+            return;
+        }
+        if (getBotNavigation()->getFloat296() > 0.5f)
+            setAvoidSide(2);
+        return;
+    }
+    if (getBotNavigation()->getFloat296() > 0.5f)
+    {
+        m_playerInput->setInput(io::PIYaw, 1.0f);
+        return;
+    }
+    if (getBotNavigation()->getFloat292() > 0.5f)
+        setAvoidSide(1);
 }
 
 // PE 10181180. [FRONTIER] [TEMP] [CHOSEN, not recovered]
@@ -1676,9 +1703,22 @@ bool BotMain::getBotIsSimulatingArtillery() const
 }
 
 // +0x238
-void BotMain::setAvoidSide(int side)
+bool BotMain::setAvoidSide(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setAvoidSide");
+    // PE 1017F810. Answers whether this call flips an already flipped side to another non-zero
+    // side, judged before the store.
+    const bool reflip = m_avoidSideFlipped && side != m_avoidSide && side != 0;
+    if (side == 0)
+    {
+        m_avoidSideFlipped = false;
+        m_avoidSide = 0;
+        return reflip;
+    }
+    const int previous = m_avoidSide;
+    m_avoidSide = side;
+    if (side != previous && previous != 0)
+        m_avoidSideFlipped = true;
+    return reflip;
 }
 
 // +0x23C

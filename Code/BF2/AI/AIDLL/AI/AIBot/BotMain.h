@@ -355,7 +355,7 @@ public:
     virtual bool getBotWantsToSimulateArtillery() const;                                          // +0x22C
     virtual void setBotIsSimulatingArtillery(bool b);                                             // +0x230
     virtual bool getBotIsSimulatingArtillery() const;                                             // +0x234
-    virtual void setAvoidSide(int side);                                                          // +0x238 [FRONTIER]
+    virtual bool setAvoidSide(int side);                                                          // +0x238
     virtual int getAvoidSide() const;                                                             // +0x23C
     virtual int getMoveToStatus() const;                                                          // +0x240
     virtual void setMoveToStatus(int status);                                                     // +0x244 [FRONTIER]
@@ -391,7 +391,7 @@ public:
     void  postPlanExecution();
     // planExecution's two private steps: after the interpreter, and last. [INFERRED] names.
     // [FRONTIER]
-    void  afterPlanInterpreted();
+    void  afterPlanInterpreted();   // steers around friends in the line of fire
     void  finishPlanExecution();
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
@@ -574,7 +574,9 @@ private:
     /* 503 */ char         m_pad503;
     /* 504 */ int          m_moveToStatus;          // = 0
     /* 508 */ int          m_avoidSide;             // = 0
-    /* 512 */ char         m_gap512[4];             // +512 byte = 0
+    // Set when the avoid side changes from one side to the other; cleared with the side.
+    /* 512 */ bool         m_avoidSideFlipped;      // = false
+    /* 513 */ char         m_pad513[3];
     /* 516 */ double       m_double516;             // = 0.0
     /* 524 */ unsigned int m_collidedObject;        // = -1
     /* 528 */ float        m_collidedObjectPosition[3];  // a Vec3 - getCollidedObjectPosition
