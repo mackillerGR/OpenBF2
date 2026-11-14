@@ -16,7 +16,8 @@ public:
     BotMemory();
     ~BotMemory();
 
-    void reset();                   // [FRONTIER]
+    // Restores the per-life values. PE 101DAAF0.
+    void reset();
     // Adjusts the urgency assigned to behaviour by amount.
     void modifyBehaviourUrgency(BotBehaviour* behaviour, double amount);   // [FRONTIER]
 

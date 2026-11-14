@@ -194,6 +194,7 @@ set(bf2_aidll_only_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/SquadMember.cpp"           # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/CustomCurve.cpp"   # libaidll only - chunk 02
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotMemory.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBot/WaypointList.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotSubObjects.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgencyMerger.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/BotBehaviour.cpp"
@@ -1169,6 +1170,7 @@ set(bf2_aidll_image_sources
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/SquadMember.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/CustomCurve.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotMemory.cpp"
+    "${BF2_ROOT}/AI/AIDLL/AI/AIBot/WaypointList.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBot/BotSubObjects.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/UrgencyMerger.cpp"
     "${BF2_ROOT}/AI/AIDLL/AI/AIBotBehaviour/BotBehaviour.cpp"

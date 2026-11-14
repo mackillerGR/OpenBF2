@@ -177,6 +177,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\SquadMember.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\CustomCurve.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBot\WaypointList.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp" ^

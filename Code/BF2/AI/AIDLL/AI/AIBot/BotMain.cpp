@@ -17,6 +17,12 @@
 #include "CommunicationAgent.h"
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
+#include "../AIBotBehaviour/BotBehaviour.h"
+#include "../AIBotBehaviourPattern/PlanGenerator.h"
+#include "../AIPlanInterpreter/PlanInterpreter.h"
+#include "../Main/AISettingsInterfaces.h"
+#include "WaypointList.h"
+#include "../AIKnowledge/IPIUnit.h"
 #include "../AIUtils/checkPointer.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"      // updatePlayerAction: the equipment's mobile plug-in
@@ -83,9 +89,6 @@ BotMain::BotMain(IAIPlayer* player,
     m_inTransitionPhase = false;        // +91
     m_pad92        = 0;                 // +92
     m_deactivated  = false;             // +93
-    m_ptr100 = 0;
-    m_ptr104 = 0;
-    m_ptr108 = 0;
     m_activePlan = 0;
     m_planLock = false;                 // +120
 
@@ -543,9 +546,71 @@ bool BotMain::updateBotVehicle(bool* changed)
 }
 
 // +0x030
-void BotMain::updateBot()
+// PE 101841E0. Files a behaviour under its priority the first time its id is taken and records it
+// at `index`; an id already present leaves both arrays alone. A null behaviour is ignored.
+void BotMain::addBehaviour(BotBehaviour* behaviour, int index)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateBot");
+    if (!behaviour)
+        return;
+    const unsigned int priority = behaviour->getPriority();
+    if (m_behavioursByPriority.size() <= priority)
+        m_behavioursByPriority.resize(priority + 1, std::list<unsigned short>());
+    if (m_behaviours[behaviour->getBehaviourId()])
+        return;
+    m_behavioursByPriority[priority].push_back(behaviour->getBehaviourId());
+    m_behaviours[index] = behaviour;
+    m_urgencyGenerators[index] = behaviour;
+}
+
+// +0x030, PE 10184300. Picks the behaviours, interpreter and modifiers of the current equipment
+// type (the man-down type while the bot is down), resets each applicable behaviour and its
+// generator, and gives the bot a first waypoint: a point 100 m above an equipment whose type flags
+// have bit 4 set, otherwise the equipment's own position. The merger's urgency is discarded.
+bool BotMain::updateBot()
+{
+    Information* const information = informationManager->getInformation(getCurrentEquipment());
+    if (!information || !information->getUnit())
+        return false;
+
+    UrgencyGenerator** const generators = m_urgencyGenerators;
+    IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    const int type = m_manDown ? settings->getManDownEquipmentType()
+                               : information->getUnit()->getEquipmentType();
+    m_planInterpreter = static_cast<PlanInterpreter*>(settings->getPlanInterpreter(type));
+    const int behaviours = settings->getNumberOfBehaviours();
+    for (int i = 0; i < behaviours; ++i)
+    {
+        BotBehaviour* behaviour = settings->getBehaviour(type, i);
+        if (behaviour)
+        {
+            if (!behaviour->isApplicable(information, this))
+                behaviour = 0;
+            else
+                behaviour->reset(this);
+        }
+        addBehaviour(behaviour, i);
+        generators[i] = behaviour;
+        if (behaviour && behaviour->getPlanGenerator())
+            behaviour->getPlanGenerator()->reset(this);
+    }
+    m_ptr72 = settings->getVehicleMods(type);
+    calculateMods();
+    m_urgencyMerger->updateActiveUrgency(this);
+    getMemory()->reset();
+
+    if ((information->getObjectTypeFlags() >> 4) & 1)
+    {
+        std::list<Vec3> waypoints;
+        Vec3 position = information->getPosition();
+        position.y += 100.0f;
+        waypoints.push_back(position);
+        setWaypoints(checkPointer(new MultiPositionWaypoint(1.0f, 1.0f, 25.0f, true, waypoints)));
+        return true;
+    }
+
+    Information* const equipment = informationManager->getInformation(m_currentEquipment);
+    setWaypoints(checkPointer(new SinglePositionWaypoint(equipment->getPosition())));
+    return true;
 }
 
 // +0x034
@@ -572,10 +637,12 @@ WaypointList* BotMain::getWaypoints()
     return m_waypoints;
 }
 
-// +0x044
-void BotMain::setWaypoints(WaypointList* w)
+// +0x044, PE 1017EBF0. Takes ownership; the previous list is deleted.
+void BotMain::setWaypoints(WaypointList* waypoints)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setWaypoints");
+    if (m_waypoints)
+        delete m_waypoints;
+    m_waypoints = waypoints;
 }
 
 // +0x04C

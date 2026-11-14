@@ -5,6 +5,11 @@
 #include "../AIBotBehaviourPattern/PlanGenerators.h"
 #include "../AIBotBehaviourPattern/PlanGeneratorSupport.h"
 #include "../Main/AIDllFrontier.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 
 #include <cmath>
 
@@ -54,6 +59,29 @@ float fireCurve(float value)
 {
     return static_cast<float>(std::pow(static_cast<double>(value + value - 0.95f), 21.0) * 1.012f
                               + 1.0f);
+}
+
+} // anonymous namespace
+
+namespace {
+
+// True when the equipment carries a weapon of one of the two types. [CHOSEN, not recovered]
+// Retail inlines the scan at each caller.
+bool hasWeaponOfType(Information* equipment, int typeA, int typeB)
+{
+    IPIArmament* const armament = equipment->getArmament();
+    const std::vector<unsigned int>& weapons = armament->getWeapons();
+    for (size_t i = 0; i < weapons.size(); ++i)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+        if (weapon)
+        {
+            const int type = weapon->getWeaponType();
+            if (type == typeA || type == typeB)
+                return true;
+        }
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -231,19 +259,28 @@ float BBBridgeRepair::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBBridgeRepair::calculateUrgency");
 }
 
-bool BBMedicAssist::isApplicable(Information*, Bot*)
+// PE 100FD160. A bot that is up and carries a type 1 or 2 weapon (the medic kit) can assist.
+bool BBMedicAssist::isApplicable(Information* equipment, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBMedicAssist::isApplicable");
+    if (bot->getManDown() || !equipment->getArmament())
+        return false;
+    return hasWeaponOfType(equipment, 1, 2);
 }
 
-bool BBRevive::isApplicable(Information*, Bot*)
+// PE 10120410. Any bot carrying a type 3 weapon (the defibrillator) can revive.
+bool BBRevive::isApplicable(Information* equipment, Bot*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRevive::isApplicable");
+    if (!equipment->getArmament())
+        return false;
+    return hasWeaponOfType(equipment, 3, 3);
 }
 
-bool BBBridgeRepair::isUsable(Information*, Bot*)
+// PE 10122CC0. Only a living engineer (kit 4) that is up.
+bool BBBridgeRepair::isUsable(Information*, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBBridgeRepair::isUsable");
+    if (!bot->getPlayer()->getIsAlive() || bot->getManDown())
+        return false;
+    return bot->getPlayer()->getSpawnKit() == 4;
 }
 
 BBIdle::BBIdle(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -732,9 +769,20 @@ float BBC4::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBC4::calculateUrgency");
 }
 
-bool BBC4::isUsable(Information*, Bot*)
+// PE 101222E0. A living bot that is up and has C4 (weapon type 4) with ammunition left.
+bool BBC4::isUsable(Information* equipment, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBC4::isUsable");
+    IPIArmament* const armament = equipment->getArmament();
+    if (!bot->getPlayer()->getIsAlive() || bot->getManDown() || !armament)
+        return false;
+    const std::vector<unsigned int>& weapons = armament->getWeapons();
+    for (size_t i = 0; i < weapons.size(); ++i)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+        if (weapon && weapon->getWeaponType() == 4 && weapon->getCurrentAmmo() > 0)
+            return true;
+    }
+    return false;
 }
 
 BBRunOverSoldier::BBRunOverSoldier(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -762,9 +810,10 @@ float BBRunOverSoldier::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBRunOverSoldier::calculateUrgency");
 }
 
-bool BBRunOverSoldier::isUsable(Information*, Bot*)
+// PE 10125740.
+bool BBRunOverSoldier::isUsable(Information*, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRunOverSoldier::isUsable");
+    return bot->getPlayer()->getIsAlive() && !bot->getManDown();
 }
 
 BBDefuseMines::BBDefuseMines(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -797,9 +846,12 @@ float BBDefuseMines::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBDefuseMines::calculateUrgency");
 }
 
-bool BBDefuseMines::isUsable(Information*, Bot*)
+// PE 10124460. Only a living engineer (kit 4) that is up.
+bool BBDefuseMines::isUsable(Information*, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBDefuseMines::isUsable");
+    if (!bot->getPlayer()->getIsAlive() || bot->getManDown())
+        return false;
+    return bot->getPlayer()->getSpawnKit() == 4;
 }
 
 BBRandom::BBRandom(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -830,9 +882,12 @@ float BBRandom::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBRandom::calculateUrgency");
 }
 
-bool BBRandom::isUsable(Information*, Bot*)
+// PE 10125F90. Always false; the checks are made and discarded, as shipped.
+bool BBRandom::isUsable(Information*, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRandom::isUsable");
+    if (bot->getPlayer()->getIsAlive())
+        bot->getManDown();
+    return false;
 }
 
 BBTriggerable::BBTriggerable(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -861,9 +916,12 @@ float BBTriggerable::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBTriggerable::calculateUrgency");
 }
 
-bool BBTriggerable::isUsable(Information*, Bot*)
+// PE 101268F0. Always false; the checks are made and discarded, as shipped.
+bool BBTriggerable::isUsable(Information*, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBTriggerable::isUsable");
+    if (bot->getPlayer()->getIsAlive())
+        bot->getManDown();
+    return false;
 }
 
 } // namespace ai

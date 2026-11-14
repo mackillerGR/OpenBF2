@@ -50,6 +50,7 @@ public:
     virtual bool  isApplicable(Information* equipment, Bot* bot);
 
     unsigned char getBehaviourId() const { return m_behaviourId; }
+    unsigned char getPriority() const { return m_priority; }
     PlanGenerator* getPlanGenerator() const { return m_generator; }
 
 protected:

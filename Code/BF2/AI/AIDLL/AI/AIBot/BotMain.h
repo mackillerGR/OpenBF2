@@ -64,12 +64,13 @@ public:
     virtual void reset() = 0;                                                                     // +0x028
     // True when the bot's equipment was re-evaluated; *changed reports whether it has a vehicle.
     virtual bool updateBotVehicle(bool* changed) = 0;                                             // +0x02C
-    virtual void updateBot() = 0;                                                                 // +0x030 [FRONTIER]
+    // Rebuilds the behaviours for the current equipment; false without a usable equipment.
+    virtual bool updateBot() = 0;                                                                 // +0x030
     virtual BotSquad* getBotSquad() const = 0;                                                    // +0x034
     virtual float getObedience() = 0;                                                             // +0x038
     virtual float* getCurrentOrders() = 0;                                                       // +0x03C order weights
     virtual WaypointList* getWaypoints() = 0;                                                     // +0x040
-    virtual void setWaypoints(WaypointList* w) = 0;                                               // +0x044 [FRONTIER]
+    virtual void setWaypoints(WaypointList* w) = 0;                                               // +0x044
     virtual bool recieveOrder(BotOrder* order) = 0;                                               // +0x048
     virtual void recieveOrder(BotOrder* order, std::list<unsigned int>& targets) = 0;             // +0x04C [FRONTIER]
     virtual std::list<unsigned int>* getOrderList(unsigned char behaviour) = 0;                   // +0x050
@@ -218,12 +219,12 @@ public:
     virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
     virtual void reset();                                                                         // +0x028
     virtual bool updateBotVehicle(bool* changed);                                                 // +0x02C
-    virtual void updateBot();                                                                     // +0x030 [FRONTIER]
+    virtual bool updateBot();                                                                     // +0x030
     virtual BotSquad* getBotSquad() const;                                                        // +0x034
     virtual float getObedience();                                                                 // +0x038
     virtual float* getCurrentOrders();                                                           // +0x03C order weights
     virtual WaypointList* getWaypoints();                                                         // +0x040
-    virtual void setWaypoints(WaypointList* w);                                                   // +0x044 [FRONTIER]
+    virtual void setWaypoints(WaypointList* w);                                                   // +0x044
     virtual bool recieveOrder(BotOrder* order);                                                   // +0x048
     virtual void recieveOrder(BotOrder* order, std::list<unsigned int>& targets);                 // +0x04C [FRONTIER]
     virtual std::list<unsigned int>* getOrderList(unsigned char behaviour);                       // +0x050
@@ -452,9 +453,9 @@ private:
     /*  94 */ char         m_pad94[2];
     // Parallel per-behaviour arrays: scalar urgency values and behaviour pointers.
     /*  96 */ float*       m_behaviourUrgencies;    // new[] sized by mu8NBehaviours - one per behaviour
-    /* 100 */ void*        m_ptr100;                // = 0
-    /* 104 */ void*        m_ptr104;                // = 0
-    /* 108 */ void*        m_ptr108;                // = 0
+    // Behaviour ids by priority, filled by addBehaviour. [INFERRED] name and element type: the
+    // PE stores a zero-extended byte as a 16-bit value.
+    /* 100 */ std::vector<std::list<unsigned short> > m_behavioursByPriority;
     /* 112 */ BotBehaviour** m_behaviours;         // new[] sized by mu8NBehaviours, zero-filled.
     // Owns the active BotScript. reset destroys it virtually and clears the pointer.
     /* 116 */ BotScript*   m_activePlan;            // Initially null; get/setPlan access it.

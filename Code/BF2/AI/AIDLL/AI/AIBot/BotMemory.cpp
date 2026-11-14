@@ -28,7 +28,10 @@ BotMemory::~BotMemory()
 
 void BotMemory::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMemory::reset");
+    m_int4 = -1;
+    m_float8 = 1.0f;
+    m_int12 = 1;
+    m_int0 = -1;
 }
 
 void BotMemory::modifyBehaviourUrgency(BotBehaviour*, double)
