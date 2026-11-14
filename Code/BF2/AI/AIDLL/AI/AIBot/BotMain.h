@@ -55,7 +55,7 @@ public:
 
     virtual void setLodLevel(BotLodLevel level) = 0;                                              // +0x008
     virtual BotLodLevel getLodLevel() const = 0;                                                  // +0x00C
-    virtual void planExecution(const double& slice) = 0;                                          // +0x010 [FRONTIER]
+    virtual bool planExecution(const double& slice) = 0;                                          // +0x010
     virtual int decisionMaking(const double& slice) = 0;                                          // +0x014 [FRONTIER]
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C [FRONTIER]
@@ -163,7 +163,7 @@ public:
     virtual void setLastChangeTime(double t) = 0;                                                 // +0x1A8
     virtual void setManDown(bool b) = 0;                                                          // +0x1AC
     virtual bool getManDown() const = 0;                                                          // +0x1B0
-    virtual void rearm(Information* i) = 0;                                                       // +0x1B4 [FRONTIER]
+    virtual void rearm(Information* equipment) = 0;                                               // +0x1B4
     virtual void setChangeTarget(unsigned int h) = 0;                                             // +0x1B8
     virtual unsigned int getChangeTarget() const = 0;                                             // +0x1BC
     virtual void setRepairTarget(unsigned int h) = 0;                                             // +0x1C0
@@ -178,6 +178,8 @@ public:
     // [INFERRED] friendship, like BotMain's below: BotManager::actionExecutePlan reads +4 inline
     // through a `Bot*` to press a climbing bot's inputs.
     friend class BotManager;
+    // [INFERRED] likewise: CommunicationAgent's fire release (PE 10147840) writes +4 inline.
+    friend class CommunicationAgent;
 
 protected:
     // Base construction leaves both pointers uninitialized. Player input is borrowed and
@@ -210,7 +212,7 @@ public:
 // [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
     virtual void setLodLevel(BotLodLevel level);                                                  // +0x008
     virtual BotLodLevel getLodLevel() const;                                                      // +0x00C
-    virtual void planExecution(const double& slice);                                              // +0x010 [FRONTIER]
+    virtual bool planExecution(const double& slice);                                              // +0x010
     // [INFERRED] Returns an integer work count accumulated by BotManager.
     virtual int decisionMaking(const double& slice);                                              // +0x014 [FRONTIER]
     virtual void cheatExecution();                                                                // +0x018
@@ -316,7 +318,7 @@ public:
     virtual void setLastChangeTime(double t);                                                     // +0x1A8
     virtual void setManDown(bool b);                                                              // +0x1AC
     virtual bool getManDown() const;                                                              // +0x1B0
-    virtual void rearm(Information* i);                                                           // +0x1B4 [FRONTIER]
+    virtual void rearm(Information* equipment);                                                   // +0x1B4
     virtual void setChangeTarget(unsigned int h);                                                 // +0x1B8
     virtual unsigned int getChangeTarget() const;                                                 // +0x1BC
     virtual void setRepairTarget(unsigned int h);                                                 // +0x1C0
@@ -383,6 +385,10 @@ public:
     // every name here is absent from all 171 slots.
     void  prePlanExecution();
     void  postPlanExecution();
+    // planExecution's two private steps: after the interpreter, and last. [INFERRED] names.
+    // [FRONTIER]
+    void  afterPlanInterpreted();
+    void  finishPlanExecution();
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
     void  uninitAllBehaviours();
@@ -529,8 +535,8 @@ private:
     /* 352 */ double       m_lastChangeTime;        // setLastChangeTime
     /* 360 */ bool         m_manDown;               // get/setManDown
     /* 361 */ char         m_pad361[3];
-    // A double, found by `reset`. The old 12-byte gap swallowed it.
-    /* 364 */ double       m_double364;             // reset: 0.0
+    // Game time accumulated toward the next rearm; reset and each rearm clear it.
+    /* 364 */ double       m_rearmTime;             // reset: 0.0
     /* 372 */ bool         m_isFiring;              // isFiring / setIsFiring
     /* 373 */ char         m_pad373[3];
     /* 376 */ SquadMember* m_squadMember;           // = 0

@@ -36,6 +36,13 @@ public:
     void setOverride(bool);
     void deletePlan();                          // - (one arm frontier)
     void clearPlanTargetInformation();
+    // Sets the flag that makes setOverride refuse, and drops the override. [INFERRED] name.
+    void setOverrideLock(bool locked);
+    // Runs the agent's own plan through the bot's interpreter. [INFERRED] name.
+    void executePlan();
+    // Rebuilds the agent's plan for the current equipment. [INFERRED] name. [FRONTIER]
+    void updatePlan();
+    bool hasPlan() const { return m_plan != 0; }
     // attested as a nested type by `std::vector<SensingAgent::FocusInformation>`; its members are
     // [UNRESOLVED] - nothing recovered so far constructs one.
     struct FocusInformation;

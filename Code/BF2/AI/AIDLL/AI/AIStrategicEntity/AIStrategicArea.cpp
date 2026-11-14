@@ -19,6 +19,9 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIBot/BotMain.h"
+#include "../Main/IBotManager.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"       // IAIGame - the control-point queries
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"    // IAITerrain::getTerrainAltitude
 #include "../../../../Math/Vec3.h"                         // vec3ToVec2XZ / vec2ToVec3XZ
@@ -962,9 +965,14 @@ float AIStrategicArea::gravity(const Vec2& position, int side)
     return gravity(static_cast<float>(distance), side);
 }
 
-bool AIStrategicArea::retainBot(int, int, ISAI*)
+// PE 100E4EE0. An area keeps any bot whose current equipment is a mobile unit. The shipped
+// body also builds and destroys an empty local std::list whose element type is not observable;
+// it has no effect and is omitted.
+bool AIStrategicArea::retainBot(int, int botId, ISAI*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::retainBot");
+    Bot* const bot = IBotManager::instance->getBotFromId(static_cast<unsigned int>(botId));
+    Information* const information = informationManager->getInformation(bot->getCurrentEquipment());
+    return information && information->getMobile() && information->getUnit();
 }
 
 // Marks the side's distances dirty and sets every vehicle group's flag for that side; with no

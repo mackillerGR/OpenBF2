@@ -16,8 +16,10 @@ FireCorrectionData::FireCorrectionData()
     // +0..+3 and +68..+83 are deliberately untouched - see above.
     for (int i = 0; i < 15; ++i)
         m_zero8[i] = 0;
-    for (int i = 0; i < 9; ++i)
-        m_zero88[i] = 0;
+    // nine zeroed words, +88..+120
+    m_projectilePrePoint.x = m_projectilePrePoint.y = m_projectilePrePoint.z = 0.0f;
+    m_projectilePostPoint.x = m_projectilePostPoint.y = m_projectilePostPoint.z = 0.0f;
+    m_projectileTargetPoint.x = m_projectileTargetPoint.y = m_projectileTargetPoint.z = 0.0f;
 }
 
 

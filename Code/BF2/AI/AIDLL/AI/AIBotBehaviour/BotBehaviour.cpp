@@ -91,9 +91,41 @@ void BotBehaviour::reset(Bot* bot)
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-plan-execution] Replace with the
 // PE 101988E0 body once BotScript's owner field and destructor slot are declared.
-BotScript* BotBehaviour::getPlan(Bot*)
+// PE 101988E0. A locked plan stands. Otherwise a generator with a plan for the bot makes a new
+// one; without, the bot's current plan is destroyed.
+BotScript* BotBehaviour::getPlan(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan");
+    if (bot->getPlanLock())
+        return bot->getPlan();
+    if (m_generator->hasPlan(bot))
+    {
+        if (bot->getPlan())
+        {
+            // Retail stores the generator into the plan's owner word (+4).
+            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
+            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript owner)");
+        }
+        BotScript* const script = m_generator->generate(bot);
+        if (script)
+        {
+            // Retail: script owner = this; a different current plan also gets owner = this and
+            // the sensing agent's +120 flag (PE +0x88) is raised.
+            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
+            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript owner)");
+        }
+        return script;
+    }
+    if (bot->getPlan())
+    {
+        if (bot->getPlan())
+        {
+            // Retail: delete bot->getPlan() through the deleting destructor.
+            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
+            BF2_AI_FRONTIER("dice::hfe::ai::BotBehaviour::getPlan (BotScript delete)");
+        }
+        bot->setPlan(0);
+    }
+    return 0;
 }
 
 bool BotBehaviour::isApplicable(Information*, Bot*)

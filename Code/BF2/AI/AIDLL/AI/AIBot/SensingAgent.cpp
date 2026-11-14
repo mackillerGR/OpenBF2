@@ -140,6 +140,30 @@ void SensingAgent::setOverride(bool value)
     }
 }
 
+// PE 101AE240.
+void SensingAgent::setOverrideLock(bool locked)
+{
+    m_flag132 = locked;
+    m_flag122 = false;
+}
+
+// PE 101AE340: execute(m_plan, m_bot, finished, failed) with both flags false, then
+// m_flag140 = failed || !finished, clearing the plan targets when set.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] m_plan is typed BAPStatement* here while the
+// interpreter takes the BotScript it really is. [RETIRE-WHEN: botscript-type] Recover BotScript
+// and retype m_plan, then write the body above.
+void SensingAgent::executePlan()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::executePlan");
+}
+
+// PE 101B14F0. [FRONTIER] [TEMP] [CHOSEN, not recovered]
+// [RETIRE-WHEN: sensing-plan] Recover the body and validate a bot that senses an enemy.
+void SensingAgent::updatePlan()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::updatePlan");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

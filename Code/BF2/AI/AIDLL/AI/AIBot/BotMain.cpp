@@ -13,6 +13,7 @@
 #include "BotSquad.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "SensingAgent.h"
+#include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"
 #include "BotSenses.h"
 #include "CommunicationAgent.h"
 #include "BotSubObjects.h"
@@ -30,6 +31,8 @@
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"   // updateBotVehicle
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIKnowledge/IPIArmament.h"
 #include "../Main/IBotManager.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../../IO/Input/PlayerInput.h"
@@ -291,7 +294,7 @@ void BotMain::reset()
     m_avoidSide = 0;
     m_moveToStatus = 0;
     m_collidedObject = -1;
-    m_double364 = 0.0;
+    m_rearmTime = 0.0;
     m_unresolvedCollision = -1;
     m_grenadeThrownTime[0] = 0.0;
     m_grenadeThrownTime[1] = 0.0;
@@ -457,10 +460,120 @@ BotLodLevel BotMain::getLodLevel() const
     return m_lodLevel;
 }
 
-// +0x010
-void BotMain::planExecution(const double& slice)
+// PE 10180AB0. [FRONTIER] [TEMP] [CHOSEN, not recovered]
+// [RETIRE-WHEN: plan-execution-steps] Recover the body and validate a bot executing a plan.
+void BotMain::afterPlanInterpreted()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution");
+    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::afterPlanInterpreted");
+}
+
+// PE 10181180. [FRONTIER] [TEMP] [CHOSEN, not recovered]
+// [RETIRE-WHEN: plan-execution-steps] Recover the body and validate a bot executing a plan.
+void BotMain::finishPlanExecution()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::finishPlanExecution");
+}
+
+// +0x010, PE 10181E60. Copies a finished bot projectile into the fire correction, replaces an
+// invalid plan with the default behaviour's, runs the plan, and returns whether it stays valid.
+// The slice is not read.
+bool BotMain::planExecution(const double&)
+{
+    m_changeTarget = static_cast<unsigned int>(-1);
+    bool finished = true;
+    bool failed = false;
+
+    IBFCollisionHandler* const collision = checkPointer(
+        static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler));
+    if (collision->botProjectilePassedPoint(m_botId))
+    {
+        m_fireCorrection->m_projectilePrePoint = collision->botProjectilePrePoint(m_botId);
+        m_fireCorrection->m_projectilePostPoint = collision->botProjectilePostPoint(m_botId);
+        m_fireCorrection->m_projectileTargetPoint = collision->botProjectileTargetPoint(m_botId);
+        m_fireCorrection->m_projectileMaxHeight = collision->botProjectileMaxHeight(m_botId);
+        m_fireCorrection->m_flag5 = true;
+        m_fireCorrection->m_flag84 = true;
+        m_fireCorrection->m_flag85 = true;
+        collision->removeBotProjectile(m_botId);
+    }
+
+    Information* const equipment = informationManager->getInformation(getCurrentEquipment());
+    if (m_planInvalid || !m_activePlan)
+    {
+        if (m_activePlan)
+        {
+            // Retail destroys the plan through its deleting destructor.
+            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
+            BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution (active plan present)");
+            m_activePlan = 0;
+            m_sensingAgent->setOverride(false);
+        }
+        if (equipment && equipment->getUnit())
+        {
+            IPIUnit* const unit = equipment->getUnit();
+            const int equipmentType = unit->getEquipmentType();
+            if (!m_manDown)
+                unit->setTime();
+            IAISettings* const settings = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings);
+            BotBehaviour* const behaviour = getManDown()
+                ? settings->getDefaultBehaviour(settings->getManDownEquipmentType())
+                : settings->getDefaultBehaviour(equipmentType);
+            if (behaviour)
+            {
+                behaviour->getPlanGenerator()->setHasPlan(this);
+                m_activePlan = behaviour->getPlan(this);
+                if (m_activePlan)
+                {
+                    // Retail: plan owner word (+4) = this, then the flags below.
+                    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: botscript-type]
+                    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::planExecution (BotScript owner)");
+                    m_hasDefaultPlan = true;
+                    m_planInvalid = false;
+                }
+            }
+        }
+    }
+
+    if (!m_planInvalid)
+    {
+        resetAllControls(true, false, false);
+        m_planInterpreter->execute(m_activePlan, this, finished, failed);
+        afterPlanInterpreted();
+        const bool invalid = failed || !finished;
+        m_planInvalid = invalid;
+        if (invalid)
+        {
+            setPlanLock(false);
+            resetAllControls(true, true, true);
+            m_sensingAgent->clearPlanTargetInformation();
+        }
+        m_sensingAgent->updatePlan();
+        if (m_sensingAgent->hasPlan())
+        {
+            m_sensingAgent->setOverrideLock(true);
+            m_sensingAgent->executePlan();
+            m_sensingAgent->setOverrideLock(false);
+        }
+    }
+
+    // Input 22 follows equipment type flag 21: pressed while the equipment's vertical speed is
+    // at most -1, released when the flag is clear. The current equipment is not null-checked.
+    Information* const current = informationManager->getInformation(m_currentEquipment);
+    if ((current->getObjectTypeFlags() >> 21) & 1)
+    {
+        if (IPIMobile* const mobile = equipment->getMobile())
+        {
+            if (!(mobile->getSpeed().y > -1.0f))
+                m_playerInput->setInput(io::PIWeaponSelect9, 1.0f);
+        }
+    }
+    else
+    {
+        m_playerInput->setInput(io::PIWeaponSelect9, 0.0f);
+    }
+
+    finishPlanExecution();
+    return !m_planInvalid;
 }
 
 // +0x014. Returns the count BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
@@ -1326,10 +1439,34 @@ bool BotMain::getManDown() const
     return m_manDown;
 }
 
-// +0x1B4
-void BotMain::rearm(Information* i)
+namespace {
+// [INFERRED] names. Writable data in the shipped image, read only by rearm.
+double s_rearmInterval = 6.0;
+float  s_rearmAmount   = 0.125f;
+} // anonymous namespace
+
+// +0x1B4, PE 10182CD0. Every six seconds of game time a bot that is up tops up each weapon of
+// the equipment by an eighth. The armament is not null-checked, as shipped.
+void BotMain::rearm(Information* equipment)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::rearm");
+    if (m_manDown)
+        return;
+    const double interval = s_rearmInterval;
+    m_rearmTime += static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease();
+    if (!(m_rearmTime > interval))
+        return;
+
+    IPIArmament* const armament = equipment->getArmament();
+    const std::vector<unsigned int> weapons(armament->getWeapons());
+    for (std::vector<unsigned int>::const_iterator it = weapons.begin(); it != weapons.end(); ++it)
+    {
+        if (*it == static_cast<unsigned int>(-1))
+            continue;
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(*it);
+        if (weapon)
+            armament->rearm(weapon, s_rearmAmount, getSide());
+    }
+    m_rearmTime = 0.0;
 }
 
 // +0x1B8
