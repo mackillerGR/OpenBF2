@@ -572,9 +572,22 @@ void AIPathfinding::MapContainer::init()
     }
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, bool) const
+// PE 1009F9F0. The position must lie on a polygon; unless the material is ignored, that
+// polygon's material must not be 5.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    unsigned int polygon;
+    const unsigned int island = m_quadTreeManager->findPolygon(
+        position, polygon, materials, m_properties->m_allowedHeightDiff);
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+        return false;
+    if (ignoreMaterial)
+        return true;
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
 bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
@@ -793,9 +806,16 @@ int AIPathfinding::internalLocalSearch(int, int, unsigned int, unsigned int, con
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::internalLocalSearch");
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, bool) const
+// PE 100A45D0. A negative map is always valid; the equipment type picks the vehicle material
+// set.
+bool AIPathfinding::isValidPosition(int map, int equipmentType, const Vec3& position,
+                                    bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->isValidPosition(position, materials, ignoreMaterial);
 }
 
 bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, bool) const

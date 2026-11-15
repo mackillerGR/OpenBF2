@@ -2,6 +2,9 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SquadManager operations.
 
 #include "SquadManager.h"
+#include "../Main/IAIPathfinding.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIMobile.h"
 
 #include <cmath>
 
@@ -176,18 +179,13 @@ void SquadManager::updateHumanPlayers(double time)
                 if (info)
                 {
                     const Vec3 position = info->getPosition();
-                    if (info->getMobile())
+                    if (IPIMobile* const mobile = info->getMobile())
                     {
-                        (void)position;
-                        (void)valid;
-                        // The check is pathfinder slot +0x30 on ds:102C058C (PE 100A45D0):
-                        // (vehicle number, equipment type, position, 0), answering false for an
-                        // invalid position. The pathfinder and its map container are not in this
-                        // tree.
-                        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-pathfinder]
-                        // Recover the pathfinder (PE vtable 1027BCB0) and validate a human
-                        // driving a vehicle beside bots.
-                        BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::updateHumanPlayers (pathfinder position check)");
+                        IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+                        const int equipmentType = info->getUnit()->getEquipmentType();
+                        const int vehicleNumber = mobile->getVehicleNumber();
+                        if (!pathfinding->isValidPosition(vehicleNumber, equipmentType, position, false))
+                            valid = false;
                     }
                 }
             }
