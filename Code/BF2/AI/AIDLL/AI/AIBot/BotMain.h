@@ -59,7 +59,7 @@ public:
     virtual int decisionMaking(const double& slice) = 0;                                          // +0x014 [FRONTIER]
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C
-    virtual void updateSensing(const double& dt) = 0;                                             // +0x020 [FRONTIER]
+    virtual void updateSensing(const double& dt) = 0;                                             // +0x020
     virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024 [FRONTIER]
     virtual void reset() = 0;                                                                     // +0x028
     // True when the bot's equipment was re-evaluated; *changed reports whether it has a vehicle.
@@ -221,7 +221,7 @@ public:
     virtual int decisionMaking(const double& slice);                                              // +0x014 [FRONTIER]
     virtual void cheatExecution();                                                                // +0x018
     virtual void see(const double& dt);                                                           // +0x01C
-    virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
+    virtual void updateSensing(const double& dt);                                                 // +0x020
     virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
     virtual void reset();                                                                         // +0x028
     virtual bool updateBotVehicle(bool* changed);                                                 // +0x02C
@@ -396,6 +396,8 @@ public:
     // The pose-change permission recorded against the firing target. [INFERRED] names.
     bool  isPoseChangeAllowed(bool& alternate, int pose);
     void  clearPoseChangeAllowance();
+    // The senses ignore sounds for 1.5 seconds after this time. PE 1017F2D0. [INFERRED] name.
+    double getDouble172() const { return m_double172; }
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
     void  uninitAllBehaviours();

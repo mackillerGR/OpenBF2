@@ -24,11 +24,24 @@ class Information;
 // until the class itself is recovered. See the reset block in the .cpp.
 // Minimal views of the two record types: only the members the sensing agent reads are declared,
 // and their bodies stay frontiers until the records themselves are recovered.
+// One shot fired at the bot. Offsets are the retail PE layout; names are [INFERRED]. The
+// constructor is not recovered: nothing in this tree creates one yet (BotMain::event_projectile
+// is a frontier).
 class FireObject
 {
 public:
-    const Vec3& getPosition() const;         // PE +0x14 [FRONTIER]
-    double getTime() const;                  // PE +0x20 [FRONTIER]
+    // Releases the strength array. PE 1017E3B0.
+    ~FireObject() { delete[] m_strengths; }
+    const Vec3& getPosition() const { return m_position; }
+    double getTime() const { return m_time; }
+    // The strength of one kind, decaying with the time since the shot. PE 1017E3C0.
+    float getStrength(int kind) const;
+
+    /* +0x00 */ bool   m_heavy;           // counts ten times in the attacker strength
+    /* +0x04 */ int*   m_strengths;       // owned, new[]
+    /* +0x14 */ Vec3   m_position;
+    /* +0x20 */ double m_time;
+    /* +0x28 */ float  m_decay;
 };
 // What a bot knows about one sensed object. Offsets are the retail PE layout; field names are
 // [INFERRED]. Construction: PE 101E1510, 0x70 bytes.
@@ -74,6 +87,9 @@ public:
     // PE 101BD8F0.
     void addSeen(unsigned int handle, const Vec3& normal, unsigned int part, Information* info,
                  bool direct, bool clear);
+    // Hearing, incoming fire and seen-record upkeep within the slice. The first step gets a
+    // tenth of it. Reached through BotMain::updateSensing. PE 101BFA10; [INFERRED] name.
+    void updateSensing(const double& slice);
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
@@ -87,6 +103,17 @@ private:
     // True when the object is a primary object within 200 behind the equipment's primary
     // object. [INFERRED] name. PE 101B8AA0.
     bool isCloseBehind(Information* equipment, IAIObject* object);
+    // The chance of hearing the object now: zero within 1.5 s of +172's time, for dead or
+    // silent objects and outside the louder of its movement and recent-shot sound spheres;
+    // otherwise interpolated over the distance. PE 101B8840; [INFERRED] name.
+    float getHearingProbability(unsigned int handle, Information* info);
+    // Re-hears the queued heard records until the deadline. PE 101BCEF0; [INFERRED] name.
+    void updateHearing(const double& slice);
+    // Sums the incoming-fire strengths and drops shots past their window. The argument is not
+    // read. PE 101BC1F0; [INFERRED] name.
+    void updateFire(const double& deadline);
+    // Seen-record upkeep. PE 101BE980; [INFERRED] name.
+    void updateSeen(const double& remaining);
 
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing
     typedef std::list<TimedObject>                TimedList;
@@ -116,9 +143,12 @@ private:
     // Only `reset` makes it valid. See the header block.
     /*  80 */ TimedList::iterator m_cursor80;
     /*  84 */ std::list<FireEntry> m_list84;
-    /*  88 */ int m_int88;                   // ctor: 0, reset: 0
-    /*  92 */ int m_int92;                   // ctor: 0, reset: 0
-    /*  96 */ char m_gap96[4];               // [UNRESOLVED] - never written
+    // Incoming-fire strengths summed by updateFire (PE +0x78, +0x7C, +0x80): all kinds, the
+    // kind matching the equipment's strength type, and that kind from the latest shot of each
+    // recent shooter. [INFERRED] names; zeroed as ints by the constructor and reset.
+    /*  88 */ float m_attackerStrength;
+    /*  92 */ float m_attackerStrengthOwnKind;
+    /*  96 */ float m_recentAttackerStrength;
     /* 100 */ std::map<unsigned int, FireObject*> m_map100;
     /* 112 */ SensedObjectMap m_sensedObjects;
     // the only two containers `reset` does not empty. Element width 4 and trivially destructible

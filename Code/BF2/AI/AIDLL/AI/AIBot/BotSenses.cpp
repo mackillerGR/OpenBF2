@@ -7,6 +7,11 @@
 #include "../Main/AIDllFrontier.h"
 #include "BotMain.h"
 #include "SensingAgent.h"
+#include <cmath>
+#include "../Main/AIRandom.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "CommunicationAgent.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
@@ -38,8 +43,8 @@ BotSenses::BotSenses(BotMain* owner)
     , m_int32(0)
     , m_int36(0)
     , m_int40(0)
-    , m_int88(0)
-    , m_int92(0)
+    , m_attackerStrength(0.0f)
+    , m_attackerStrengthOwnKind(0.0f)
 {
     // the constructor'S last statement - see the block above. The binary copies the list's head
     // pointer; in source that is the list's own end. The cursor at +80 is deliberately not here.
@@ -81,8 +86,8 @@ void BotSenses::reset()
     }
     m_list84.clear();
 
-    m_int88 = 0;
-    m_int92 = 0;
+    m_attackerStrength = 0.0f;
+    m_attackerStrengthOwnKind = 0.0f;
 
     m_map100.clear();
 }
@@ -108,14 +113,251 @@ SensedObject* BotSenses::getSensedObject(unsigned int handle) const
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] The record layouts are not recovered; these stop when
 // the senses first hold a record. [RETIRE-WHEN: bot-senses-records] Recover FireObject and
 // SensedObject and validate a bot that sees and hears an enemy.
-const Vec3& FireObject::getPosition() const
+float FireObject::getStrength(int kind) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::FireObject::getPosition");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    return static_cast<float>(m_strengths[kind] / ((now - m_time) * m_decay + 1.0f));
 }
 
-double FireObject::getTime() const
+// PE 101B8840. The target's mobile plug-in is not null-checked once a sound sphere reaches the
+// bot. The self-noise term takes the larger of 1 and the speed ratio, as shipped.
+float BotSenses::getHearingProbability(unsigned int /*handle*/, Information* info)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::FireObject::getTime");
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment)
+        return 0.0f;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - m_bot->getDouble172() < 1.5)
+        return 0.0f;
+    if (IPIPhysical* const physical = info->getPhysical())
+    {
+        if (physical->getHealth() <= 0.0f)
+            return 0.0f;
+    }
+    IPIMobile* const mobile = info->getMobile();
+    IPIArmament* const armament = info->getArmament();
+    if (!armament && !mobile)
+        return 0.0f;
+    if (IAIObjectPhysical* const objectPhysical = info->getAIObject()->getPhysical())
+    {
+        if (objectPhysical->getHealth() <= 0.0f)
+            return 0.0f;
+    }
+    IPIMobile* const ownMobile = equipment->getMobile();
+    float radius = mobile ? mobile->getSoundSphereRadius() : 0.0f;
+    float weaponRadius = 0.0f;
+    if (armament)
+    {
+        WeaponInfo* const weapon = armament->getLastFiredWeapon();
+        if (weapon && now - weapon->getTimeOfFiring() < 5.0)
+            weaponRadius = weapon->getSoundSphereRadius();
+    }
+    if ((info->getObjectTypeFlags() >> 21) & 1)
+    {
+        const int pose = info->getSoldierPose();
+        if (pose >= 2 && pose <= 3)
+            radius = 0.0f;
+    }
+    if (radius < weaponRadius)
+        radius = weaponRadius;
+    float selfNoise;
+    if (ownMobile)
+    {
+        const float ratio = ownMobile->getSpeedMagnitude() / ownMobile->getMaxSpeed();
+        selfNoise = 1.0f < ratio ? ratio : 1.0f;
+    }
+    else
+    {
+        selfNoise = 0.0f;
+    }
+    const Vec3& at = info->getAIObject()->getPosition();
+    const Vec3& own = equipment->getPosition();
+    const float dx = at.x - own.x;
+    const float dy = at.y - own.y;
+    const float dz = at.z - own.z;
+    float distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (distance > radius)
+        return 0.0f;
+    distance = distance / mobile->getSoundSphereRadiusMax();
+    float probability;
+    if (ownMobile)
+        probability = ownMobile->getHearingProbabilityMin() * (1.0f - distance) +
+                      ownMobile->getHearingProbabilityMax() * distance;
+    else
+        probability = 1.0f;
+    const float threshold = (1.0f - selfNoise) * probability;
+    if (!(AIRandom::m_instance->nextFloat() > threshold))
+        return 0.0f;
+    return probability;
+}
+
+// PE 101BCEF0.
+void BotSenses::updateHearing(const double& slice)
+{
+    IBFTimer* const timer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    const double now = timer->getGameTime();
+    if (now - m_bot->getDouble172() < 1.5)
+        return;
+    const double deadline = timer->getUpdateTime() + slice;
+    if (!informationManager->getInformation(m_bot->getCurrentEquipment()))
+        return;
+    const unsigned int count = static_cast<unsigned int>(m_list76.size());
+    const int side = m_bot->getSide();
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        if (!(timer->getUpdateTime() < deadline))
+            return;
+        SensedObject* const object = m_list76.front().second;
+        m_list76.pop_front();
+        const unsigned int handle = object->m_handle;
+        Information* const info = informationManager->getInformation(handle);
+        if (!info || (!info->getMobile() && !info->getArmament()))
+        {
+            m_set64.erase(handle);
+            object->m_senseFlags &= ~1u;
+            if (!(object->m_senseFlags & 3))
+            {
+                m_sensedObjects.erase(object->m_handle);
+                delete object;
+            }
+            continue;
+        }
+        const float probability = getHearingProbability(handle, info);
+        if (probability > 0.0f)
+        {
+            object->m_lastSeen = now;
+            object->m_senseFlags |= 0x10;
+            object->m_lastSense = 0x10;
+            Information* const primary = informationManager->getInformation(info->getPrimaryObject(side));
+            const float certainty = probability < 0.1f ? 0.1f : probability;
+            if (primary->setTime(timer->getGameTime(), certainty))
+                primary->getAIObject()->addInformationToGrid(side);
+            int iterator = -1;
+            for (Information* seat = informationManager->getInformation(primary->getFirstSecondaryObject(iterator, side));
+                 seat; seat = informationManager->getInformation(primary->getSecondaryObject(iterator, side)))
+            {
+                seat->setTime(timer->getGameTime(), probability < 0.1f ? 0.1f : probability);
+            }
+            m_list76.push_back(TimedObject(now, object));
+        }
+        else if (object->m_senseFlags & 0x10)
+        {
+            object->m_senseFlags &= ~0x10u;
+            object->m_lastSeen = now;
+            m_list76.push_back(TimedObject(now, object));
+        }
+        else if (now - object->m_lastSeen > 30.0)
+        {
+            m_set64.erase(object->m_handle);
+            object->m_senseFlags &= ~1u;
+            if (!(object->m_senseFlags & 3))
+            {
+                m_sensedObjects.erase(object->m_handle);
+                delete object;
+            }
+        }
+        else
+        {
+            m_list76.push_back(TimedObject(now, object));
+        }
+    }
+}
+
+// PE 101BC1F0.
+void BotSenses::updateFire(const double&)
+{
+    m_attackerStrength = 0.0f;
+    m_attackerStrengthOwnKind = 0.0f;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    IPIPhysical* const physical = equipment ? equipment->getPhysical() : 0;
+    const int kind = physical ? physical->getStrengthType() : 0;
+    IBFTimer* const timer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+
+    double shots = static_cast<double>(static_cast<unsigned int>(m_list84.size()));
+    if (!(shots >= 1.0))
+        shots = 1.0;
+    double window = 60.0 / shots;
+    if (5.0 < window)
+        window = 5.0;
+    for (std::list<FireEntry>::iterator it = m_list84.begin(); it != m_list84.end();)
+    {
+        FireObject* const shot = it->first;
+        const float weight = shot->m_heavy ? 10.0f : 1.0f;
+        for (int k = 0; k < 6; ++k)
+            m_attackerStrength += shot->getStrength(k) * weight;
+        if (physical)
+            m_attackerStrengthOwnKind += shot->getStrength(kind) * weight;
+        bool drop;
+        if (timer->getGameTime() - shot->m_time > window)
+        {
+            std::map<unsigned int, FireObject*>::iterator found = m_map100.find(it->second);
+            drop = found == m_map100.end() || found->second != shot;
+        }
+        else
+        {
+            std::pair<std::map<unsigned int, FireObject*>::iterator, bool> inserted =
+                m_map100.insert(std::make_pair(it->second, static_cast<FireObject*>(0)));
+            if (inserted.second || inserted.first->second->m_time < shot->m_time)
+            {
+                inserted.first->second = shot;
+                drop = false;
+            }
+            else
+            {
+                drop = inserted.first->second != shot;
+            }
+        }
+        if (drop)
+        {
+            delete shot;
+            it = m_list84.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    m_recentAttackerStrength = 0.0f;
+    double shooters = static_cast<double>(static_cast<unsigned int>(m_map100.size()));
+    if (!(shooters >= 1.0))
+        shooters = 1.0;
+    double recent = 30.0 / shooters;
+    if (!(15.0 < recent))
+        recent = 15.0;
+    const double now = timer->getGameTime();
+    for (std::map<unsigned int, FireObject*>::iterator it = m_map100.begin(); it != m_map100.end();)
+    {
+        if (now - it->second->m_time < recent)
+        {
+            m_recentAttackerStrength += it->second->getStrength(kind);
+            ++it;
+        }
+        else
+        {
+            m_map100.erase(it++);
+        }
+    }
+}
+
+// PE 101BFA10.
+void BotSenses::updateSensing(const double& slice)
+{
+    IBFTimer* const timer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    double deadline = timer->getUpdateTime() + slice;
+    const double hearingSlice = slice * 0.1;
+    updateHearing(hearingSlice);
+    timer->getUpdateTime();
+    updateFire(deadline);
+    const double remaining = deadline - timer->getUpdateTime();
+    updateSeen(remaining);
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bot-senses-seen-upkeep]
+// Recover PE 101BE980 and validate a bot keeping and losing sight of an enemy.
+void BotSenses::updateSeen(const double&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSeen (PE 101BE980)");
 }
 
 // PE 101E1510. The sense point, part, first-sensed and last-seen times are left unset.

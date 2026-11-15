@@ -773,9 +773,10 @@ void BotMain::see(const double& dt)
 }
 
 // +0x020
+// PE 1017EAD0.
 void BotMain::updateSensing(const double& dt)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateSensing");
+    m_sensingAgent->getSenses()->updateSensing(dt);
 }
 
 // +0x024
