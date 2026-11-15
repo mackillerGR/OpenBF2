@@ -7,6 +7,10 @@
 #include "BFCommander.h"
 
 #include "AIFrontier.h"
+#include "../../../IO/Network/INetworkable.h"
+#include "../../../Game/Objects/IObject.h"
+#include "../../../Game/GameLogic/SquadManager/SquadOrder.h"
+#include "IAIObject.h"
 
 #include "../../../Core/EventManager.h"                          // fireArtillery's queued request
 #include "../../../Game/IEventListener.h"                        // ECGameLogic
@@ -52,6 +56,31 @@ BFCommander::BFCommander()
 {
 }
 
+namespace {
+
+// BF2.exe 8179D0. Builds a commander order at the position, aimed at the target's networked
+// object when there is one, and issues it for (b, a). The retail result is the stale EAX left
+// by the void issue call; no caller reads it, so this returns 0. [CHOSEN] the return value.
+int issueOrder(const Vec3& position, int a, int b, IAIObject* target, int type)
+{
+    SquadOrder order;
+    order.orderId = type;
+    order.points[0] = position;
+    order.points[1].x = order.points[1].y = order.points[1].z = 0.0f;
+    order.points[2].x = order.points[2].y = order.points[2].z = 0.0f;
+    order.flag2C = false;
+    order.targetNetId = 0;
+    if (target)
+    {
+        if (io::INetworkable* const networkable = target->getObject()->getNetworkable())
+            order.targetNetId = networkable->m_networkableId;
+    }
+    static_cast<ISquadManager*>(squadManager)->issueCommanderOrder(b, a, order, false);
+    return 0;
+}
+
+} // anonymous namespace
+
 BFCommander::~BFCommander()
 {
 }
@@ -66,19 +95,22 @@ int BFCommander::retireAsCommander(IAIPlayer* player)
     BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::retireAsCommander");
 }
 
+// BF2.exe 817A70: order type 5.
 int BFCommander::giveAttackOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveAttackOrder");
+    return issueOrder(position, a, b, target, 5);
 }
 
+// BF2.exe 817A90: order type 4.
 int BFCommander::giveMoveOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveMoveOrder");
+    return issueOrder(position, a, b, target, 4);
 }
 
+// BF2.exe 817AB0: order type 6.
 int BFCommander::giveDefendOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCommander::giveDefendOrder");
+    return issueOrder(position, a, b, target, 6);
 }
 
 void BFCommander::sendAttackMessage(int a, int b)
