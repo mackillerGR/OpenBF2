@@ -241,6 +241,15 @@ void CommunicationAgent::sendRadioMessage(const CAPrioMessage& message)
     }
 }
 
+// PE 10146300: hands the bot's player, the contact's object and the bot's side to the courier
+// call PE 100837E0, whose body is not recovered.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-contact-report]
+// Recover PE 100837E0 and validate a bot reporting a first sighting.
+void CommunicationAgent::reportContact(Information*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationAgent::reportContact (PE 100837E0)");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

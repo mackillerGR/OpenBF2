@@ -36,6 +36,8 @@ struct AIRadioMessageInfo
 class CommunicationAgent
 {
 public:
+    // Reports a newly contacted enemy for the bot's side. PE 10146300; [INFERRED] name.
+    void reportContact(Information* information);
     // Queued priority message. The integer at +8 determines ordering.
     struct CAPrioMessage
     {

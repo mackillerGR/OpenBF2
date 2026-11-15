@@ -26,6 +26,9 @@ class SensingAgent
 public:
     // The steered senses. [INFERRED] accessor; PE BotMain::getSensedObjects inlines the load.
     BotSenses* getSenses() const { return m_senses; }
+    // Raised when another bot's sighting is shared with this one. [INFERRED] name; PE writes
+    // +0x88 inline (BotSenses::addSeen).
+    void setAlerted() { m_flag120 = true; }
     // The second parameter is in the ABI and is never read - see the header block.
     SensingAgent(BotMain* owner, unsigned char behaviourCount);
     ~SensingAgent();                            // [FRONTIER]
@@ -44,6 +47,9 @@ public:
     // Rebuilds the agent's look plan for the current equipment. [INFERRED] name.
     void updatePlan();
     bool hasPlan() const { return m_plan != 0; }
+    // Clears the weight of the sectors the camera is looking at; looking at the focus sector of
+    // the running plan marks it seen. PE 101B0890.
+    void setQuadSeen();
     // [INFERRED] accessors; BAPMergeSoldierInputs reads these inline.
     const Vec2& getLookDirection() const { return m_lookDirection; }
     const Vec3& getFocusPoint() const { return m_focusPoint; }
@@ -83,6 +89,10 @@ private:
     bool isDirectionAllowed(const Vec2& direction);                            // PE 101AE9A0
     bool getQuadrantsOf(const Vec3& position, int quadrants[2]);               // PE 101AEBD0
     bool isQuadrantAllowed(int quadrant);                                      // PE 101AF380
+    // True when the sector lies within about ten degrees of the camera's forward direction.
+    // [INFERRED] name. PE 101AECF0.
+    bool isQuadrantInView(int quadrant);
+
     void updateReactionTime(const FocusChoice& focus, Information* equipment,
                             const Vec2& lookDirection);                        // PE 101AF410
     void createPlanFromFocus(ISensingAgentPattern* pattern, const FocusChoice& focus);   // PE 101AF5E0

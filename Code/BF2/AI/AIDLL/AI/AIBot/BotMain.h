@@ -58,7 +58,7 @@ public:
     virtual bool planExecution(const double& slice) = 0;                                          // +0x010
     virtual int decisionMaking(const double& slice) = 0;                                          // +0x014 [FRONTIER]
     virtual void cheatExecution() = 0;                                                            // +0x018
-    virtual void see(const double& dt) = 0;                                                       // +0x01C [FRONTIER]
+    virtual void see(const double& dt) = 0;                                                       // +0x01C
     virtual void updateSensing(const double& dt) = 0;                                             // +0x020 [FRONTIER]
     virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024 [FRONTIER]
     virtual void reset() = 0;                                                                     // +0x028
@@ -220,7 +220,7 @@ public:
     // [INFERRED] Returns an integer work count accumulated by BotManager.
     virtual int decisionMaking(const double& slice);                                              // +0x014 [FRONTIER]
     virtual void cheatExecution();                                                                // +0x018
-    virtual void see(const double& dt);                                                           // +0x01C [FRONTIER]
+    virtual void see(const double& dt);                                                           // +0x01C
     virtual void updateSensing(const double& dt);                                                 // +0x020 [FRONTIER]
     virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
     virtual void reset();                                                                         // +0x028
@@ -380,7 +380,7 @@ public:
     virtual double getTimeOfLastFailedSplashDamageAttack() const;                                 // +0x290
     virtual void setTakeOffPosition(const Vec3& v);                                               // +0x294 [FRONTIER]
     virtual const Vec3& getTakeOffPosition() const;                                               // +0x298
-    virtual void setQuadSeen();                                                                   // +0x29C [FRONTIER]
+    virtual void setQuadSeen();                                                                   // +0x29C
     virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0 [FRONTIER]
     virtual void event_shotTimeOut(int i);                                                        // +0x2A4 [FRONTIER]
     virtual void event_firing(bool& b, int i, const Vec3& v);                                     // +0x2A8 [FRONTIER]

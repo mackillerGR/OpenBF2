@@ -766,9 +766,10 @@ void BotMain::cheatExecution()
 }
 
 // +0x01C
+// PE 1017EAB0.
 void BotMain::see(const double& dt)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::see");
+    m_sensingAgent->getSenses()->see(dt);
 }
 
 // +0x020
@@ -2021,9 +2022,10 @@ const Vec3& BotMain::getTakeOffPosition() const
 }
 
 // +0x29C
+// PE 1017EAF0.
 void BotMain::setQuadSeen()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setQuadSeen");
+    m_sensingAgent->setQuadSeen();
 }
 
 // +0x2A0

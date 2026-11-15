@@ -242,6 +242,45 @@ const float kHalfSqrt2 = 0.7071067690849304f;
 
 } // anonymous namespace
 
+// PE 101AECF0. The bot's player is read directly, not through getPlayer.
+bool SensingAgent::isQuadrantInView(int quadrant)
+{
+    if (quadrant < 0)
+        return false;
+    const Mat4& camera = *static_cast<const Mat4*>(m_bot->m_player->getCameraTransformation());
+    Vec2 forward;
+    forward.x = camera.m[8];
+    forward.y = camera.m[10];
+    normalise(forward);
+    Vec2 direction;
+    direction.x = 0.0f;
+    direction.y = 0.0f;
+    getQuadrantDirection(quadrant, direction);
+    return direction.y * forward.y + direction.x * forward.x > 0.9848f;
+}
+
+// PE 101B0890.
+void SensingAgent::setQuadSeen()
+{
+    const Mat4& camera = *static_cast<const Mat4*>(m_bot->getPlayer()->getCameraTransformation());
+    Vec3 ahead;
+    ahead.x = camera.m[8] + camera.m[12];
+    ahead.y = camera.m[9] + camera.m[13];
+    ahead.z = camera.m[10] + camera.m[14];
+    int quadrants[2];
+    if (!getQuadrantsOf(ahead, quadrants))
+        return;
+    for (int i = 0; i < 2; ++i)
+    {
+        const int quadrant = quadrants[i];
+        if (!isQuadrantInView(quadrant))
+            continue;
+        m_quadrantWeights[quadrant] = 0.0f;
+        if (m_plan && m_flag148 && quadrant == m_int24)
+            m_flag44 = true;
+    }
+}
+
 // PE 101AE0A0. The eight sector directions: the four axes, then the four diagonals.
 void SensingAgent::getQuadrantDirection(int quadrant, Vec2& direction)
 {
