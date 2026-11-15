@@ -109,6 +109,9 @@ public:
                           int a, ISAI* sai) = 0;                                          // slot 32
 
     int getNumberOfAssignedUnits(int side) const;
+    // A random point in the side's extent, scaled about its position, at the object's height.
+    // [INFERRED] name. PE 100E8F70.
+    void getRandomPosition(int side, float scale, Vec3& position);
     bool isAttack(int side) const;
     // Borrowed mutable statistics at m_statistics[side - 1]; reference spelling is [INFERRED].
     EnemyStatistics& getBattleStatistics(int side) const;

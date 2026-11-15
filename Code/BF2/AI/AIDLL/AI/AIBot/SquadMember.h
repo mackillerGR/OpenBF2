@@ -34,6 +34,11 @@ public:
     bool avoidArtillery(Vec3 position, double elapsed, int zoneSide);
     // Not a separate function in retail: the weapon-selection step of update. [CHOSEN] split.
     void selectSecondaryWeapon(Information* information, IPIArmament* armament);
+    // Gives the bot a path to the position: an air point at height for aircraft, otherwise a
+    // strategic waypoint list. [INFERRED] name. PE 1017CDC0.
+    void moveTo(const Vec3& position, Information* vehicle);
+    // The leader's own order movement. [INFERRED] name. PE 1017D030.
+    void moveLeader(Information* vehicle);
     bool isBot();
     Bot* getBot();                           // borrowed
     bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name
@@ -56,7 +61,7 @@ public:
     bool isAllowedInFormation();             // nonnull vehicle [FRONTIER]
     void updateMemberPos();                  // nonnull vehicle [FRONTIER]
     bool isMobile();
-    void moveWithFormation();                // world-position [FRONTIER]
+    void moveWithFormation();
     void moveWithoutFormation();             // alive owner query [FRONTIER]
     float getVehicleRadius();                // [FRONTIER]
 

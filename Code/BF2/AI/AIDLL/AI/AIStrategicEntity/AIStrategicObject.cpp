@@ -2,6 +2,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining AIStrategicObject operations.
 
 #include "AIStrategicObject.h"
+#include "../Main/AIRandom.h"
 
 #include <string>
 
@@ -271,6 +272,20 @@ std::istream& operator>>(std::istream& stream, AIStrategicObject::StrategicObjec
         type = static_cast<AIStrategicObject::StrategicObjectType>(token == "East" ? 20 : 27);
 
     return stream;
+}
+
+// PE 100E8F70. Each extent is read twice and draws its own random number between.
+void AIStrategicObject::getRandomPosition(int side, float scale, Vec3& position)
+{
+    const float xExtent = getXExtent(side);
+    const float x = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) * xExtent *
+                                       2.3283064365386963e-10 * scale) - getXExtent(side) * 0.5f;
+    const float zExtent = getZExtent(side);
+    const float z = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) * zExtent *
+                                       2.3283064365386963e-10 * scale) - getZExtent(side) * 0.5f;
+    position.x = x + m_position[side - 1].x;
+    position.y = m_f148;
+    position.z = z + m_position[side - 1].y;
 }
 
 } // namespace ai

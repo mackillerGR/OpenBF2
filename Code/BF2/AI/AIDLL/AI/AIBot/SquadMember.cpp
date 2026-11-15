@@ -5,6 +5,12 @@
 #include "../Main/AIRandom.h"
 #include "SquadManager.h"
 #include "WaypointList.h"
+#include "../AIUtils/checkPointer.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../AIStrategic/SAI.h"
+#include "../Main/AIMain.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../AIKnowledge/WeaponInfo.h"
@@ -569,23 +575,112 @@ bool SquadMember::isMobile()
     return information && information->getUnit() && information->getMobile();
 }
 
-// Position validity is deliberately ignored before the formation-world-position query.
-// [INFERRED] void return: callers discard it and exits materialize no common value.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// PE 1017D7A0. The member's position is used without its validity flag. Records the time to
+// reach the slot (squared distance over the vehicle's top speed); the slot-zero member follows
+// the squad order, every other member is sent to its slot when asked to.
 void SquadMember::moveWithFormation()
 {
     SquadFormation* const formation = m_squad->getSquadFormation();
-    Vec3 position = {};
-    getPosition(position);
-    Vec3 slotPosition = {};
-    (void)formation; (void)slotPosition;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveWithFormation (SquadFormation::getSlotWorldPos)");
+    const Vec3 position = m_position;
+    Vec3 slot;
+    slot.x = slot.y = slot.z = 0.0f;
+    if (!formation->getSlotWorldPos(m_memberIndex, slot))
+        return;
+    const float dx = slot.x - position.x;
+    const float dy = slot.y - position.y;
+    const float dz = slot.z - position.z;
+    const float distanceSquared = dx * dx + dy * dy + dz * dz;
+    // The vehicle and its information are not null-checked.
+    Information* const vehicle = informationManager->getInformation(
+        m_player->getCurrentVehicle()->getInformation(m_side + 1));
+    m_maxSpeed = vehicle->getMobile()->getMaxSpeed();
+    m_estimatedArrival = distanceSquared / m_maxSpeed;
+    if (!m_bot)
+        return;
+    if (distanceSquared > 10.0f)
+    {
+        m_flag30 = false;
+    }
+    else
+    {
+        if (!m_flag30)
+            m_havePath = false;
+        m_flag30 = true;
+    }
+
+    if (formation->getSquadMemberIndexAtSlot(0) != m_memberIndex)
+    {
+        if (m_flag49 || m_flag4A)
+        {
+            m_flag4A = false;
+            moveTo(slot, vehicle);
+        }
+        return;
+    }
+
+    if (m_squad->getMissionStatus() == 2 && formation->shouldSquadMoveOut())
+    {
+        m_maxSpeed = formation->getFormationMaxSpeed();
+        Vec3 target = m_squad->getSquadGotoPos();
+        if (m_squad->squadHasPosition())
+            m_squad->getMemberOrderPos(this, target);
+        if (m_havePath)
+            return;
+        const float tx = position.x - target.x;
+        const float ty = position.y - target.y;
+        const float tz = position.z - target.z;
+        if (!(std::sqrt(tx * tx + ty * ty + tz * tz) > 3.0f))
+            return;
+        moveLeader(vehicle);
+        return;
+    }
+    if (m_havePath)
+        return;
+    if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        return;
+    moveLeader(vehicle);
 }
 
-// The no-bot and dead-player returns are shipped. The alive branch ignores position
-// validity, copies the goal and queries the fresh player; no null vehicle guard follows.
-// [INFERRED] void return, as above.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// PE 1017CDC0.
+void SquadMember::moveTo(const Vec3& position, Information* vehicle)
+{
+    m_havePath = true;
+    m_vector60 = position;
+    const unsigned int flags = vehicle->getObjectTypeFlags();
+    if ((flags >> 4) & 1)
+    {
+        float height = 70.0f;
+        float tolerance = 30.0f;
+        if ((flags >> 5) & 1)
+        {
+            tolerance = 5.0f;
+            height = 20.0f;
+        }
+        std::list<Vec3> points;
+        Vec3 point;
+        point.x = position.x;
+        point.y = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+                      ->getTerrainAltitude(position.x, position.z) + height;
+        point.z = position.z;
+        points.push_back(point);
+        m_bot->setWaypoints(checkPointer(new MultiPositionWaypoint(tolerance, tolerance, height, 2, points)));
+        return;
+    }
+    std::list<StrategicWaypointList::Point> points;
+    StrategicWaypointList::Point point;
+    point.position = position;
+    point.strategicObject = static_cast<unsigned int>(-1);
+    points.push_back(point);
+    m_bot->setWaypoints(checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points)));
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: squad-leader-move]
+// Recover PE 1017D030 and validate a bot squad leader following a squad order.
+void SquadMember::moveLeader(Information*)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveLeader (PE 1017D030)");
+}
+
 void SquadMember::moveWithoutFormation()
 {
     if (!m_bot)

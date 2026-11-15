@@ -76,6 +76,7 @@ public:
     bool shouldLeaveSquadLeader();           // returns m_b84
     void joinSquadLeader();                  // (inlines the movement update)
     float getFormationMaxSpeed();
+    bool shouldSquadMoveOut() const { return m_b36; }   // PE 1019D4B0
     void updateFormationMaxSpeed();
     void setFormation();
     void setLineFormation();

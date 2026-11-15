@@ -106,6 +106,9 @@ public:
     virtual int  getObjectTypeFlags() const;                       // slot 18,
     // The area centre; PE +0x118. [INFERRED] accessor form.
     const Vec2& getCentre() const { return m_centre; }
+    // Whether the position's XZ lies in the box spanned by m_centre and its reflection through
+    // the side-one position. [INFERRED] name. PE 100E0B00.
+    bool isInsideArea(const Vec3& position) const;
     // Borrowed; non-virtual. PE 100DECF0.
     const std::vector<AILandingZone*>& getLandingZones() const { return m_landingZones; }
     // Tests a StrategicObjectType bit position, not a mask.

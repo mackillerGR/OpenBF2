@@ -895,7 +895,7 @@ bool BotMain::updateBot()
         Vec3 position = information->getPosition();
         position.y += 100.0f;
         waypoints.push_back(position);
-        setWaypoints(checkPointer(new MultiPositionWaypoint(1.0f, 1.0f, 25.0f, true, waypoints)));
+        setWaypoints(checkPointer(new MultiPositionWaypoint(1.0f, 1.0f, 25.0f, 1, waypoints)));
         return true;
     }
 

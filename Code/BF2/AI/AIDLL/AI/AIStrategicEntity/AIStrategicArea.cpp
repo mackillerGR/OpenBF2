@@ -1006,6 +1006,22 @@ float AIStrategicArea::gravity(float distance, int side)
     return static_cast<float>(m_size[side] / (wideDistance * wideDistance));
 }
 
+// PE 100E0B00 with PE 101948A0 inlined.
+bool AIStrategicArea::isInsideArea(const Vec3& position) const
+{
+    const float px = position.x;
+    const float py = position.z;
+    const Vec2& corner = m_centre;
+    const Vec2& centre = m_position[0];
+    if (px < corner.x || py < corner.y)
+        return false;
+    const float maxX = centre.x - corner.x + centre.x;
+    const float maxY = centre.y - corner.y + centre.y;
+    if (maxX < px)
+        return false;
+    return !(py > maxY);
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

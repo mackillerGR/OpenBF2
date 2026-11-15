@@ -61,7 +61,7 @@ private:
 class MultiPositionWaypoint : public WaypointList
 {
 public:
-    MultiPositionWaypoint(float toleranceA, float toleranceB, float distance, bool flag,
+    MultiPositionWaypoint(float toleranceA, float toleranceB, float distance, int mode,
                           const std::list<Vec3>& waypoints);
     virtual ~MultiPositionWaypoint();                                // PE 1012D240
     virtual float update(const Vec3& position, Bot* bot);       // PE 1012D290
@@ -74,8 +74,36 @@ private:
     /* +0x14 */ float           m_toleranceB;
     /* +0x18 */ float           m_float18;     // = 1e9
     /* +0x1C */ float           m_distance;
-    /* +0x20 */ bool            m_flag;
+    /* +0x20 */ int             m_mode;        // 1 or 2; stored as a full word
     /* +0x24 */ std::list<Vec3> m_waypoints;
+};
+
+// A list of points, each tied to a strategic object (or -1), that a moving squad member
+// follows. [INFERRED] name. PE vtable 1027F92C, constructor 1012CDF0; 0x2C bytes.
+class StrategicWaypointList : public WaypointList
+{
+public:
+    struct Point
+    {
+        Vec3 position;
+        unsigned int strategicObject;   // index for AIStrategicObjectManager, or -1
+    };
+
+    StrategicWaypointList(float tolerance, float radius, int mode, const std::list<Point>& points);
+    virtual ~StrategicWaypointList();                                // PE 1012C870
+    // Steps to the next point once the bot is close enough or inside the point's object, and
+    // returns the speed to keep: lower near a point, 2 toward an object the side holds.
+    virtual float update(const Vec3& position, Bot* bot);            // PE 1012C8C0
+    virtual bool getCurrentWaypoint(Vec3& waypoint) const;           // PE 1012C780
+    virtual int getType() const;                                     // PE 1012C830
+    virtual float getTolerance() const;                              // PE 1012C540
+
+private:
+    /* +0x10 */ float            m_tolerance;
+    /* +0x14 */ float            m_radius;     // at least 1
+    /* +0x18 */ int              m_mode;       // 1: stop at the point; otherwise pass through
+    /* +0x1C */ std::list<Point> m_points;
+    /* +0x28 */ bool             m_flag28;     // = false [UNRESOLVED]
 };
 
 } // namespace ai
