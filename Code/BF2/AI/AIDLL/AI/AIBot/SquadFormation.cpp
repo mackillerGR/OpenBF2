@@ -7,6 +7,10 @@
 
 #include "SquadCoordinator.h"
 #include "SquadMember.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/Information.h"
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"   // IAIPlayer::getCurrentVehicle
@@ -1035,6 +1039,8 @@ void SquadFormation::resetTrailingPositions()
 
 // Sets the formation speed from the slowest occupied slot, adjusted for crowding.
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadFormation operation.
+// PE 1019ED10. The slowest occupied member's top speed, less a tenth with two or more members;
+// 5 when no slot is occupied.
 void SquadFormation::updateFormationMaxSpeed()
 {
     int occupied = 0;
@@ -1048,8 +1054,13 @@ void SquadFormation::updateFormationMaxSpeed()
         if (slot->m_occupied)
         {
             ++occupied;
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateFormationMaxSpeed"
-                            " - the per-member IPIMobile::getMaxSpeed lookup");
+            // The vehicle and its information are not null-checked.
+            Information* const vehicle = informationManager->getInformation(
+                m_coordinator->getSquadMember(slot->m_memberIndex)->getPlayer()
+                    ->getCurrentVehicle()->getInformation(m_side + 1));
+            const float speed = vehicle->getMobile()->getMaxSpeed();
+            if (speed < m_formationMaxSpeed)
+                m_formationMaxSpeed = speed;
         }
     }
 
