@@ -27,12 +27,15 @@ public:
     virtual float update(const Vec3& position, Bot* bot) = 0;
     // The waypoint the bot is heading for, false when there is none.
     virtual bool getCurrentWaypoint(Vec3& waypoint) const = 0;
-    // 8 for a single position, 6 for a list.
+    // 8 for a single position, 6 for a list, 1 for a strategic waypoint list.
     virtual int getType() const = 0;
     virtual void setPausedFlag(bool paused);                         // PE 1012C460
     virtual bool isPaused() const;                                   // PE 1012C470
     // The base reports zero; the list reports its first tolerance. [INFERRED] name.
     virtual float getTolerance() const;                              // PE 1012C480
+
+    // Read inline by its callers (PE byte +5).
+    bool isFinished() const { return m_finished; }
 
 protected:
     /* +0x04 */ bool  m_active;      // = true

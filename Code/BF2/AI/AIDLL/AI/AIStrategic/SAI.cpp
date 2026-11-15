@@ -30,6 +30,7 @@
 #include "../AIKnowledge/UnitPredicate.h"
 #include "../AIBot/BotCallBack.h"
 #include "../AIBot/BotMain.h"
+#include "../AIBot/WaypointList.h"
 #include "../AIBot/BotSquad.h"
 #include "../AIBot/SquadManager.h"
 #include "../AIStrategicEntity/AIStrategicObject.h"
@@ -1645,32 +1646,29 @@ void SAI::modifyStrategicObjectsTemperatures()
         (*it)->updateTemperature(m_activeStrategy->m_strategy, m_side);
 }
 
-namespace {
-
-// One pass of the second half of updateBotPositions over a per-side bot set. A bot whose recheck
-// interval (20 s on foot, 35 s otherwise) has elapsed and that senses at most one object is
-// offered to the object again through retainBot. The waypoint-list gate in front of that test
-// has no recovered interface yet, so reaching a bot stops at a named frontier.
-void retainBotsInSet(int side, AIStrategicObject* object, std::set<int>& bots, double now)
+// One pass of the second half of updateBotPositions over a per-side bot set. A bot that has
+// finished a strategic waypoint list, whose recheck interval (20 s on foot, 35 s otherwise) has
+// elapsed and that senses at most one object is offered to the object again through retainBot,
+// and its BotInfo time is restamped. Part of PE 101400E0; [CHOSEN] split.
+void SAI::retainBotsInSet(AIStrategicObject* object, std::set<int>& bots, double now)
 {
     for (std::set<int>::iterator it = bots.begin(); it != bots.end(); ++it)
     {
         Bot* const bot = IBotManager::instance->getBotFromId(static_cast<unsigned int>(*it));
-        const unsigned int soldier =
-            bot->getPlayer()->getSoldier()->getInformation(side);
+        const unsigned int soldier = bot->getPlayer()->getSoldier()->getInformation(m_side);
         const float interval = (bot->getCurrentEquipment() == soldier) ? 20.0f : 35.0f;
-        (void)interval;
-        (void)now;
-        (void)object;
-        // PE: getWaypoints()->byte +5 and its slot +0x0C == 1 gate the timer test, then
-        // getSensedObjects().size() <= 1, isInBotSet92 and retainBot(side, id, sai), and the
-        // BotInfo +0x18 time is restamped. [FRONTIER] [TEMP] [CHOSEN, not recovered]
-        // [RETIRE-WHEN: waypointlist-interface] Recover WaypointList's flag and slot 3.
-        BF2_AI_FRONTIER("dice::hfe::ai::SAI::updateBotPositions (WaypointList gate)");
+        if (!bot->getWaypoints()->isFinished() || bot->getWaypoints()->getType() != 1)
+            continue;
+        if (!(interval < now - m_botInfo[*it]->m_double14))
+            continue;
+        if (bot->getSensedObjects().size() > 1)
+            continue;
+        if (!object->isInBotSet92(*it, m_side))
+            continue;
+        object->retainBot(m_side, *it, this);
+        m_botInfo[*it]->m_double14 = now;
     }
 }
-
-} // anonymous namespace
 
 // PE 101400E0. For every strategic area, each bot in its fourth per-side set whose current
 // equipment carries a unit is moved to the neighbouring area that attracts its position most,
@@ -1738,9 +1736,9 @@ void SAI::updateBotPositions()
 
         const double now =
             static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
-        retainBotsInSet(m_side, *obj, (*obj)->getBotSet68(m_side), now);
-        retainBotsInSet(m_side, *obj, (*obj)->getBotSet20(m_side), now);
-        retainBotsInSet(m_side, *obj, (*obj)->getBotSet44(m_side), now);
+        retainBotsInSet(*obj, (*obj)->getBotSet68(m_side), now);
+        retainBotsInSet(*obj, (*obj)->getBotSet20(m_side), now);
+        retainBotsInSet(*obj, (*obj)->getBotSet44(m_side), now);
     }
 }
 
