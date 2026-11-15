@@ -34,6 +34,10 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+namespace {
+float distanceSquared(const Vec3& a, const Vec3& b);
+} // anonymous namespace
+
 // Creates the sight frustum and initializes sensing collections for the supplied bot.
 BotSenses::BotSenses(BotMain* owner)
     : m_bot(owner)
@@ -353,11 +357,380 @@ void BotSenses::updateSensing(const double& slice)
     updateSeen(remaining);
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bot-senses-seen-upkeep]
-// Recover PE 101BE980 and validate a bot keeping and losing sight of an enemy.
-void BotSenses::updateSeen(const double&)
+// PE 101B8750. An unknown pose is a logged error, as shipped.
+void BotSenses::getBotSoldierSensePoint(Vec3& target, Vec3& offset, Information* info)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSeen (PE 101BE980)");
+    const int pose = info->getSoldierPose();
+    if (pose == 3)
+    {
+        offset.x = 0.0f;
+        offset.y = -0.7f;
+        offset.z = 0.0f;
+    }
+    else if (pose == 2 || pose == 1)
+    {
+        offset.x = offset.y = offset.z = 0.0f;
+    }
+    else
+    {
+        Debug(DebugTypeError, "AI/AIDLL/AI/AIBot/BotSenses.cpp", 207, "") << "Unknown pose";
+    }
+    const Vec3& at = info->getPosition();
+    target.x = at.x + offset.x;
+    target.y = at.y + offset.y;
+    target.z = at.z + offset.z;
+}
+
+void BotSenses::probeRequestedPose(int requested, int current, const Vec3& eye, const Vec3& target,
+                                   const std::vector<IAIObject*>& ignore, bool targetIsBot,
+                                   float tolerance, unsigned int handle)
+{
+    float y;
+    if (requested == 2)
+        y = current == 1 ? eye.y - 0.53f : eye.y + 0.38f;
+    else if (requested == 3)
+        y = current == 1 ? eye.y - 0.91f : eye.y - 0.38f;
+    else
+        return;
+    Vec3 raised;
+    raised.x = eye.x;
+    raised.y = y;
+    raised.z = eye.z;
+    bool clear = false;
+    const bool open = !static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)
+                           ->collideLineWithWorld(raised, target, ignore, targetIsBot, tolerance, true, clear);
+    m_bot->setPoseStatus(requested, handle, open, clear);
+}
+
+// PE 101BE980. Walks the seen list from the cursor, re-tracing each record: the remembered
+// point, then a fresh random one. A record seen again moves to the back with its position and
+// time refreshed and is shared with the vehicle's other bots; one not seen is marked reported,
+// loses its contact after two seconds and is dropped once too old. While the bot fires at a
+// seen target it also tests the sight line for its requested pose. Stops at the slice, after
+// a full lap or when the list empties.
+void BotSenses::updateSeen(const double& remaining)
+{
+    IAIObjectEnvironment* const environment =
+        static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment);
+    IBotManager* const manager = IBotManager::instance;
+    const bool render = manager->getRenderBotSensing();
+    IBFTimer* const timer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    const double start = timer->getUpdateTime();
+    const double now = timer->getGameTime();
+    if (m_list56.empty())
+        return;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const bool ownSoldier = ((equipment->getObjectTypeFlags() >> 21) & 1) != 0;
+    const float near = equipment->getPhysical()->getRadius() * 3.0f;
+    // Unlike see, the third entry is never trimmed: a stale exposed soldier stays ignored.
+    std::vector<IAIObject*> ignore;
+    ignore.push_back(equipment->getAIObject()->getPrimaryObject());
+    ignore.push_back(0);
+    ignore.push_back(0);
+    const Mat4& camera = *static_cast<const Mat4*>(m_bot->getPlayer()->getCameraTransformation());
+    Vec3 eye;
+    eye.x = camera.m[12];
+    eye.y = camera.m[13] - 0.1f;
+    eye.z = camera.m[14];
+    const TimedList::iterator lapStart = m_cursor60;
+    const int side = m_bot->getSide();
+
+    for (;;)
+    {
+        if (m_cursor60 == m_list56.end())
+            m_cursor60 = m_list56.begin();
+        const TimedList::iterator node = m_cursor60++;
+        SensedObject* const object = node->second;
+        Information* const info = informationManager->getInformation(object->m_handle);
+
+        bool keep = false;
+        bool forgetNow = !info || !info->getAIObject() || !info->isRootObject() ||
+                         info->getSide() == m_bot->getSide() || !info->getSide();
+        if (!forgetNow && info->getPhysical() && info->getPhysical()->getHealth() <= 0.0f)
+            forgetNow = true;
+        if (forgetNow)
+        {
+            m_list56.erase(node);
+            m_map44.erase(object->m_handle);
+            object->m_senseFlags &= ~2u;
+            if (!(object->m_senseFlags & 3))
+            {
+                m_sensedObjects.erase(object->m_handle);
+                delete object;
+            }
+        }
+        else
+        {
+            const bool primary = info->isPrimary();
+            const bool soldier = ((info->getObjectTypeFlags() >> 21) & 1) != 0;
+            const float radius = info->getAIObject()->getBoundingRadius();
+            const Vec3& at = info->getAIObject()->getPosition();
+            const float d2 = distanceSquared(eye, at);
+            bool inView;
+            if (!primary && !soldier)
+            {
+                inView = false;
+            }
+            else if (now - object->m_double40 <= 5.0)
+            {
+                inView = true;
+            }
+            else
+            {
+                const float reach = radius + radius + near;
+                if (ownSoldier && d2 <= reach * reach)
+                    inView = true;
+                else if (!m_frustum->inside(info->getAIObject()->getPosition(), radius))
+                    inView = false;
+                else if (!info->getUnit())
+                    inView = true;
+                else
+                    inView = info->getUnit()->getCullDistanceSqr() >= d2;
+            }
+            const unsigned int flags = equipment->getObjectTypeFlags();
+            const bool soldierView = ((flags >> 4) & 1) || ((flags >> 5) & 1);
+            bool seen = inView || (soldierView && isCloseBehind(equipment, info->getAIObject()));
+
+            Vec3 target;
+            target.x = target.y = target.z = 0.0f;
+            Vec3 normal;
+            normal.x = normal.y = normal.z = 0.0f;
+            bool clear = false;
+            Bot* const targetBot = manager->getBot(info->getAIObject());
+            const bool targetIsBot = targetBot ? targetBot->getLodLevel() >= 1 : false;
+            unsigned int part = static_cast<unsigned int>(-1);
+            bool traced = false;
+
+            if (seen)
+            {
+                ignore[1] = info->getAIObject();
+                if (IPIUnit* const unit = info->getUnit())
+                {
+                    if (soldier)
+                    {
+                        Information* const occupied =
+                            informationManager->getInformation(unit->getOccupiedObject(m_bot->getSide()));
+                        if (occupied && occupied->getUnit() && occupied->getUnit()->hasExposedSoldier())
+                            ignore[2] = occupied->getAIObject();
+                    }
+                    else if (unit->hasExposedSoldier())
+                    {
+                        Information* const occupier =
+                            informationManager->getInformation(unit->getOccupier(m_bot->getSide()));
+                        if (occupier)
+                            ignore[2] = occupier->getAIObject();
+                    }
+                }
+
+                // The remembered point first.
+                bool tryRandom = true;
+                if (soldier && targetIsBot)
+                {
+                    getBotSoldierSensePoint(target, normal, info);
+                    seen = !environment->collideLineWithWorld(eye, target, ignore, targetIsBot, 0.75f, true, clear);
+                    const int current = equipment->getSoldierPose();
+                    const int requested = m_bot->getRequestedSolderPose();
+                    if (seen && current != requested && current != 4 &&
+                        m_bot->getFiringTarget() == object->m_handle)
+                        probeRequestedPose(requested, current, eye, target, ignore, targetIsBot, 0.75f,
+                                           object->m_handle);
+                    tryRandom = false;
+                }
+                else if (!soldier)
+                {
+                    target = info->getAIObject()->getPosition();
+                    normal.x = normal.y = normal.z = 0.0f;
+                    seen = !environment->collideLineWithWorld(eye, target, ignore, targetIsBot, 0.75f, true, clear);
+                    if (!seen && targetIsBot)
+                        tryRandom = false;
+                    else if (!seen)
+                    {
+                        normal = object->m_senseNormal;
+                        Vec3 offset;
+                        offset.x = offset.y = offset.z = 0.0f;
+                        const Mat4& transform = info->getAIObject()->getTransformation();
+                        offset.x = normal.x * transform.m[0] + normal.y * transform.m[4] + normal.z * transform.m[8] + transform.m[12];
+                        offset.y = normal.x * transform.m[1] + normal.y * transform.m[5] + normal.z * transform.m[9] + transform.m[13];
+                        offset.z = normal.x * transform.m[2] + normal.y * transform.m[6] + normal.z * transform.m[10] + transform.m[14];
+                        target = offset;
+                        seen = !environment->collideLineWithWorld(eye, target, ignore, false, 0.75f, true, clear);
+                    }
+                }
+                else
+                {
+                    const unsigned int rememberedPart = object->m_part;
+                    const bool found = environment->getSoldierSensePosition(target, normal, info->getAIObject(),
+                                                                            rememberedPart);
+                    part = object->m_part;
+                    if (found)
+                    {
+                        seen = !environment->collideLineWithWorld(eye, target, ignore, false, 0.75f, true, clear);
+                        const int current = equipment->getSoldierPose();
+                        const int requested = m_bot->getRequestedSolderPose();
+                        if (seen && current != requested && m_bot->getFiringTarget() == object->m_handle)
+                            probeRequestedPose(requested, current, eye, target, ignore, false, 0.8f,
+                                               object->m_handle);
+                    }
+                    else
+                    {
+                        seen = false;
+                    }
+                }
+
+                // A fresh random point when the remembered one failed.
+                if (!seen && tryRandom)
+                {
+                    if (soldier)
+                    {
+                        environment->pickSoldierRandomSensePosition(target, normal, info->getAIObject(), part);
+                        object->m_part = part;
+                    }
+                    else
+                    {
+                        environment->pickRandomSensePosition(target, normal, eye, info->getAIObject());
+                    }
+                    seen = !environment->collideLineWithWorld(eye, target, ignore, false, 0.75f, true, clear);
+                    const int current = equipment->getSoldierPose();
+                    const int requested = m_bot->getRequestedSolderPose();
+                    if (seen && requested != current && m_bot->getFiringTarget() == object->m_handle)
+                        probeRequestedPose(requested, current, eye, target, ignore, false, 0.8f,
+                                           object->m_handle);
+                }
+                traced = true;
+            }
+
+            if (seen)
+            {
+                info->setTime(now);
+                if (object->m_senseFlags & 8)
+                {
+                    if (!object->m_contactAdded)
+                    {
+                        info->addContact();
+                        object->m_contactAdded = true;
+                    }
+                    object->m_senseFlags &= ~8u;
+                }
+                object->m_position = target;
+                object->m_positionTime = now;
+                object->m_lastPosition = target;
+                object->m_lastUpdate = now;
+                object->m_senseNormal = normal;
+                if (!clear)
+                {
+                    object->m_senseFlags |= 0x40;
+                    object->m_lastSense = 0x40;
+                }
+                else
+                {
+                    object->m_senseFlags &= ~0x40u;
+                }
+                Information* const vehicle = equipment->isPrimary()
+                    ? equipment
+                    : informationManager->getInformation(equipment->getPrimaryObject(m_bot->getSide()));
+                Bot* const driver = manager->getBot(vehicle->getAIObject());
+                if (driver && driver != static_cast<Bot*>(m_bot))
+                {
+                    driver->getSensingAgent()->getSenses()->addSeen(object->m_handle, object->m_senseNormal,
+                                                                    part, info, false, clear);
+                    if (manager->getRenderBotSensing())
+                    {
+                        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-debug-render]
+                        BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSeen (sensing render)");
+                    }
+                }
+                int iterator = -1;
+                for (unsigned int seat = vehicle->getFirstSecondaryObject(iterator, m_bot->getSide());;
+                     seat = vehicle->getSecondaryObject(iterator, m_bot->getSide()))
+                {
+                    Information* const seatInformation = informationManager->getInformation(seat);
+                    if (!seatInformation)
+                        break;
+                    Bot* const passenger = manager->getBot(seatInformation->getAIObject());
+                    if (passenger && passenger != static_cast<Bot*>(m_bot))
+                    {
+                        passenger->getSensingAgent()->getSenses()->addSeen(
+                            object->m_handle, object->m_senseNormal, part, info, false, clear);
+                        if (manager->getRenderBotSensing())
+                        {
+                            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-debug-render]
+                            BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSeen (sensing render)");
+                        }
+                    }
+                }
+                keep = true;
+            }
+            else if (!(object->m_senseFlags & 8))
+            {
+                object->m_firstSensed = now;
+                object->m_senseFlags |= 8;
+                object->m_lastSense = 8;
+                keep = true;
+            }
+            else
+            {
+                const double age = now - object->m_firstSensed;
+                Information* const lost = informationManager->getInformation(object->m_handle);
+                if (age > 2.0 && object->m_contactAdded)
+                {
+                    object->m_contactAdded = false;
+                    lost->removeContact();
+                    int iterator;
+                    for (Information* seat = informationManager->getInformation(
+                             lost->getFirstSecondaryObject(iterator, m_bot->getSide()));
+                         seat; seat = informationManager->getInformation(
+                             lost->getSecondaryObject(iterator, m_bot->getSide())))
+                        seat->removeContact();
+                }
+                Information* const own = informationManager->getInformation(m_bot->getCurrentEquipment());
+                const bool antiAircraft = own->getArmament() && ((lost->getObjectTypeFlags() >> 4) & 1) &&
+                                          own->getArmament()->isAntiAircraft() > 0;
+                bool forget;
+                if (age > 60.0 || !primary)
+                    forget = true;
+                else if (!own->getMobile() && age > 5.0)
+                    forget = true;
+                else if (antiAircraft && age > 5.0)
+                    forget = true;
+                else
+                    forget = m_bot->getIsGoingForFlag() && age > 5.0;
+                keep = !forget;
+            }
+            (void)traced;
+
+            if (render)
+            {
+                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-debug-render]
+                BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::updateSeen (sensing render)");
+            }
+
+            if (keep)
+            {
+                m_list56.erase(node);
+                m_list56.push_back(TimedObject(now, object));
+                m_map44[object->m_handle] = --m_list56.end();
+            }
+            else
+            {
+                m_list56.erase(node);
+                m_map44.erase(object->m_handle);
+                object->m_senseFlags &= ~2u;
+                if (!(object->m_senseFlags & 3))
+                {
+                    m_sensedObjects.erase(object->m_handle);
+                    delete object;
+                }
+            }
+        }
+
+        const double elapsed = timer->getUpdateTime() - start;
+        if (m_cursor60 == lapStart)
+            break;
+        if (!(elapsed < remaining))
+            break;
+        if (m_list56.empty())
+            break;
+    }
 }
 
 // PE 101E1510. The sense point, part, first-sensed and last-seen times are left unset.

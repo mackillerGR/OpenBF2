@@ -1596,9 +1596,19 @@ int BotMain::getRequestedSolderPose()
 }
 
 // +0x19C
+// PE 1017F710. Records, against the target, whether a crouched (2) or prone (any other pose)
+// sight line would be clear; isPoseChangeAllowed reads the pair back.
 void BotMain::setPoseStatus(int pose, unsigned int h, bool a, bool b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setPoseStatus");
+    m_int304 = static_cast<int>(h);
+    if (pose == 2)
+    {
+        m_flag300[0] = a;
+        m_flag300[1] = b;
+        return;
+    }
+    m_flag300[2] = a;
+    m_flag300[3] = b;
 }
 
 // +0x1A0

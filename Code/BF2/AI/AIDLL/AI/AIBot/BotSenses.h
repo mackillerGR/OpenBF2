@@ -114,6 +114,14 @@ private:
     void updateFire(const double& deadline);
     // Seen-record upkeep. PE 101BE980; [INFERRED] name.
     void updateSeen(const double& remaining);
+    // The sense point on a bot soldier: its position, lowered for a prone pose. [INFERRED]
+    // name. PE 101B8750.
+    static void getBotSoldierSensePoint(Vec3& target, Vec3& offset, Information* info);
+    // Traces again from the eye raised or lowered for the requested pose and records the
+    // result against the target. Part of updateSeen; [CHOSEN] split.
+    void probeRequestedPose(int requested, int current, const Vec3& eye, const Vec3& target,
+                            const std::vector<IAIObject*>& ignore, bool targetIsBot,
+                            float tolerance, unsigned int handle);
 
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing
     typedef std::list<TimedObject>                TimedList;

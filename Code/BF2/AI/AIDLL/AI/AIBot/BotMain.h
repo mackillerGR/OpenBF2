@@ -316,7 +316,7 @@ public:
     virtual float getFireInclination();                                                           // +0x190
     virtual void requestSoldierPose(int pose, bool b);                                            // +0x194 [FRONTIER]
     virtual int getRequestedSolderPose();                                                         // +0x198
-    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C [FRONTIER]
+    virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C
     virtual void event_airborn();                                                                 // +0x1A0 [FRONTIER]
     virtual bool isAirBorn() const;                                                               // +0x1A4
     virtual void setLastChangeTime(double t);                                                     // +0x1A8
