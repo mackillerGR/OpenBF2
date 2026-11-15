@@ -154,10 +154,8 @@ void SquadManager::setPlayerOnValidPosition(IAIPlayer* player, bool valid, doubl
         m_playerValidPositions.insert(std::make_pair(id, time));
 }
 
-// Copy the borrowed factory
-// vector before callbacks. Preserve the repeated AI-player query even when the first one
-// returned true. A live, non-downed human with a vehicle next needs IAIObject::getInformation
-// (ELF +0xB8 / PE +0xB4); its full interface remains unknown. Stop at that caller boundary.
+// PE 1012BE90. Copy the borrowed factory vector before callbacks. Preserve the repeated
+// AI-player query even when the first one returned true.
 void SquadManager::updateHumanPlayers(double time)
 {
     const std::vector<IAIPlayer*> players =
@@ -167,17 +165,35 @@ void SquadManager::updateHumanPlayers(double time)
         IAIPlayer* player = *i;
         if (!player)
             continue;
+        // A human in a vehicle with mobile information is checked against the navigation map.
+        bool valid = true;
         if (!player->getIsAIPlayer() && player->getIsAlive() && !player->isManDown())
         {
-            if (player->getCurrentVehicle())
+            if (IAIObject* const vehicle = player->getCurrentVehicle())
             {
-                player->getSide();
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-                BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::updateHumanPlayers (IAIObject::getInformation)");
+                Information* const info =
+                    informationManager->getInformation(vehicle->getInformation(player->getSide()));
+                if (info)
+                {
+                    const Vec3 position = info->getPosition();
+                    if (info->getMobile())
+                    {
+                        (void)position;
+                        (void)valid;
+                        // The check is pathfinder slot +0x30 on ds:102C058C (PE 100A45D0):
+                        // (vehicle number, equipment type, position, 0), answering false for an
+                        // invalid position. The pathfinder and its map container are not in this
+                        // tree.
+                        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-pathfinder]
+                        // Recover the pathfinder (PE vtable 1027BCB0) and validate a human
+                        // driving a vehicle beside bots.
+                        BF2_AI_FRONTIER("dice::hfe::ai::SquadManager::updateHumanPlayers (pathfinder position check)");
+                    }
+                }
             }
         }
         if (!player->getIsAIPlayer())
-            setPlayerOnValidPosition(player, true, time);
+            setPlayerOnValidPosition(player, valid, time);
     }
     for (std::map<int, double>::iterator i = m_playerValidPositions.begin();
          i != m_playerValidPositions.end(); )
