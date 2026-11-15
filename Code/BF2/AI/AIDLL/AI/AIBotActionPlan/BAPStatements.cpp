@@ -486,7 +486,7 @@ bool isPressed(io::PlayerInput* input, io::PlayerInputMap which)
 
 // PE 101991F0. Walking: the throttle is split between forward and strafe so the soldier keeps
 // moving along the sensing agent's look direction whatever way it faces, with the axes turned
-// ahead by the soldier's current yaw rate. Sprinting or prone: the look is steered onto that
+// ahead by the soldier's current yaw rate. Sprinting or swimming: the look is steered onto that
 // direction instead, and the throttle and sprint follow how far away the focus is and how far
 // the soldier must still turn.
 bool BAPMergeSoldierInputs::execute(Bot* bot, bool& finished, bool& failed)
@@ -499,7 +499,7 @@ bool BAPMergeSoldierInputs::execute(Bot* bot, bool& finished, bool& failed)
     float pitchError = 0.0f;
     float yawError = 0.0f;
     IPIControlInfo* const control = equipment->getControlInfo();
-    const bool prone = equipment->getSoldierPose() == 4;
+    const bool swimming = equipment->getSoldierPose() == SPSwimming;
 
     bool steer;
     bool sprinting = false;
@@ -510,7 +510,7 @@ bool BAPMergeSoldierInputs::execute(Bot* bot, bool& finished, bool& failed)
     }
     else
     {
-        steer = prone;
+        steer = swimming;
     }
 
     if (!steer)

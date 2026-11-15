@@ -37,6 +37,7 @@
 #include "../Main/IBotManager.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../../IO/Input/PlayerInput.h"
+#include "../../../../Core/Debug.h"
 #include <cfloat>       // DBL_MAX - the two 'never happened' timestamps
 
 namespace dice {
@@ -496,11 +497,162 @@ void BotMain::afterPlanInterpreted()
         setAvoidSide(1);
 }
 
-// PE 10181180. [FRONTIER] [TEMP] [CHOSEN, not recovered]
-// [RETIRE-WHEN: plan-execution-steps] Recover the body and validate a bot executing a plan.
+namespace {
+
+void setPoseInputs(io::PlayerInput* input, bool crouch, float lie)
+{
+    input->setInput(io::PICrouch, crouch ? 1.0f : 0.0f);
+    input->setInput(io::PILie, lie);
+}
+
+// The lie input is a toggle: pressed when released, released when pressed.
+void toggleLie(io::PlayerInput* input)
+{
+    if (input->mappingFlags & (1ULL << io::PILie))
+        input->inputs[io::PILie] = input->inputs[io::PILie] == 1.0f ? 0.0f : 1.0f;
+}
+
+} // anonymous namespace
+
+// PE 10180800. True when the firing target is gone or friendly; otherwise the permission
+// recorded against it, or false when it was recorded for another target. `alternate` receives
+// the second flag of the pair only on that last path.
+bool BotMain::isPoseChangeAllowed(bool& alternate, int pose)
+{
+    Information* const target = informationManager->getInformation(getFiringTarget());
+    if (!target || target->getSide() == getSide())
+        return true;
+    if (static_cast<unsigned int>(m_int304) != getFiringTarget())
+        return false;
+    if (pose == 2)
+    {
+        alternate = m_flag300[1];
+        return m_flag300[0];
+    }
+    alternate = m_flag300[3];
+    return m_flag300[2];
+}
+
+// PE 1017F6B0.
+void BotMain::clearPoseChangeAllowance()
+{
+    m_int304 = -1;
+    for (int k = 0; k < 4; ++k)
+        m_flag300[k] = false;
+}
+
+// PE 10181180. Drives the crouch and lie inputs from the current pose toward the requested
+// one. Crouch is held; lie is a toggle, so its press time is recorded. Changing into a lower
+// pose waits for isPoseChangeAllowed unless +502 forces it. An unavailable pose resets the
+// request to standing; an unknown request while crouching or lying is a logged error.
 void BotMain::finishPlanExecution()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::finishPlanExecution");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    Information* const equipment = informationManager->getInformation(m_currentEquipment);
+    if (!equipment)
+        return;
+
+    io::PlayerInput* const input = m_playerInput;
+    bool alternate;
+    switch (equipment->getSoldierPose())
+    {
+    case SPStanding:
+        switch (m_requestedSoldierPose)
+        {
+        case 1:
+        case 4:
+            setPoseInputs(input, false, 0.0f);
+            m_flag285 = false;
+            break;
+        case 2:
+            if (!isPoseChangeAllowed(alternate, 2) && !m_flag502)
+                break;
+            setPoseInputs(input, true, 0.0f);
+            m_flag285 = true;
+            break;
+        case 3:
+            if (!isPoseChangeAllowed(alternate, 3) && !m_flag502)
+                break;
+            input->setInput(io::PICrouch, 0.0f);
+            toggleLie(input);
+            m_time288 = now;
+            m_flag285 = true;
+            break;
+        default:
+            return;
+        }
+        break;
+    case SPCrouching:
+        switch (m_requestedSoldierPose)
+        {
+        case 1:
+            setPoseInputs(input, false, 0.0f);
+            clearPoseChangeAllowance();
+            m_flag285 = true;
+            break;
+        case 2:
+            setPoseInputs(input, true, 0.0f);
+            m_flag285 = false;
+            break;
+        case 3:
+            if (!isPoseChangeAllowed(alternate, 3) && !m_flag502)
+                break;
+            input->setInput(io::PICrouch, 0.0f);
+            toggleLie(input);
+            m_time288 = now;
+            m_flag285 = true;
+            break;
+        case 4:
+            setPoseInputs(input, false, 0.0f);
+            m_flag285 = false;
+            break;
+        default:
+            Debug(DebugTypeError, __FILE__, __LINE__, "") << "Internal error, unknown pose.";
+            return;
+        }
+        break;
+    case SPLying:
+        switch (m_requestedSoldierPose)
+        {
+        case 1:
+            input->setInput(io::PICrouch, 0.0f);
+            toggleLie(input);
+            clearPoseChangeAllowance();
+            m_time288 = now;
+            m_flag285 = true;
+            break;
+        case 2:
+            if (!isPoseChangeAllowed(alternate, 2) && !m_flag502)
+                break;
+            setPoseInputs(input, true, 0.0f);
+            m_time288 = now;
+            m_flag285 = true;
+            break;
+        case 3:
+        case 4:
+            setPoseInputs(input, false, 0.0f);
+            m_flag285 = false;
+            break;
+        default:
+            Debug(DebugTypeError, __FILE__, __LINE__, "") << "Internal error, unknown pose.";
+            return;
+        }
+        break;
+    case SPSwimming:
+        setPoseInputs(input, false, 0.0f);
+        m_flag285 = false;
+        break;
+    default:
+        m_requestedSoldierPose = 1;
+        m_flag285 = false;
+        break;
+    }
+
+    // A pose change releases fire for soldier-type equipment.
+    const bool changed = m_flag285;
+    m_flag502 = false;
+    if (changed && ((equipment->getObjectTypeFlags() >> 21) & 1))
+        input->setInput(io::PIFire, 0.0f);
 }
 
 // +0x010, PE 10181E60. Copies a finished bot projectile into the fire correction, replaces an

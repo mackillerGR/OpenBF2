@@ -393,6 +393,9 @@ public:
     // [FRONTIER]
     void  afterPlanInterpreted();   // steers around friends in the line of fire
     void  finishPlanExecution();
+    // The pose-change permission recorded against the firing target. [INFERRED] names.
+    bool  isPoseChangeAllowed(bool& alternate, int pose);
+    void  clearPoseChangeAllowance();
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
     void  uninitAllBehaviours();
@@ -520,11 +523,14 @@ private:
     /* 268 */ double       m_firingTargetTime;      // getFiringTargetTime
     /* 276 */ double       m_time276;               // = -DBL_MAX - "never happened"
     /* 284 */ bool         m_botStuck;              // = false
+    // Set when finishPlanExecution changed the pose inputs this tick. [INFERRED] meaning.
     /* 285 */ bool         m_flag285;               // = false
     /* 286 */ char         m_pad286[2];
     // Construction uses -DBL_MAX as the timestamp sentinel; reset uses -9999.0.
-    /* 288 */ double       m_time288;               // ctor: -DBL_MAX, reset: -9999.0
+    /* 288 */ double       m_time288;               // ctor: -DBL_MAX, reset: -9999.0; last lie toggle
     /* 296 */ int          m_requestedSoldierPose;  // = 1 dice spells the getter "Solder"
+    // Pose-change permission against the target in +304: [0]/[1] for crouching, [2]/[3] for
+    // lying; isPoseChangeAllowed returns the even entry and reports the odd one.
     /* 300 */ bool         m_flag300[4];            // +300..+303, all false
     /* 304 */ int          m_int304;                // = -1
     /* 308 */ unsigned int m_unresolvedCollision;   // = -1
@@ -572,7 +578,8 @@ private:
     /* 492 */ double       m_timeOfLastFailedStaticSkyAttack;  // = 0.0
     /* 500 */ bool         m_wantsToSimulateArtillery;   // = false
     /* 501 */ bool         m_isSimulatingArtillery;      // = false
-    /* 502 */ bool         m_flag502;                    // = false [UNRESOLVED]
+    // Forces one pose change through regardless of the permission; finishPlanExecution clears it.
+    /* 502 */ bool         m_flag502;                    // = false [INFERRED] meaning
     /* 503 */ char         m_pad503;
     /* 504 */ int          m_moveToStatus;          // = 0
     /* 508 */ int          m_avoidSide;             // = 0
