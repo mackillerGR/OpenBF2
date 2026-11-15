@@ -1029,19 +1029,28 @@ int SAI::getSpawnsToPoint(int) const
     BF2_AI_FRONTIER("dice::hfe::ai::SAI::getSpawnsToPoint");
 }
 
-Vec3 SAI::getBotCurrentPos(int) const
+// PE 1013DE10. The bot's position object, -22 for an unknown bot.
+int SAI::getBotCurrentPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotCurrentPos");
+    if (!m_botInfo[botId])
+        return -22;
+    return m_botInfo[botId]->m_int0C;
 }
 
-Vec3 SAI::getBotOrderedPos(int) const
+// PE 1013DE40. The bot's target object, -44 for an unknown bot.
+int SAI::getBotOrderedPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotOrderedPos");
+    if (!m_botInfo[botId])
+        return -44;
+    return m_botInfo[botId]->m_int04;
 }
 
-Vec3 SAI::getBotLastOrderedPos(int) const
+// PE 1013DE70. The bot's previous target, -1 for an unknown bot.
+int SAI::getBotLastOrderedPos(int botId) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getBotLastOrderedPos");
+    if (!m_botInfo[botId])
+        return -1;
+    return m_botInfo[botId]->m_int08;
 }
 
 // Accumulate into the previous totals, then decay; no initial clear.

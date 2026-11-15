@@ -167,8 +167,8 @@ float StrategicWaypointList::update(const Vec3& position, Bot* bot)
             return 0.0f;
         }
         float speed;
-        AIStrategicObject* const object =
-            AIStrategicObjectManager::getInstance()->getStrategicObject(front.strategicObject);
+        AIStrategicArea* const object =
+            AIStrategicObjectManager::getInstance()->getStrategicArea(front.strategicObject);
         if (object)
         {
             const int side = bot->getSide();
@@ -176,7 +176,7 @@ float StrategicWaypointList::update(const Vec3& position, Bot* bot)
             {
                 speed = 2.0f;
             }
-            else if (static_cast<AIStrategicArea*>(object)->isInsideArea(position))
+            else if (object->isInsideArea(position))
             {
                 speed = 0.0f;
                 distanceSquared = 0.0f;
@@ -212,11 +212,11 @@ float StrategicWaypointList::update(const Vec3& position, Bot* bot)
     bool advance = distanceSquared < limit * limit;
     if (!advance)
     {
-        AIStrategicObject* const object =
-            AIStrategicObjectManager::getInstance()->getStrategicObject(front.strategicObject);
+        AIStrategicArea* const object =
+            AIStrategicObjectManager::getInstance()->getStrategicArea(front.strategicObject);
         if (object)
         {
-            if (static_cast<AIStrategicArea*>(object)->isInsideArea(position))
+            if (object->isInsideArea(position))
             {
                 advance = true;
             }
@@ -251,6 +251,12 @@ bool StrategicWaypointList::getCurrentWaypoint(Vec3& waypoint) const
         return false;
     waypoint = m_points.front().position;
     return true;
+}
+
+void StrategicWaypointList::getPoints(std::list<Vec3>& points) const
+{
+    for (std::list<Point>::const_iterator it = m_points.begin(); it != m_points.end(); ++it)
+        points.push_back(it->position);
 }
 
 int StrategicWaypointList::getType() const

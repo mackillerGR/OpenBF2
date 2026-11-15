@@ -20,6 +20,7 @@ class SquadFormation;
 class SquadMember;
 class IAIPlayer;
 class AIStrategicArea;
+class AIStrategicObject;
 enum StrategicStrengthType : int; // Attested type name; enum labels remain unrecovered.
 
 class SquadCoordinator
@@ -62,6 +63,15 @@ public:
     // The position getSquadPosition last stored. [INFERRED] name. PE 101A1880.
     void getLastSquadPosition(Vec3& position) const { position = m_v108; }
     int getSquadLeaderIndex() const { return m_i96; }   // [INFERRED] name. PE 101A1170
+    // The squad's secondary goal, set alongside the order. [INFERRED] name. PE 101A12E0.
+    const Vec3& getSecondaryGotoPos() const { return m_v200; }
+    // Whether the next path should be announced over the radio. [INFERRED] names.
+    bool shouldAnnounceOrder() const { return m_b220; }               // PE 101A10C0
+    void setAnnounceOrder(bool announce) { m_b220 = announce; }       // PE 101A10B0
+    // A member is close to the goal of an area the side holds. [INFERRED] name. PE 101A2FA0.
+    bool isAnyMemberNearGoal();
+    // The order position of `object` for the member's vehicle. [INFERRED] name. PE 101A1A10.
+    bool getObjectOrderPos(SquadMember* member, AIStrategicObject* object, Vec3& position);
     SquadMember* getSquadLeader();
     int getNumberOfSquadMembers();
     int getSquadId();

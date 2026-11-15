@@ -36,6 +36,7 @@ public:
 
     // Read inline by its callers (PE byte +5).
     bool isFinished() const { return m_finished; }
+    int getKind() const { return m_kind; }     // read inline (PE +0xC)
 
 protected:
     /* +0x04 */ bool  m_active;      // = true
@@ -100,6 +101,8 @@ public:
     virtual bool getCurrentWaypoint(Vec3& waypoint) const;           // PE 1012C780
     virtual int getType() const;                                     // PE 1012C830
     virtual float getTolerance() const;                              // PE 1012C540
+    // Appends the point positions. PE 1012CC00.
+    void getPoints(std::list<Vec3>& points) const;
 
 private:
     /* +0x10 */ float            m_tolerance;

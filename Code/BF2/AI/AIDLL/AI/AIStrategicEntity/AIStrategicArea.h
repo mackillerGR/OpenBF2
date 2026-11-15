@@ -109,6 +109,9 @@ public:
     // Whether the position's XZ lies in the box spanned by m_centre and its reflection through
     // the side-one position. [INFERRED] name. PE 100E0B00.
     bool isInsideArea(const Vec3& position) const;
+    // Copies the cached path from `from` to this area for the side into `path` (unless it is that
+    // list); false when none is cached. [INFERRED] name. PE 100E6EE0.
+    bool findPath(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& path);
     // Borrowed; non-virtual. PE 100DECF0.
     const std::vector<AILandingZone*>& getLandingZones() const { return m_landingZones; }
     // Tests a StrategicObjectType bit position, not a mask.
@@ -163,10 +166,12 @@ public:
     /* +359 */ char m_pad359[1];
     /* +360 */ std::list<std::pair<float, AIStrategicObject*> >* m_listsA;   // [group]
     /* +364 */ std::list<std::pair<float, AIStrategicObject*> >* m_listsB;   // [group]
-    /* +368 */ std::map<AIStrategicObject*, float>* m_mapsA;                 // [group]
-    /* +372 */ std::map<AIStrategicObject*, float>* m_mapsB;                 // [group]
-    /* +376 */ std::map<AIStrategicObject*, float>* m_mapsC;                 // [group]
-    /* +380 */ std::map<AIStrategicObject*, float>* m_mapsD;                 // [group]
+    // Cached strategic paths from an object to this area: the node holds a 16-byte value
+    // (PE head node flag at +0x1D). findPath reads group zero of A for side one, B for side two.
+    /* +368 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_mapsA; // [group]
+    /* +372 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_mapsB; // [group]
+    /* +376 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_mapsC; // [group]
+    /* +380 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_mapsD; // [group]
     // Per-side distance records, indexed by side - 1 like m_distancesDirty.
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
     /* +392 */ std::list<AreaRecord> m_list392;    // node

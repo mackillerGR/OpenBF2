@@ -431,6 +431,18 @@ AIStrategicObject* AIStrategicObjectManager::getStrategicObject(int index) const
     return m_strategicObjects[index];
 }
 
+// PE 1008F360. As getStrategicObject, but only an area (type 0) is returned.
+AIStrategicArea* AIStrategicObjectManager::getStrategicArea(int index) const
+{
+    if (index < 0)
+        return 0;
+    if (index >= (int)m_strategicObjects.size())
+        return 0;
+    if (m_strategicObjects[index]->getType() != 0)
+        return 0;
+    return static_cast<AIStrategicArea*>(m_strategicObjects[index]);
+}
+
 // Disables waypoint drawing by clearing the first key component; leaves the second unchanged.
 void AIStrategicObjectManager::clearWaypointToDraw()
 {

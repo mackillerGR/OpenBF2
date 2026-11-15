@@ -1014,6 +1014,34 @@ bool SquadCoordinator::getSquadGotoPos(Vec3& position)
     return true;
 }
 
+// PE 101A2FA0.
+bool SquadCoordinator::isAnyMemberNearGoal()
+{
+    if (!m_strategicAreaAssignment || !m_strategicAreaAssignment->getStatus(m_side + 1))
+        return false;
+    for (unsigned int i = 0; !m_squadMembers.empty() && i < m_squadMembers.size(); ++i)
+    {
+        if (m_squadMembers[i]->isNearSquadGoal())
+            return true;
+    }
+    return false;
+}
+
+// PE 101A1A10. The vehicle's information must carry unit and mobile plug-ins.
+bool SquadCoordinator::getObjectOrderPos(SquadMember* member, AIStrategicObject* object, Vec3& position)
+{
+    if (!member || !object)
+        return false;
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return false;
+    Information* const info = informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    if (!info || !info->getUnit() || !info->getMobile())
+        return false;
+    position = object->getOrderPos(info->getMobile()->getVehicleNumber(), m_side + 1);
+    return true;
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

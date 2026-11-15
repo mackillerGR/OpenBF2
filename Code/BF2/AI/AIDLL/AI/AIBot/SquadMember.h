@@ -11,6 +11,10 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+class StrategicWaypointList;
+
+class WaypointList;
+
 class IPIArmament;
 
 class Information;
@@ -39,6 +43,16 @@ public:
     void moveTo(const Vec3& position, Information* vehicle);
     // The leader's own order movement. [INFERRED] name. PE 1017D030.
     void moveLeader(Information* vehicle);
+    // Inside the formation distance of the goal of an area the side holds. [INFERRED] name.
+    // PE 1017BF00.
+    bool isNearSquadGoal();
+    // Whether the current list is a strategic list whose points match the candidate's within
+    // 10. [INFERRED] name. PE 1017C950.
+    bool isSamePath(WaypointList* current, StrategicWaypointList* candidate);
+    // Hands the bot a one-point strategic list unless it already follows the same path.
+    // Part of moveLeader; [CHOSEN] split.
+    void sendAlongPoint(const Vec3& target, bool announce);
+    void announceOrder(int message);
     bool isBot();
     float getEstimatedArrival() const { return m_estimatedArrival; }   // PE 1017BC00
     Bot* getBot();                           // borrowed

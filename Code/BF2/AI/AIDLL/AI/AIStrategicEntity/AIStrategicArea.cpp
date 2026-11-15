@@ -310,10 +310,10 @@ void AIStrategicArea::internalConstructorCall(const Vec2& topLeft, const Vec2& c
     m_listsA = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
     m_listsB = checkPointer(new std::list<std::pair<float, AIStrategicObject*> >[groups]);
 
-    m_mapsA = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsB = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsC = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
-    m_mapsD = checkPointer(new std::map<AIStrategicObject*, float>[groups]);
+    m_mapsA = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
+    m_mapsB = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
+    m_mapsC = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
+    m_mapsD = checkPointer(new std::map<AIStrategicObject*, std::list<AIStrategicObject*> >[groups]);
 
     m_distancesDirty[0] = true;
     m_distancesDirty[1] = true;
@@ -1020,6 +1020,20 @@ bool AIStrategicArea::isInsideArea(const Vec3& position) const
     if (maxX < px)
         return false;
     return !(py > maxY);
+}
+
+// PE 100E6EE0. Side one reads m_mapsA, side two m_mapsB (the PE indexes the pointer pair).
+bool AIStrategicArea::findPath(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& path)
+{
+    std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* const paths = side == 1 ? m_mapsA : m_mapsB;
+    std::map<AIStrategicObject*, std::list<AIStrategicObject*> >::iterator it = paths->find(from);
+    if (it == paths->end())
+        return false;
+    if (&path == &it->second)
+        return true;
+    path.clear();
+    path.insert(path.begin(), it->second.begin(), it->second.end());
+    return true;
 }
 
 } // namespace ai

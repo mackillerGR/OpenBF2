@@ -5,6 +5,9 @@
 #include "../Main/AIRandom.h"
 #include "SquadManager.h"
 #include "WaypointList.h"
+#include "CommunicationAgent.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"
+#include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIUtils/checkPointer.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"
@@ -674,11 +677,196 @@ void SquadMember::moveTo(const Vec3& position, Information* vehicle)
     m_bot->setWaypoints(checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points)));
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: squad-leader-move]
-// Recover PE 1017D030 and validate a bot squad leader following a squad order.
-void SquadMember::moveLeader(Information*)
+// PE 1017BF00.
+bool SquadMember::isNearSquadGoal()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveLeader (PE 1017D030)");
+    if (!m_squad->isMissionStatusTwo() || !m_squad->getSquadStrategicAreaAssignment())
+        return false;
+    if (!m_squad->getSquadStrategicAreaAssignment()->getStatus(m_side + 1) || !m_positionValid)
+        return false;
+    const Vec3& goal = m_squad->getSquadGotoPos();
+    const float dx = goal.x - m_position.x;
+    const float dy = goal.y - m_position.y;
+    const float dz = goal.z - m_position.z;
+    return dx * dx + dy * dy + dz * dz < m_formationDistanceSq;
+}
+
+// PE 1017C950. The candidate is read as a strategic list without checking its kind.
+bool SquadMember::isSamePath(WaypointList* current, StrategicWaypointList* candidate)
+{
+    if (current->getKind() != 0)
+        return false;
+    bool same = false;
+    std::list<Vec3> mine;
+    std::list<Vec3> theirs;
+    static_cast<StrategicWaypointList*>(current)->getPoints(mine);
+    candidate->getPoints(theirs);
+    if (!mine.empty() && !theirs.empty())
+    {
+        std::list<Vec3>::iterator a = mine.begin();
+        std::list<Vec3>::iterator b = theirs.begin();
+        while (a != mine.end())
+        {
+            const float dx = b->x - a->x;
+            const float dy = b->y - a->y;
+            const float dz = b->z - a->z;
+            if (dx * dx + dy * dy + dz * dz > 100.0f)
+                break;
+            ++a;
+            ++b;
+            if (a == mine.end())
+            {
+                if (b == theirs.end())
+                    same = true;
+                break;
+            }
+            if (b == theirs.end())
+                break;
+        }
+    }
+    return same;
+}
+
+// The radio announcement after a path is given (6) or refused (7), once per order.
+void SquadMember::announceOrder(int message)
+{
+    if (!m_squad->shouldAnnounceOrder() || !m_bot)
+        return;
+    m_bot->getCommunicationAgent()->enqueueRadioMessage(message, 3, 3, 2.0f, 0);
+    m_squad->setAnnounceOrder(false);
+}
+
+void SquadMember::sendAlongPoint(const Vec3& target, bool announce)
+{
+    std::list<StrategicWaypointList::Point> points;
+    StrategicWaypointList::Point point;
+    point.position = target;
+    point.strategicObject = static_cast<unsigned int>(-1);
+    points.push_back(point);
+    StrategicWaypointList* const list = checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points));
+    if (isSamePath(m_bot->getWaypoints(), list))
+    {
+        delete list;
+        return;
+    }
+    m_bot->setWaypoints(list);
+    m_vector60 = target;
+    if (announce)
+        announceOrder(6);
+}
+
+// PE 1017D030. Only with a mobile vehicle and a running order. A ground leader whose formation
+// has moved first heads for the secondary goal (moved onto the closest object's order position
+// when that object contains it); refused positions are announced and fall back to the main
+// goal. Aircraft get an air point above it; ground leaders a strategic list, through the
+// cached area path when the squad holds an area.
+void SquadMember::moveLeader(Information* vehicle)
+{
+    if (!vehicle->getMobile() || m_squad->getMissionStatus() != 2)
+        return;
+    Vec3 target = m_squad->getSquadGotoPos();
+    AIStrategicArea* const area = m_squad->getSquadStrategicAreaAssignment();
+    const unsigned int flags = vehicle->getObjectTypeFlags();
+    if (!((flags >> 4) & 1) && m_squad->getSquadFormation()->hasFormationMoved() &&
+        !m_squad->isAnyMemberNearGoal())
+    {
+        target = m_squad->getSecondaryGotoPos();
+        bool tryIt = true;
+        if (area)
+        {
+            if (area->isInsideArea(target))
+            {
+                tryIt = false;
+            }
+            else
+            {
+                AIStrategicObject* const closest =
+                    AIStrategicObjectManager::getInstance()->getClosestObject(target, m_side + 1);
+                if (closest && static_cast<AIStrategicArea*>(closest)->isInsideArea(target))
+                    m_squad->getObjectOrderPos(this, closest, target);
+            }
+        }
+        if (tryIt)
+        {
+            if (m_squad->isPositionValidForMember(this, target))
+            {
+                m_havePath = true;
+                std::list<StrategicWaypointList::Point> points;
+                StrategicWaypointList::Point point;
+                point.position = target;
+                point.strategicObject = static_cast<unsigned int>(-1);
+                points.push_back(point);
+                m_bot->setWaypoints(checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points)));
+                m_vector60 = target;
+                announceOrder(6);
+                return;
+            }
+            announceOrder(7);
+        }
+    }
+    target = m_squad->getSquadGotoPos();
+    if (m_squad->getSquadStrategicAreaAssignment())
+        m_squad->getMemberOrderPos(this, target);
+
+    if ((flags >> 4) & 1)
+    {
+        float height = 70.0f;
+        float tolerance = 30.0f;
+        if ((vehicle->getObjectTypeFlags() >> 5) & 1)
+        {
+            tolerance = 5.0f;
+            height = 20.0f;
+        }
+        std::list<Vec3> points;
+        Vec3 point;
+        point.x = target.x;
+        point.y = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+                      ->getTerrainAltitude(target.x, target.z) + height;
+        point.z = target.z;
+        points.push_back(point);
+        m_bot->setWaypoints(checkPointer(new MultiPositionWaypoint(tolerance, tolerance, height, 2, points)));
+        m_vector60 = target;
+        announceOrder(6);
+        return;
+    }
+
+    if (!m_squad->isPositionValidForMember(this, target))
+    {
+        announceOrder(7);
+        return;
+    }
+    m_havePath = true;
+    if (!m_squad->getSquadStrategicAreaAssignment())
+    {
+        sendAlongPoint(target, true);
+        return;
+    }
+
+    std::list<AIStrategicObject*> path;
+    ISAI* const sai = IAIMain::m_instance->getSAI(m_side + 1);
+    AIStrategicObject* const from = AIStrategicObjectManager::getInstance()->getStrategicObject(
+        sai->getBotCurrentPos(m_bot->getBotId()));
+    if (!m_squad->getSquadStrategicAreaAssignment()->findPath(m_side + 1, from, path))
+    {
+        sendAlongPoint(target, false);
+        return;
+    }
+    if (path.size() > 1)
+    {
+        const float mx = target.x - m_position.x;
+        const float mz = target.z - m_position.z;
+        const Vec2& first = path.front()->getPosition(m_side + 1);
+        const float fx = target.x - first.x;
+        const float fz = target.z - first.y;
+        if (fx * fx + fz * fz > mz * mz + mx * mx)
+            path.pop_front();
+    }
+    target.y = m_squad->getSquadStrategicAreaAssignment()->m_f148;
+    m_vector60 = target;
+    // The cached path becomes the bot's waypoints (PE 100E5560: area, side, path, bot id, SAI).
+    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: strategic-path-assign]
+    // Recover PE 100E5560 and validate a squad leader routed through cached area paths.
+    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveLeader (AIStrategicArea path assignment, PE 100E5560)");
 }
 
 void SquadMember::moveWithoutFormation()
