@@ -3,6 +3,15 @@
 #include "SensingAgentPatterns.h"
 
 #include "../Main/AIDllFrontier.h"
+#include "SensingAgent.h"
+#include "BotMain.h"
+#include "../AIBotActionPlan/BAPConditions.h"
+#include "../AIBotActionPlan/BAPStatements.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../AIPlanInterpreter/BAPContext.h"
+#include "../AIUtils/checkPointer.h"
 
 namespace dice {
 namespace hfe {
@@ -108,35 +117,97 @@ BotScript* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, u
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentMouseFreeLookPattern::createPlan");
 }
 
-BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+// PE 1012EB40. Looks along the direction until told otherwise, then merges the soldier's inputs.
+BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot, const Vec3& direction)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return plan;
+    BAPConFalse* const until = new BAPConFalse;
+    const int id = getId();
+    BAPALook* const look = new BAPALookDirection(direction, 0, checkPointer(until),
+                                                 control->getLookControls(), id);
+    return endPlan(checkPointer(look), bot);
 }
 
-BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+// PE 1012EBF0. As above, looking at an object.
+BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot, unsigned int object)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return plan;
+    BAPConFalse* const until = new BAPConFalse;
+    const int id = getId();
+    BAPALook* const look = new BAPALookAtObject(bot, object, 0, checkPointer(until),
+                                                control->getLookControls(), id, 0, 0);
+    return endPlan(checkPointer(look), bot);
 }
 
-void SensingAgentSoldierPattern::initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&)
+// PE 1012EA10. Keeps the agent's plan when it is already this pattern's; otherwise drops it,
+// clears the script variables and fetches the equipment's control info.
+bool SensingAgentSoldierPattern::initPlan(SensingAgent* agent, Bot* bot, IPIControlInfo*& control,
+                                          BotScript*& plan)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::initPlan");
+    if (plan)
+    {
+        if (agent->m_plan->getId() == getId())
+            return false;
+        if (plan)
+            delete plan;
+        agent->m_plan = 0;
+    }
+    agent->m_bapContext->clear();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (equipment)
+    {
+        control = equipment->getControlInfo();
+        if (control)
+            return true;
+    }
+    plan = 0;
+    return false;
 }
 
-void SensingAgentSoldierPattern::endPlan(BAPALook *, Bot *)
+// PE 1012EAB0. The look runs beside the input merger.
+BotScript* SensingAgentSoldierPattern::endPlan(BAPALook* look, Bot*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::endPlan");
+    BAPParallel* const plan = checkPointer(new BAPParallel(getId(), -1, false));
+    BAPMergeSoldierInputs* const merge = checkPointer(new BAPMergeSoldierInputs(getId()));
+    plan->addStatement(look);
+    plan->addStatement(merge);
+    plan->m_owner = this;
+    return plan;
 }
 
 // Null-pattern planning still requires an implementation; these overloads stop visibly.
-BotScript* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+// PE 1012E860 / 1012E900, identical: keep this pattern's plan, or release the look.
+static BotScript* createNullPlan(SensingAgentNullPattern* pattern, SensingAgent* agent,
+                                 BotScript*& agentPlan, BAPContext* context)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
+    BotScript* const plan = agentPlan;
+    if (plan)
+    {
+        if (plan->getId() == pattern->getId())
+            return plan;
+        delete plan;
+        agentPlan = 0;
+    }
+    context->clear();
+    BAPResetControls* const reset = checkPointer(new BAPResetControls(false, true, false, pattern->getId()));
+    reset->m_owner = pattern;
+    return reset;
 }
 
-BotScript* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BotScript* SensingAgentNullPattern::createPlan(SensingAgent* agent, Bot*, const Vec3&)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
+    return createNullPlan(this, agent, agent->m_plan, agent->m_bapContext);
+}
+
+BotScript* SensingAgentNullPattern::createPlan(SensingAgent* agent, Bot*, unsigned int)
+{
+    return createNullPlan(this, agent, agent->m_plan, agent->m_bapContext);
 }
 
 } // namespace ai

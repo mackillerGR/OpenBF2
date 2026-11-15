@@ -74,9 +74,10 @@ public:
     virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 
-    // Non-virtual, and unique to this pattern: it brackets the plan it builds.
-    void initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&);
-    void endPlan(BAPALook *, Bot *);
+    // Unique to this pattern and called through its vtable (PE +0x14 / +0x18): they bracket the
+    // plan it builds. initPlan answers whether to build; endPlan returns the finished plan.
+    virtual bool initPlan(SensingAgent *, Bot *, IPIControlInfo *&, BotScript *&);
+    virtual BotScript* endPlan(BAPALook *, Bot *);
 };
 
 // The null object. Both createPlan overloads are and do nothing useful.

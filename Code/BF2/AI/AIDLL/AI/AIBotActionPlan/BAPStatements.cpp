@@ -38,6 +38,17 @@ BAPParallel::BAPParallel(int id, bool failOnlyIfAllFail, int limit, bool neverFa
     m_children.clear();
 }
 
+BAPParallel::BAPParallel(int id, int limit, bool neverFail)
+    : m_limit(limit)
+    , m_neverFail(neverFail)
+{
+    m_cursor = m_children.end();
+    m_failOnlyIfAllFail = true;
+    m_inputMask = 0;
+    m_id = id;
+    m_children.clear();
+}
+
 BAPParallel::~BAPParallel()
 {
     for (std::list<BotScript*>::iterator it = m_children.begin(); it != m_children.end(); ++it)
@@ -389,6 +400,97 @@ BAPInfoWrapper::~BAPInfoWrapper()
 }
 
 int BAPInfoWrapper::getWrapperIndex() { return 4; }
+
+// ---- BAPMergeSoldierInputs ----------------------------------------------------------------
+
+BAPMergeSoldierInputs::BAPMergeSoldierInputs(int id)
+    : m_int18(0)
+    , m_int1C(0)
+{
+    m_id = id;
+}
+
+BAPMergeSoldierInputs::~BAPMergeSoldierInputs() {}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-merge-soldier-inputs] Recover the
+// body (and its helper PE 101C8010) and validate a soldier bot walking while it looks around.
+bool BAPMergeSoldierInputs::execute(Bot*, bool&, bool&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPMergeSoldierInputs::execute");
+}
+
+BAPStatementType BAPMergeSoldierInputs::getType() { return BAPSTMergeSoldierInputs; }
+bool BAPMergeSoldierInputs::isComposite() { return true; }
+
+// ---- BAPALook ------------------------------------------------------------------------------
+
+BAPALook::BAPALook(int flag, BAPCondition* until, unsigned long long inputMask, int id)
+    : m_until(until)
+    , m_flag(flag)
+{
+    for (int i = 0; i < 5; ++i)
+        m_zero20[i] = 0;
+    m_inputMask = inputMask;
+    m_id = id;
+}
+
+// The condition is the derived classes' to destroy.
+BAPALook::~BAPALook() {}
+
+bool BAPALook::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPALook::getType() { return BAPSTLookAt; }
+bool BAPALook::isComposite() { return false; }
+
+// The condition is claimed without a null check.
+BAPALookDirection::BAPALookDirection(const Vec3& direction, int flag, BAPCondition* until,
+                                     unsigned long long inputMask, int id)
+    : BAPALook(flag, until, inputMask, id)
+    , m_direction(direction)
+{
+    m_until->m_owner = this;
+}
+
+BAPALookDirection::~BAPALookDirection()
+{
+    if (m_until)
+        delete m_until;
+}
+
+void BAPALookDirection::getTarget(Vec3& target, bool& valid)
+{
+    valid = true;
+    target = m_direction;
+}
+
+BAPALookAtObject::BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
+                                   unsigned long long inputMask, int id, int arg8, int arg9)
+    : BAPALook(flag, until, inputMask, id)
+    , m_bot(bot)
+    , m_object(object)
+    , m_arg40(arg8)
+    , m_arg44(arg9)
+{
+    m_until->m_owner = this;
+}
+
+BAPALookAtObject::~BAPALookAtObject()
+{
+    if (m_until)
+        delete m_until;
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-look-at-object] Recover the body and
+// validate a bot that looks at a sensed object.
+void BAPALookAtObject::getTarget(Vec3&, bool&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPALookAtObject::getTarget");
+}
 
 } // namespace ai
 } // namespace hfe

@@ -40,6 +40,8 @@ class BAPParallel : public BAPStatementList
 public:
     // PE 1019A4B0.
     BAPParallel(int id, bool failOnlyIfAllFail, int limit, bool neverFail);
+    // PE 1019A410: fails only when every child fails.
+    BAPParallel(int id, int limit, bool neverFail);
     // PE 1019A540: destroys the children.
     virtual ~BAPParallel();
 
@@ -181,6 +183,71 @@ public:
 
     /* +0x20 */ Vec3 m_position;
     /* +0x2C */ Bot* m_bot;
+};
+
+// Steers the soldier's movement relative to where it looks. Type 36. PE vtable 10282B10.
+class BAPMergeSoldierInputs : public BotScript
+{
+public:
+    explicit BAPMergeSoldierInputs(int id);                            // PE 10199030
+    virtual ~BAPMergeSoldierInputs();                                  // PE 10199140
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101991F0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();
+
+    /* +0x18 */ int m_int18;   // [UNRESOLVED] written back by execute
+    /* +0x1C */ int m_int1C;   // [UNRESOLVED] written back by execute
+};
+
+// Turns the bot's look toward a target. Type 23. PE vtable 102854C8; the target comes from the
+// eighth slot. The name is attested by SensingAgentSoldierPattern::endPlan's signature.
+class BAPALook : public BotScript
+{
+public:
+    // PE 101DF6E0.
+    BAPALook(int flag, BAPCondition* until, unsigned long long inputMask, int id);
+    virtual ~BAPALook();                                               // PE 101DF740
+
+    // The fallback when no entry is installed: unfinished and failed.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101DF6C0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();
+    // Writes where to look and whether that is known. [INFERRED] name.
+    virtual void getTarget(Vec3& target, bool& valid) = 0;
+
+    /* +0x18 */ BAPCondition* m_until;
+    /* +0x1C */ int m_flag;          // [UNRESOLVED]
+    /* +0x20 */ int m_zero20[5];     // [UNRESOLVED] zeroed by the constructor
+};
+
+// Looks along a fixed direction. PE vtable 10284990. [INFERRED] name.
+class BAPALookDirection : public BAPALook
+{
+public:
+    // PE 101C17B0.
+    BAPALookDirection(const Vec3& direction, int flag, BAPCondition* until,
+                      unsigned long long inputMask, int id);
+    virtual ~BAPALookDirection();                                      // PE 101C1800
+    virtual void getTarget(Vec3& target, bool& valid);                 // PE 101C1780
+
+    /* +0x38 */ Vec3 m_direction;
+};
+
+// Looks at an object. PE vtable 10283AA8. [INFERRED] name.
+class BAPALookAtObject : public BAPALook
+{
+public:
+    // PE 101AD7D0.
+    BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
+                     unsigned long long inputMask, int id, int arg8, int arg9);
+    virtual ~BAPALookAtObject();                                       // PE 101AD850
+    virtual void getTarget(Vec3& target, bool& valid);                 // PE 101AD890
+
+    /* +0x38 */ Bot* m_bot;
+    /* +0x3C */ unsigned int m_object;
+    /* +0x40 */ int m_arg40;         // [UNRESOLVED]
+    /* +0x44 */ int m_arg44;         // [UNRESOLVED]
 };
 
 } // namespace ai

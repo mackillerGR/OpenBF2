@@ -27,6 +27,7 @@ public:
 
     // Read through to the engine object's control info. PE 1019CA90 / 1019CAB0 / 1019CAD0.
     float getCameraRelativeDofRotationOffset() const;
+    unsigned long long getLookControls() const;      // PE 1019C6F0
     const Vec3& getCameraRelativeMinRotation() const;
     const Vec3& getCameraRelativeMaxRotation() const;
 };
@@ -34,6 +35,11 @@ public:
 inline float IPIControlInfo::getCameraRelativeDofRotationOffset() const
 {
     return m_information->getAIObject()->getControlInfo()->getCameraRelativeDofRotationOffset();
+}
+
+inline unsigned long long IPIControlInfo::getLookControls() const
+{
+    return m_information->getAIObject()->getControlInfo()->getLookControls();
 }
 
 inline const Vec3& IPIControlInfo::getCameraRelativeMinRotation() const

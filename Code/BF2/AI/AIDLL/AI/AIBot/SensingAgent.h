@@ -69,6 +69,10 @@ public:
     };
 
 private:
+    // [INFERRED] friendship: the patterns read and replace the plan and clear the context inline.
+    friend class SensingAgentNullPattern;
+    friend class SensingAgentSoldierPattern;
+
     void getQuadrantDirection(int quadrant, Vec2& direction);                  // PE 101AE0A0
     bool isInQuadrant(int quadrant, const Vec2& direction);                    // PE 101AE7E0
     bool isInQuadrantHalf(int quadrant, const Vec2& direction);                // PE 101AE8C0
