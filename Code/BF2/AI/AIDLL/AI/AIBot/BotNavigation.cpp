@@ -11,6 +11,8 @@
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
+#include "../AIKnowledge/AIInformationGrid.h"
+#include "../AIKnowledge/BFInformationEnvironment.h"
 
 namespace dice {
 namespace hfe {
@@ -54,7 +56,6 @@ BotNavigation::BotNavigation(BotMain* owner)
     {
         m_zero24[i]  = 0;
         m_zero44[i]  = 0;
-        m_zero88[i]  = 0;
         m_zero176[i] = 0;
         m_zero216[i] = 0;
         m_zero256[i] = 0;
@@ -87,7 +88,7 @@ void BotNavigation::resetAll()
 {
     reset();
 
-    m_int252 = 0;
+    m_obstacleCount = 0;
     m_flag276 = false;
     // Not the constructor's 0.0 - see the block above.
     m_double268 = -9999.0;
@@ -183,12 +184,36 @@ void BotNavigation::clearProgress()
     m_zero280[2] = 0;                      // +288
 }
 
-// [FRONTIER] Obstacle updates for living, standing bots are not implemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when the corresponding navigation behavior is recovered.
+namespace {
+
+// Primary mobile objects, and anything of type bit 25. PE vtable 102811F0, PE 10172770.
+// [INFERRED] name.
+class ObstaclePredicate : public IAIInformationGridPredicate
+{
+public:
+    bool includeInformation(Information* information) const override
+    {
+        if (information->isPrimary() && information->hasMobile())
+            return true;
+        return ((information->getObjectTypeFlags() >> 25) & 1) != 0;
+    }
+};
+
+} // anonymous namespace
+
+// PE 101749A0. Collects obstacles within 50 of the current equipment from both grids of the
+// bot's side. The equipment is not null-checked.
 void BotNavigation::updateObstacles()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateObstacles");
+    m_obstacles.resize(0);
+    const Vec3& position =
+        informationManager->getInformation(m_bot->getCurrentEquipment())->getPosition();
+    ObstaclePredicate predicate;
+    static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+        ->getObjectsWithinRadius(m_obstacles, position, 50.0f, m_bot->getSide(), true, &predicate);
+    static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+        ->getObjectsWithinRadius(m_obstacles, position, 50.0f, m_bot->getSide(), false, &predicate);
+    m_obstacleCount = static_cast<int>(m_obstacles.size());
 }
 
 bool BotNavigation::isActive()

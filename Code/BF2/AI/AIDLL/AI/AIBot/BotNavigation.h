@@ -118,7 +118,8 @@ private:
     /*  76 */ int   m_int76;               // = -1
     /*  80 */ int   m_vehicleNumber;       // reset: the equipment's vehicle number. [INFERRED] name
     /*  84 */ char  m_gap84[4];            // [UNRESOLVED] - never written
-    /*  88 */ int   m_zero88[3];           // +88, +92, +96
+    // Handles of nearby obstacles, refreshed by updateObstacles (PE +0x58).
+    /*  88 */ std::vector<unsigned int> m_obstacles;
     // the walkable result - see the header note. The constructor's dead resize targets this.
     /* 100 */ std::vector<NavigationPoint> m_points;
     /* 112 */ char  m_gap112[4];           // [UNRESOLVED] - never written
@@ -152,7 +153,7 @@ private:
     /* 240 */ int   m_int240;              // = 0
     /* 244 */ double m_double244;          // not a gap - `reset` zeroes it
     // resetAll clears this field.
-    /* 252 */ int   m_int252;              // resetAll: 0
+    /* 252 */ int   m_obstacleCount;       // resetAll: 0; updateObstacles writes the size
     /* 256 */ int   m_zero256[3];          // +256, +260, +264
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false
