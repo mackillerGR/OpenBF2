@@ -213,14 +213,19 @@ unsigned int AIPlayer::getPlayerControlObjectId()
     BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getPlayerControlObjectId");
 }
 
+// BF2.exe 826650. The default vehicle's AI component; a missing default vehicle traps, and
+// the vehicle is read a second time after the check.
 IAIObject* AIPlayer::getSoldier()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getSoldier");
+    if (!m_player->getDefaultVehicle())
+        __debugbreak();
+    return static_cast<IAIObject*>(m_player->getDefaultVehicle()->getAIComponent());
 }
 
+// BF2.exe 8262F0. Not null-checked.
 IAIObject* AIPlayer::getDefaultVehicle()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getDefaultVehicle");
+    return static_cast<IAIObject*>(m_player->getDefaultVehicle()->getAIComponent());
 }
 
 IAIObject* AIPlayer::getCurrentVehicle()
