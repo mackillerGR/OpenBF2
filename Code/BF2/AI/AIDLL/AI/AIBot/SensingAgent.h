@@ -44,6 +44,10 @@ public:
     // Rebuilds the agent's look plan for the current equipment. [INFERRED] name.
     void updatePlan();
     bool hasPlan() const { return m_plan != 0; }
+    // [INFERRED] accessors; BAPMergeSoldierInputs reads these inline.
+    const Vec2& getLookDirection() const { return m_lookDirection; }
+    const Vec3& getFocusPoint() const { return m_focusPoint; }
+    unsigned int getFocusObject() const { return m_focusObject; }
     // BotBehaviour::getPlan raises +120 when it replaces a bot's plan. [INFERRED] name.
     void setPlanReplaced() { m_flag120 = true; }
     // A thing worth looking at: its weight and where it is. Attested as a nested type by
@@ -112,8 +116,10 @@ private:
     /*  76 */ float m_planTargetWeight;    // clearPlanTargetInformation: 0
     // The look direction the plan last aimed along (PE +0x5C). [INFERRED] name.
     /*  80 */ Vec2 m_lookDirection;
-    /*  88 */ int m_zero88[3];             // +88..+96
-    /* 100 */ char m_gap100[4];            // [UNRESOLVED] - never written
+    // A focus point and object set from outside the agent (PE +0x64 / +0x70); the soldier input
+    // merger runs toward them. [UNRESOLVED] what writes them; the object is not initialised.
+    /*  88 */ Vec3 m_focusPoint;
+    /* 100 */ unsigned int m_focusObject;
     /* 104 */ BotSenses* m_senses;         // new(0x94) - the mechanism this agent steers
     /* 108 */ BotMain*   m_bot;            // the ctor argument
     // the whole tail is `reset`'s, not the constructor's - see the note at +24.

@@ -196,8 +196,9 @@ public:
     virtual BAPStatementType getType();
     virtual bool isComposite();
 
-    /* +0x18 */ int m_int18;   // [UNRESOLVED] written back by execute
-    /* +0x1C */ int m_int1C;   // [UNRESOLVED] written back by execute
+    // Last tick's look-controller errors, fed back as the derivative's history.
+    /* +0x18 */ float m_yawError;
+    /* +0x1C */ float m_pitchError;
 };
 
 // Turns the bot's look toward a target. Type 23. PE vtable 102854C8; the target comes from the

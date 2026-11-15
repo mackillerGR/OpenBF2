@@ -7,6 +7,22 @@
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "LookController.h"
+#include "../AIBot/SensingAgent.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../Main/IBotManager.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../../Game/Objects/IObject.h"
+#include "../../../../Game/Objects/ObjectLayoutAccess.h"
+#include "../../../../IO/Input/PlayerInput.h"
+#include "../../../../Math/Mat4.h"
+#include "../../../../Physics/IPhysicsNode.h"
+#include <cmath>
+#include <cstring>
 
 namespace dice {
 namespace hfe {
@@ -404,19 +420,219 @@ int BAPInfoWrapper::getWrapperIndex() { return 4; }
 // ---- BAPMergeSoldierInputs ----------------------------------------------------------------
 
 BAPMergeSoldierInputs::BAPMergeSoldierInputs(int id)
-    : m_int18(0)
-    , m_int1C(0)
+    : m_yawError(0.0f)
+    , m_pitchError(0.0f)
 {
     m_id = id;
 }
 
 BAPMergeSoldierInputs::~BAPMergeSoldierInputs() {}
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-merge-soldier-inputs] Recover the
-// body (and its helper PE 101C8010) and validate a soldier bot walking while it looks around.
-bool BAPMergeSoldierInputs::execute(Bot*, bool&, bool&)
+namespace {
+
+// Writable data in the shipped image. [INFERRED] names.
+float s_degreesToRadians = 0.01745329238474369f;   // PE 102AC788
+int   s_turnPredictionSteps = 3;                    // PE 102AC7A8
+
+float signOf(float value)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPMergeSoldierInputs::execute");
+    if (value > 0.0f)
+        return 1.0f;
+    if (!(value >= 0.0f))
+        return -1.0f;
+    return 0.0f;
+}
+
+// PE 100E9DE0, the conditional Vec2 normaliser.
+void normaliseVec2(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+
+// sign(a) * sqrt(|a|), clamped to [-1, 1].
+float softAxis(float a)
+{
+    float value = signOf(a) * std::sqrt(std::fabs(a));
+    if (!(-1.0f <= value))
+        value = -1.0f;
+    else if (!(1.0f >= value))
+        value = 1.0f;
+    return value;
+}
+
+void setIfMapped(io::PlayerInput* input, io::PlayerInputMap which, float value)
+{
+    if (input->mappingFlags & (1ULL << which))
+        input->inputs[which] = value;
+}
+
+bool isPressed(io::PlayerInput* input, io::PlayerInputMap which)
+{
+    return (input->mappingFlags & (1ULL << which)) && input->inputs[which] != 0.0f;
+}
+
+} // anonymous namespace
+
+// PE 101991F0. Walking: the throttle is split between forward and strafe so the soldier keeps
+// moving along the sensing agent's look direction whatever way it faces, with the axes turned
+// ahead by the soldier's current yaw rate. Sprinting or prone: the look is steered onto that
+// direction instead, and the throttle and sprint follow how far away the focus is and how far
+// the soldier must still turn.
+bool BAPMergeSoldierInputs::execute(Bot* bot, bool& finished, bool& failed)
+{
+    io::PlayerInput* const input = bot->playerInput();
+    SensingAgent* const agent = bot->getSensingAgent();
+    const Vec2 look = agent->getLookDirection();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const Mat4& transform = equipment->getTransformation();
+    float pitchError = 0.0f;
+    float yawError = 0.0f;
+    IPIControlInfo* const control = equipment->getControlInfo();
+    const bool prone = equipment->getSoldierPose() == 4;
+
+    bool steer;
+    bool sprinting = false;
+    if (isPressed(input, io::PISprint))
+    {
+        steer = true;
+        sprinting = true;
+    }
+    else
+    {
+        steer = prone;
+    }
+
+    if (!steer)
+    {
+        Vec2 forward;
+        forward.x = transform.m[8];
+        forward.y = transform.m[10];
+        Vec2 right;
+        right.x = transform.m[0];
+        right.y = transform.m[2];
+        normaliseVec2(forward);
+        normaliseVec2(right);
+        IAIObject* const object = equipment->getAIObject();
+        if (object)
+        {
+            world::IPhysicsNode* const node = static_cast<world::IPhysicsNode*>(
+                world::object_detail::LayoutAccess::physicsNode(object->getObject()));
+            if (node)
+            {
+                const float elapsed = static_cast<float>(
+                    static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease());
+                const float ahead = static_cast<float>(s_turnPredictionSteps) * elapsed;
+                const float rate = s_degreesToRadians * node->getRotationalSpeed().y;
+                if (rate != 0.0f)
+                {
+                    const float angle = rate * ahead;
+                    const float sine = std::sin(angle);
+                    const float cosine = std::cos(angle);
+                    // Row-major 3x3 with rows (c, -s, 0), (s, c, 0), (0, 1, 0); a Vec2 is turned
+                    // by its upper-left block (PE 10199180 / 10199100).
+                    const float m0 = cosine, m1 = -sine, m3 = sine, m4 = cosine;
+                    const float fx = forward.x * m0 + forward.y * m3;
+                    const float fy = forward.x * m1 + forward.y * m4;
+                    forward.x = fx;
+                    forward.y = fy;
+                    const float rx = right.x * m0 + right.y * m3;
+                    const float ry = right.x * m1 + right.y * m4;
+                    right.x = rx;
+                    right.y = ry;
+                }
+            }
+        }
+        const bool throttleMapped = (input->mappingFlags & (1ULL << io::PIThrottle)) != 0;
+        const float throttle = std::fabs(throttleMapped ? input->inputs[io::PIThrottle] : 0.0f);
+        const float ahead = softAxis(forward.x * look.x + forward.y * look.y) * throttle;
+        const float strafe = softAxis(right.x * look.x + right.y * look.y) * throttle;
+        if (throttleMapped)
+            input->inputs[io::PIThrottle] = ahead;
+        setIfMapped(input, io::PIYaw, strafe);
+        setIfMapped(input, io::PISprint, 0.0f);
+    }
+    else
+    {
+        Vec3 direction;
+        direction.x = look.x;
+        direction.y = 0.0f;
+        direction.z = look.y;
+        steerLook(bot, direction,
+                  *static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation()),
+                  pitchError, m_pitchError, yawError, m_yawError,
+                  0.0f, control, input, 0.0f, 0.0f, 0.0f);
+        const float turnLimit = s_degreesToRadians * 40.0f;
+        float distanceSquared = 0.0f;
+        float near = 16.0f;
+        bool targetIsVehicle = false;
+        if (sprinting)
+        {
+            const float px = transform.m[12];
+            const float pz = transform.m[14];
+            float tx;
+            float tz;
+            Information* target = 0;
+            if (agent->getFocusObject() != static_cast<unsigned int>(-1))
+                target = informationManager->getInformation(agent->getFocusObject());
+            if (target)
+            {
+                const Vec3& position = target->getPosition();
+                tx = position.x;
+                tz = position.z;
+                IAIObject* const targetObject = target->getAIObject();
+                targetIsVehicle = targetObject && !IBotManager::instance->getBot(targetObject) &&
+                                  target->getUnit() && target->getUnit()->isOccupied();
+            }
+            else
+            {
+                tx = agent->getFocusPoint().x;
+                tz = agent->getFocusPoint().z;
+            }
+            const float dx = px - tx;
+            const float dz = pz - tz;
+            distanceSquared = dx * dx + dz * dz;
+        }
+
+        bool close = false;
+        if (agent->getFocusObject() != static_cast<unsigned int>(-1) && distanceSquared < 9.0f &&
+            targetIsVehicle)
+        {
+            close = true;
+            near = 1.0f;
+        }
+        if (distanceSquared < near && !close && !(turnLimit * 5.0f >= std::fabs(yawError)))
+        {
+            setIfMapped(input, io::PIThrottle, 0.0f);
+            setIfMapped(input, io::PISprint, 0.0f);
+        }
+        else if ((!(std::fabs(yawError) >= turnLimit) || close) && distanceSquared > near)
+        {
+            if (sprinting)
+                setIfMapped(input, io::PISprint, 1.0f);
+            setIfMapped(input, io::PIThrottle, 1.0f);
+        }
+        else
+        {
+            setIfMapped(input, io::PIThrottle, 1.0f);
+            setIfMapped(input, io::PISprint, 0.0f);
+        }
+    }
+    m_pitchError = pitchError;
+    m_yawError = yawError;
+    finished = true;
+    failed = true;
+    return true;
 }
 
 BAPStatementType BAPMergeSoldierInputs::getType() { return BAPSTMergeSoldierInputs; }

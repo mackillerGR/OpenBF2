@@ -39,8 +39,7 @@ SensingAgent::SensingAgent(BotMain* owner, unsigned char /*behaviourCount*/)
     m_focusPosition.x = m_focusPosition.y = m_focusPosition.z = 0.0f;
     m_planTargetDirection.x = m_planTargetDirection.y = m_planTargetDirection.z = 0.0f;
     m_lookDirection.x = m_lookDirection.y = 0.0f;
-    for (int i = 0; i < 3; ++i)
-        m_zero88[i] = 0;                   // +88..+96
+    m_focusPoint.x = m_focusPoint.y = m_focusPoint.z = 0.0f;   // +88..+96
 
     // the mechanism this agent steers. , and it takes the bot rather than the agent
     // so `BotSenses` answers to the bot directly and this object is a policy layer over it.
