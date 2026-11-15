@@ -249,21 +249,27 @@ void SquadFormation::selectFormation()
     m_formation = FormationLine;
 }
 
-// Updates the formation direction from its anchor member. An empty anchor returns immediately.
-// [FRONTIER] The occupied-anchor path requires the remaining information queries.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadFormation operation.
+namespace {
+int normalise(Vec2& value);
+} // anonymous namespace
+
+// PE 1019EDE0. Points the formation along the slot-zero member's vehicle velocity once it moves
+// faster than 0.5.
 void SquadFormation::updateFormationForwardVector()
 {
-    Vec3 speed = {};
     Slot* const anchor = m_slots[0];
     if (!anchor->m_occupied)
         return;
-
+    // The vehicle information is not null-checked.
     IAIPlayer* const player = m_coordinator->getSquadMember(anchor->m_memberIndex)->getPlayer();
-    IAIObject* const vehicle = player->getCurrentVehicle();
-    (void)speed;
-    (void)vehicle;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateFormationForwardVector (IAIObject information query)");
+    Information* const vehicle =
+        informationManager->getInformation(player->getCurrentVehicle()->getInformation(m_side + 1));
+    const Vec3 speed = vehicle->getMobile()->getSpeed();
+    if (!(speed.x * speed.x + speed.y * speed.y + speed.z * speed.z > 0.25f))
+        return;
+    m_forward.x = speed.x;
+    m_forward.y = speed.z;
+    normalise(m_forward);
 }
 
 // Adds a trail position when the anchor moves more than six metres from the last position.
