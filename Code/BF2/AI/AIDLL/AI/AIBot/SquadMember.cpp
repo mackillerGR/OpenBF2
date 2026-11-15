@@ -5,6 +5,11 @@
 #include "../Main/AIRandom.h"
 #include "SquadManager.h"
 #include "WaypointList.h"
+#include "../../../../IO/Input/PlayerInput.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/IPIArmament.h"
 #include <cmath>
 
 #include "../Main/AIDllFrontier.h"
@@ -271,13 +276,11 @@ void SquadMember::update(double time)
         const unsigned int handle = m_bot->getCurrentEquipment();
         Information* const information = manager->getInformation(handle);
 #endif
+        IPIArmament* armament;
         if (information && (information->getObjectTypeFlags() & 0x200000u) &&
-            information->hasArmament())
+            (armament = information->getArmament()) != 0 && armament->getActiveWeapon() != -1)
         {
-            // The next call is the armament's selected-index query, ELF +0x14
-            // PE +0x10. Keep the full missing owner/WeaponInfo chain explicit.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (IPIArmament selected weapon)");
+            selectSecondaryWeapon(information, armament);
         }
     }
 
@@ -502,6 +505,52 @@ bool SquadMember::avoidArtillery(Vec3 position, double /*elapsed*/, int zoneSide
     // Recover PE 1012C870/1012C8C0/1012C780 and validate a bot fleeing artillery; then pass the
     // list to Bot::setWaypoints and record the flee position when `found`.
     BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::avoidArtillery (waypoint list PE 1012CDF0)");
+}
+
+// The armament section of PE 1017DAC0. A soldier whose active weapon is a primary or secondary
+// type keeps it while firing; a kit-5 soldier keeps a type-1 weapon until its health drops to
+// 0.95 of its maximum; a kit-3 soldier keeps a type-2 weapon while the other weapons' ammunition
+// ratios multiply to at most 0.9. Otherwise the weapon in slot 2 is selected.
+void SquadMember::selectSecondaryWeapon(Information* information, IPIArmament* armament)
+{
+    WeaponInfoManager* const manager = WeaponInfoManager::m_instance;
+    WeaponInfo* const active = manager->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    if (!active)
+        return;
+    IPIPhysical* const physical = information->getPhysical();
+    bool keep = false;
+    if (m_player->getSpawnKit() == 5 && active->getWeaponType() == 1 &&
+        !(physical->getHealth() > 0.95f))
+    {
+        keep = true;
+    }
+    else
+    {
+        if (m_player->getSpawnKit() == 3 && active->getWeaponType() == 2)
+        {
+            const std::vector<unsigned int> weapons(armament->getWeapons());
+            float ratio = 1.0f;
+            for (unsigned int i = 0; i < weapons.size(); ++i)
+            {
+                WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+                if (!weapon || weapon->getWeaponType() == 1 || weapon->getWeaponType() == 2 ||
+                    weapon->getAmmo() == -1 || weapon->getMaxAmmo() == 0)
+                    continue;
+                ratio *= static_cast<float>(weapon->getCurrentAmmo()) /
+                         static_cast<float>(weapon->getMaxAmmo());
+            }
+            if (!(ratio > 0.9f))
+                keep = true;
+        }
+        if (!keep && active->getWeaponType() != 1 && active->getWeaponType() != 2 &&
+            m_bot->isFiring())
+            keep = true;
+    }
+    WeaponInfo* const secondary = manager->getInformation(armament->getWeapon(2));
+    if (!secondary || keep || active == secondary)
+        return;
+    m_bot->playerInput()->setInput(
+        static_cast<io::PlayerInputMap>(secondary->getWeaponActivate()), 1.0f);
 }
 
 // PE 1017C1F0. True when the member's living, upright player is in a vehicle whose

@@ -11,6 +11,10 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+class IPIArmament;
+
+class Information;
+
 class IAIPlayer;
 class Bot;
 class SquadCoordinator;
@@ -28,6 +32,8 @@ public:
     int getSide();                           // one-based; PE 1017BC60
     // Sends the bot out of an artillery zone; true while it is fleeing. PE 1017CAB0.
     bool avoidArtillery(Vec3 position, double elapsed, int zoneSide);
+    // Not a separate function in retail: the weapon-selection step of update. [CHOSEN] split.
+    void selectSecondaryWeapon(Information* information, IPIArmament* armament);
     bool isBot();
     Bot* getBot();                           // borrowed
     bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name

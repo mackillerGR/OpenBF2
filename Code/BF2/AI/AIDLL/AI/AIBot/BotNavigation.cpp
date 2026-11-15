@@ -216,9 +216,11 @@ void BotNavigation::updateObstacles()
     m_obstacleCount = static_cast<int>(m_obstacles.size());
 }
 
+// PE 10172230. True within three seconds of the time held in +244.
 bool BotNavigation::isActive()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::isActive");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    return now - m_double244 < 3.0;
 }
 
 void BotNavigation::updateOccationally()
