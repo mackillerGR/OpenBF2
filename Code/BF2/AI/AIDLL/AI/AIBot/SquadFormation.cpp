@@ -1161,6 +1161,7 @@ void SquadFormation::setFormation()
 
 // Places slot zero at the origin and alternates subsequent formation slots on either side.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// PE 1019EF90.
 void SquadFormation::setLineFormation()
 {
     const float spacing = 1.0f;
@@ -1196,10 +1197,17 @@ void SquadFormation::setLineFormation()
         slot->m_offset.y = 0.0f;
         slot->m_offset.z = 0.0f;
 
+        // An occupied slot is spread by both members' vehicle radii from its reference slot,
+        // whose member is read even when that slot is empty.
         if (slot->m_occupied)
         {
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setLineFormation"
-                            " - the occupied-slot vehicle-radius spread");
+            const float own = m_coordinator->getSquadMember(slot->m_memberIndex)->getVehicleRadius() * 3.0f;
+            Slot* const reference = m_slots[slot->m_referenceSlot];
+            const float scale =
+                m_coordinator->getSquadMember(reference->m_memberIndex)->getVehicleRadius() * 3.0f + own;
+            slot->m_offset.x = scale * slot->m_offset.x + reference->m_offset.x;
+            slot->m_offset.y = scale * slot->m_offset.y + reference->m_offset.y;
+            slot->m_offset.z = scale * slot->m_offset.z + reference->m_offset.z;
         }
     }
 }

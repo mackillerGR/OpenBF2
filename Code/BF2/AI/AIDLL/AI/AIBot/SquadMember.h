@@ -64,7 +64,7 @@ public:
     bool isMobile();
     void moveWithFormation();
     void moveWithoutFormation();             // alive owner query [FRONTIER]
-    float getVehicleRadius();                // [FRONTIER]
+    float getVehicleRadius();
 
     // [INFERRED] carrier name. The two fields are attested by setCurrentRequestAction
     // its first parameter is the RequestAction enum, its second unsigned int.

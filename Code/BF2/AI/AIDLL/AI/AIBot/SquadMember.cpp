@@ -698,9 +698,11 @@ void SquadMember::moveWithoutFormation()
 
 // [FRONTIER] Returns the member's vehicle radius once the information query chain is implemented.
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding SquadMember operation.
+// PE 1017C060. Neither the vehicle nor its information is null-checked.
 float SquadMember::getVehicleRadius()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::getVehicleRadius");
+    return informationManager->getInformation(m_player->getCurrentVehicle()->getInformation(m_side + 1))
+        ->getPhysical()->getRadius();
 }
 
 } // namespace ai
