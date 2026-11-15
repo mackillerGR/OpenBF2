@@ -573,6 +573,109 @@ bool SquadManager::getArtilleryTarget(int side, Vec2& target)
     return false;
 }
 
+// PE 10128D20.
+bool SquadManager::isInArtilleryDangerZone(Vec3 position, int side, double& elapsed, int& zoneSide)
+{
+    elapsed = -1.0;
+    zoneSide = 0;
+    const int own = side - 1;
+    const int other = own == 0 ? 1 : 0;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const float radiusSquared = m_float152 * m_float152;
+
+    const SideBlock& ownBlock = own ? m_sideBlock1 : m_sideBlock0;
+    if (ownBlock.m_b0)
+    {
+        const float dx = ownBlock.m_artilleryPosition.x - position.x;
+        const float dy = ownBlock.m_artilleryPosition.y - position.y;
+        const float dz = ownBlock.m_artilleryPosition.z - position.z;
+        if (dz * dz + dy * dy + dx * dx < radiusSquared)
+        {
+            elapsed = now - ownBlock.m_artilleryStartTime;
+            zoneSide = own + 1;
+            return true;
+        }
+    }
+    const SideBlock& otherBlock = other ? m_sideBlock1 : m_sideBlock0;
+    if (otherBlock.m_b0)
+    {
+        const float dx = otherBlock.m_artilleryPosition.x - position.x;
+        const float dy = otherBlock.m_artilleryPosition.y - position.y;
+        const float dz = otherBlock.m_artilleryPosition.z - position.z;
+        if (dz * dz + dy * dy + dx * dx < radiusSquared &&
+            now > otherBlock.m_artilleryDelay + otherBlock.m_artilleryStartTime)
+        {
+            elapsed = now - otherBlock.m_artilleryStartTime;
+            zoneSide = other + 1;
+            return true;
+        }
+    }
+    return false;
+}
+
+// PE 10128E50. One-based side, unchecked.
+Vec3 SquadManager::getArtilleryPosition(int side) const
+{
+    return (side == 1 ? m_sideBlock0 : m_sideBlock1).m_artilleryPosition;
+}
+
+namespace {
+
+// The member's vehicle information, when it is a unit. Shared head of PE 10128E80 / 10128F40.
+Information* fleeVehicleInformation(SquadMember* member, int side)
+{
+    IAIObject* const vehicle = member->getPlayer()->getCurrentVehicle();
+    if (!vehicle)
+        return 0;
+    Information* const information = informationManager->getInformation(vehicle->getInformation(side + 1));
+    if (!information || !information->getUnit())
+        return 0;
+    return information;
+}
+
+} // anonymous namespace
+
+// PE 10128E80.
+bool SquadManager::getValidArtilleryFleePos(SquadMember* member, Vec3& position)
+{
+    const int side = member->getSide() - 1;
+    Information* const information = fleeVehicleInformation(member, side);
+    if (!information)
+        return false;
+    const SideBlock& block = side ? m_sideBlock1 : m_sideBlock0;
+    if ((information->getObjectTypeFlags() >> 21) & 1)
+    {
+        if (!block.m_validFlee0)
+            return false;
+        position = block.m_fleePos0;
+        return true;
+    }
+    if (!block.m_validFlee1)
+        return false;
+    position = block.m_fleePos1;
+    return true;
+}
+
+// PE 10128F40.
+void SquadManager::setValidArtilleryFleePos(SquadMember* member, Vec3 position)
+{
+    const int side = member->getSide() - 1;
+    Information* const information = fleeVehicleInformation(member, side);
+    if (!information)
+        return;
+    SideBlock& block = side ? m_sideBlock1 : m_sideBlock0;
+    if ((information->getObjectTypeFlags() >> 21) & 1)
+    {
+        block.m_validFlee0 = true;
+        block.m_fleePos0 = position;
+    }
+    else
+    {
+        block.m_validFlee1 = true;
+        block.m_fleePos1 = position;
+    }
+}
+
 // Drops the strategic-area assignment of every squad of a one-based side. PE 1012AC70.
 void SquadManager::unAssignSquads(int side)
 {

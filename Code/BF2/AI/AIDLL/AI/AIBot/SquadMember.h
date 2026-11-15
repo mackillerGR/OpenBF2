@@ -25,6 +25,9 @@ public:
     IAIPlayer* getPlayer();
     SquadCoordinator* getSquad();
     int getPlayerId();
+    int getSide();                           // one-based; PE 1017BC60
+    // Sends the bot out of an artillery zone; true while it is fleeing. PE 1017CAB0.
+    bool avoidArtillery(Vec3 position, double elapsed, int zoneSide);
     bool isBot();
     Bot* getBot();                           // borrowed
     bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name
@@ -46,7 +49,7 @@ public:
     bool getPosition(Vec3& position);         // copies even if invalid
     bool isAllowedInFormation();             // nonnull vehicle [FRONTIER]
     void updateMemberPos();                  // nonnull vehicle [FRONTIER]
-    bool isMobile();                         // owner query [FRONTIER]
+    bool isMobile();
     void moveWithFormation();                // world-position [FRONTIER]
     void moveWithoutFormation();             // alive owner query [FRONTIER]
     float getVehicleRadius();                // [FRONTIER]
@@ -79,7 +82,7 @@ public:
     /* +0x48 */ bool m_positionValid;
     /* +0x49 */ bool m_flag49;               // [UNRESOLVED]
     /* +0x4A */ bool m_flag4A;               // setHavePath writes the inverse of its argument
-    /* +0x4B */ bool m_flag4B;               // [UNRESOLVED]
+    /* +0x4B */ bool m_flag4B;               // fleeing artillery; set by avoidArtillery
     /* +0x4C */ float m_formationDistanceSq; // [INFERRED] name, starts at 900.0
     /* +0x50 */ bool m_moved;
     /* +0x54 */ Vec3 m_vector54;             // [UNRESOLVED]

@@ -2,6 +2,9 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining SquadMember operations.
 
 #include "SquadMember.h"
+#include "../Main/AIRandom.h"
+#include "SquadManager.h"
+#include <cmath>
 
 #include "../Main/AIDllFrontier.h"
 #include "../Main/IBotManager.h"
@@ -149,6 +152,7 @@ SquadMember::~SquadMember()
 }
 
 IAIPlayer* SquadMember::getPlayer() { return m_player; }
+int SquadMember::getSide() { return m_side + 1; }
 
 // return the stored squad pointer.
 // Non-const in the mangled signature; no lookup, ownership transfer or null guard.
@@ -229,12 +233,14 @@ void SquadMember::update(double time)
         Vec3 position = {};
         if (getPosition(position))
         {
-            if (isMobile())
+            // A bot fleeing artillery skips the rest of the update.
+            double elapsed;
+            int zoneSide;
+            if (isMobile() &&
+                SquadManager::m_instance->isInArtilleryDangerZone(position, m_side + 1, elapsed, zoneSide))
             {
-                // The bool danger query and subsequent avoidArtillery body remain
-                // unrecovered, not replaced by a fabricated no-danger decision.
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-                BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (SquadManager::isInArtilleryDangerZone)");
+                if (avoidArtillery(position, elapsed, zoneSide))
+                    return;
             }
             else
             {
@@ -396,9 +402,100 @@ void SquadMember::updateMemberPos()
         m_moved = true;
 }
 
-// Retain
-// the vehicle before testing the freshly read player's alive/man-down state.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+namespace {
+
+// PE 1006EEC0, the conditional Vec3 normaliser.
+void normalise(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = value.y = value.z = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+}
+
+// The direction turned about the vertical axis; the result has no height. PE 1014AFB0.
+void rotateAboutY(const Vec3& direction, Vec3& result, float angle)
+{
+    const float cosine = std::cos(angle);
+    const float sine = std::sin(angle);
+    result.y = 0.0f;
+    result.x = cosine * direction.x - sine * direction.z;
+    result.z = sine * direction.x + cosine * direction.z;
+}
+
+} // anonymous namespace
+
+// PE 1017CAB0. Tries five points just outside the zone, starting straight away from its centre
+// and fanning out to alternate sides, for one the formation accepts; otherwise reuses the
+// side's recorded flee position. A found point is handed to the bot as its waypoints and, when
+// it was found here, recorded as the side's flee position.
+bool SquadMember::avoidArtillery(Vec3 position, double /*elapsed*/, int zoneSide)
+{
+    bool found = false;
+    if (m_flag4B)
+        return true;
+
+    SquadManager* const manager = SquadManager::m_instance;
+    const Vec3 centre = manager->getArtilleryPosition(zoneSide);
+    Vec3 away;
+    away.x = position.x - centre.x;
+    away.y = position.y - centre.y;
+    away.z = position.z - centre.z;
+    float distance = manager->getArtilleryRadius();
+    normalise(away);
+    distance += 5.0f;
+
+    int tries = 0;
+    float angle = 0.0f;
+    Vec3 direction = away;
+    Vec3 target;
+    for (;;)
+    {
+        target.x = direction.x * distance + centre.x;
+        target.y = direction.y * distance + centre.y;
+        target.z = direction.z * distance + centre.z;
+        if (m_squad->isPositionValidForMember(this, target))
+        {
+            found = true;
+            break;
+        }
+        ++tries;
+        // Alternates sides with a random step of 0.6 to 0.8 radians. The non-positive arm
+        // triples the angle rather than negating it, as shipped.
+        const float step = static_cast<float>(
+            static_cast<double>(AIRandom::m_instance->next()) * 4.6566129424663316e-11 + 0.6f);
+        if (angle > 0.0f)
+            angle = -angle - step;
+        else
+            angle = angle + angle * 2.0f + step;
+        rotateAboutY(away, direction, angle);
+        if (tries >= 5)
+            break;
+    }
+    if (!found && !manager->getValidArtilleryFleePos(this, target))
+        return found;
+
+    m_havePath = true;
+    m_flag4B = true;
+    // A one-point list for the waypoint class built by PE 1012CDF0 (vtable 1027F92C, 0x2C
+    // bytes): (tolerance 0, 60, 2, points), each point carrying a -1 handle. The class's update
+    // and current-waypoint bodies are not recovered, so the bot is not given it.
+    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: handled-waypoint-list]
+    // Recover PE 1012C870/1012C8C0/1012C780 and validate a bot fleeing artillery; then pass the
+    // list to Bot::setWaypoints and record the flee position when `found`.
+    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::avoidArtillery (waypoint list PE 1012CDF0)");
+}
+
+// PE 1017C1F0. True when the member's living, upright player is in a vehicle whose
+// information is a unit with a mobile plug-in. The vehicle is read before the player state.
 bool SquadMember::isMobile()
 {
     IAIObject* const vehicle = m_player->getCurrentVehicle();
@@ -408,8 +505,9 @@ bool SquadMember::isMobile()
         return false;
     if (m_player->isManDown())
         return false;
-
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::isMobile (IAIObject information handle)");
+    Information* const information =
+        informationManager->getInformation(vehicle->getInformation(m_side + 1));
+    return information && information->getUnit() && information->getMobile();
 }
 
 // Position validity is deliberately ignored before the formation-world-position query.

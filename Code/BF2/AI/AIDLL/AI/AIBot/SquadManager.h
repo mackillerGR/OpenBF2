@@ -60,6 +60,15 @@ public:
                                                int side, bool attack, int* strength);
     void incomingArtillery(const Vec3& position, int side); // PE 10128C80, one-based side
     bool getArtilleryTarget(int side, Vec2& target);        // [INFERRED] name; PE 10129BE0
+    // True when the position lies strictly inside an active artillery zone: the side's own at
+    // once, the other side's only once its delay has passed. Reports the time since the fire
+    // and the zone's one-based side. PE 10128D20; [INFERRED] name and parameter split.
+    bool isInArtilleryDangerZone(Vec3 position, int side, double& elapsed, int& zoneSide);
+    Vec3 getArtilleryPosition(int side) const;              // [INFERRED] name; PE 10128E50
+    // The flee position recorded for the member's side and vehicle kind (type bit 21 or not).
+    // PE 10128E80 / 10128F40; the setter name is attested by this header's earlier note.
+    bool getValidArtilleryFleePos(SquadMember* member, Vec3& position);
+    void setValidArtilleryFleePos(SquadMember* member, Vec3 position);
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
