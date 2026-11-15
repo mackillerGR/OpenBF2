@@ -23,6 +23,11 @@
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"      // IBFTimer::getGameTime
 #include "../../../AIInterface/BFKnowledge/BFSquad.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../Main/AIRandom.h"
+#include "../Main/AISettingsInterfaces.h"
+#include "SquadManager.h"
+#include <cmath>
 
 namespace dice {
 namespace hfe {
@@ -810,6 +815,226 @@ bool SquadCoordinator::getMemberOrderPos(SquadMember* member, Vec3& position)
     if (!information || !information->getUnit() || !information->getMobile())
         return false;
     position = object->getOrderPos(information->getMobile()->getVehicleNumber(), m_side + 1);
+    return true;
+}
+
+// PE 101A3000. The leader is read before either branch and is not range-checked. The squad-order
+// arm treats positions as equal when every component differs by at most FLT_EPSILON.
+void SquadCoordinator::setMission(int type, const Vec3& position, int value, bool commander)
+{
+    SquadMember* const leader = m_squadMembers[m_i96];
+    if (commander)
+    {
+        const bool busy = (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && isAnyMemberNearGoal()) ||
+                          m_i120 != 0;
+        if (busy && !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+            return;
+        m_i120 = 1;
+        m_d132 = m_d124 + 10.0;
+        m_v64 = position;
+        m_b92 = commander;
+        m_i76 = type;
+        m_i80 = value;
+        m_pendingArea = 0;
+        return;
+    }
+    if (m_squadMembers.empty())
+        return;
+    const float epsilon = 1.1920929e-07f;
+    const bool same = std::fabs(position.x - m_v200.x) <= epsilon && std::fabs(position.y - m_v200.y) <= epsilon &&
+                      std::fabs(position.z - m_v200.z) <= epsilon;
+    if (same || leader->hasBot())
+        return;
+    m_b220 = true;
+    m_v200 = position;
+    clearMemberPaths();
+    m_formation->leaveSquadLeader();
+}
+
+// PE 101A1750.
+void SquadCoordinator::requestRepair(const Vec3& position)
+{
+    m_b172 = true;
+    m_v176 = position;
+    m_d188 = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + 60.0;
+    m_b196 = false;
+}
+
+// PE 101A2BF0.
+void SquadCoordinator::clearMemberPaths()
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        if (m_squadMembers[i])
+            m_squadMembers[i]->setHavePath(false);
+    }
+}
+
+// PE 101A1F40. Each candidate draws x then z; the draw is u32 * width * 2^-31 from the low edge.
+bool SquadCoordinator::findValidPositionNear(SquadMember* member, Vec3& position, float halfWidth)
+{
+    if (isPositionValidForMember(member, position))
+        return true;
+    IAITerrain* const terrain = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    Vec3 candidate;
+    candidate.x = 0.0f;
+    candidate.y = 0.0f;
+    candidate.z = 0.0f;
+    for (int i = 0; i < 8; ++i)
+    {
+        candidate.x = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) * halfWidth *
+                                         4.656612873077393e-10 +
+                                         (static_cast<double>(position.x) - halfWidth));
+        candidate.z = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) * halfWidth *
+                                         4.656612873077393e-10 +
+                                         (static_cast<double>(position.z) - halfWidth));
+        candidate.y = terrain->getTerrainAltitude(candidate.x, candidate.z);
+        if (isPositionValidForMember(member, candidate))
+        {
+            position = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+// PE 101A3120. The closest object to the pending position is looked up after the assignment is
+// cleared, so the "already assigned" test only passes when no object is found. A position
+// accepted without an object skips the accepted-flag test. The leader index is not range-checked.
+bool SquadCoordinator::acceptMission(SquadMember* member)
+{
+    const bool result = false;
+    bool accepted = false;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_strategicAreaAssignment = 0;
+    AIStrategicArea* const closest = static_cast<AIStrategicArea*>(
+        AIStrategicObjectManager::getInstance()->getClosestObject(m_v64, m_side + 1));
+    if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && closest && m_i76 == 0 &&
+        !closest->getStatus(m_side + 1))
+    {
+        m_strategicAreaAssignment = 0;
+        m_i44 = 0;
+        m_i120 = 0;
+        m_i40 = 4;
+        return false;
+    }
+    if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander() && m_i40 == m_i76 &&
+        m_strategicAreaAssignment == closest)
+        return true;
+
+    bool announce = false;
+    if (closest)
+    {
+        const Vec2& centre = closest->getPosition(m_side + 1);
+        const float px = centre.x;
+        const float pz = centre.y;
+        const float height = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->getTerrainAltitude(px, pz);
+        float reach = closest->m_size[m_side];
+        reach = static_cast<float>(
+            static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getIgnoreCommanderDistance() + reach);
+        bool take = closest->isInsideArea(m_v64);
+        if (!take)
+        {
+            const float dx = m_v64.x - px;
+            const double dy = static_cast<double>(m_v64.y) - height;
+            const double dz = static_cast<double>(m_v64.z) - pz;
+            const double distance = std::sqrt(static_cast<double>(dx) * dx + dz * dz + dy * dy);
+            take = distance < reach && closest->getStatus(m_side + 1);
+        }
+        if (take)
+        {
+            m_v64.x = px;
+            m_v64.y = height;
+            m_v64.z = pz;
+            m_v28 = m_v64;
+            m_d48 = now;
+            m_strategicAreaAssignment = closest;
+            m_i120 = 2;
+            m_i40 = m_i76;
+            m_i44 = m_i80;
+            m_b56 = m_b92;
+            accepted = true;
+        }
+    }
+
+    if (!m_strategicAreaAssignment)
+    {
+        Vec3 position = m_v64;
+        if (findValidPositionNear(member, position, 30.0f))
+        {
+            m_v64 = position;
+            m_i120 = 2;
+            m_v28 = m_v64;
+            m_i40 = m_i76;
+            m_i44 = m_i80;
+            m_d48 = now;
+            m_b56 = m_b92;
+            announce = true;
+        }
+        else
+        {
+            if (member->hasBot())
+            {
+                member->getBot()->getCommunicationAgent()->enqueueRadioMessage(7, 4, 3, 2.0f, 0);
+                if (member->isSquadLeader())
+                {
+                    IBFSquad* const squad = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+                    if (m_i76 == 0)
+                        squad->declineCommanderAttackOrder(m_squadIndex + 1, member->getPlayer());
+                    else if (m_i76 == 1)
+                        squad->declineCommanderDefendOrder(m_squadIndex + 1, member->getPlayer());
+                    else if (m_i76 == 2)
+                        squad->declineCommanderMoveOrder(m_squadIndex + 1, member->getPlayer());
+                }
+            }
+            m_strategicAreaAssignment = 0;
+            m_i40 = 4;
+            m_i44 = 0;
+            m_i120 = 0;
+            clearMemberPaths();
+        }
+    }
+    if (!announce && !accepted)
+        return result;
+
+    SquadMember* const leader = m_squadMembers[m_i96];
+    if (leader->hasBot())
+    {
+        CommunicationAgent* const agent = leader->getBot()->getCommunicationAgent();
+        if (IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+            agent->enqueueRadioMessage(6, 4, 3, 2.5f, 0);
+        if (m_i40 == 0)
+        {
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->issueSquadAttackOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->acceptCommanderAttackOrder(m_squadIndex + 1, member->getPlayer());
+            agent->enqueueRadioMessage(16, 3, 3, 2.0f, 0);
+        }
+        else if (m_i40 == 1)
+        {
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->issueSquadDefendOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->acceptCommanderDefendOrder(m_squadIndex + 1, member->getPlayer());
+            agent->enqueueRadioMessage(15, 3, 3, 2.0f, 0);
+        }
+        else if (m_i40 == 2)
+        {
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->issueSquadMoveOrder(m_v28, m_squadIndex + 1, m_side + 1, 0);
+            static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+                ->acceptCommanderMoveOrder(m_squadIndex + 1, member->getPlayer());
+            agent->enqueueRadioMessage(17, 3, 3, 2.0f, 0);
+        }
+    }
+    else if (!IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+    {
+        if (m_i40 == 0 || m_i40 == 1)
+            SquadManager::m_instance->queueCommanderMessage(m_side, m_squadIndex, m_i40, 3.0);
+    }
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setHavePath(false);
     return true;
 }
 

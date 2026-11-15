@@ -95,6 +95,53 @@ void SquadManager::updateArtilleryStatus(double time)
     }
 }
 
+// PE 1012ACB0.
+void SquadManager::receiveOrder(int type, int playerId, bool commander)
+{
+    int side;
+    SquadCoordinator* squad = getSquadFromPlayer(playerId, 1);
+    if (squad)
+    {
+        side = 1;
+    }
+    else
+    {
+        squad = getSquadFromPlayer(playerId, 2);
+        side = 2;
+    }
+    if (!squad)
+        return;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    IBFSquad* const courier = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+    if (commander)
+        courier->getCommanderOrder(side, squad->getSquadId() + 1, position, 0);
+    else
+        courier->getSquadOrder(side, squad->getSquadId() + 1, position, 0);
+    if (type == 3)
+        squad->requestRepair(position);
+    else
+        squad->setMission(type, position, 0, commander);
+}
+
+// PE 1012B920. The record is zero-filled before its fields are written.
+void SquadManager::queueCommanderMessage(int side, int squadIndex, int type, double delay)
+{
+    for (std::list<CommanderMessage*>::iterator i = m_commanderMessages.begin(); i != m_commanderMessages.end(); ++i)
+    {
+        if ((*i)->m_sideIndex == side && (*i)->m_squadIndex == squadIndex)
+            return;
+    }
+    CommanderMessage* const message = new CommanderMessage();
+    message->m_dueTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + delay;
+    message->m_type = static_cast<CommanderMessageType>(type);
+    message->m_sideIndex = side;
+    message->m_squadIndex = squadIndex;
+    m_commanderMessages.push_back(message);
+}
+
 // Purge messages for each human commander before reading
 // game time once. Dispatch only types 0/1, but delete every expired type. The queued pointer
 // is fetched again after the send callback for deletion, and the list end remains live.

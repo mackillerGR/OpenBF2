@@ -368,6 +368,14 @@ void SquadFormation::joinSquadLeader()
     updateMovementFlag(true);
 }
 
+// PE 1019EEC0. The movement update is inlined with force set.
+void SquadFormation::leaveSquadLeader()
+{
+    m_b85 = false;
+    m_b84 = true;
+    updateMovementFlag(true);
+}
+
 // [INFERRED] void result. No slot-vector, leader or member null guards exist.
 void SquadFormation::updateFormation()
 {

@@ -75,6 +75,13 @@ public:
 
     // Clears messages and position records by erasing each container node individually.
     void clearCommanderMessages();
+    // Queues a commander message for the side's squad unless one is already queued for it; it is
+    // due `delay` seconds after the current game time. [INFERRED] name. PE 1012B920.
+    // An order the engine reports for a player's squad: the order position is read back from the
+    // squad courier (commander or squad order) and becomes the squad's pending mission, or its
+    // repair request for type 3. Players in no squad are ignored. [INFERRED] name. PE 1012ACB0.
+    void receiveOrder(int type, int playerId, bool commander);
+    void queueCommanderMessage(int side, int squadIndex, int type, double delay);
     void clearPlayerValidPositions();
 
     static SquadManager* m_instance;

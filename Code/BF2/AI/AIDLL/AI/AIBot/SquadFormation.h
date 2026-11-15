@@ -98,6 +98,9 @@ public:
     int findFreeSlotTarget(SquadMember* member);
     void swapSlots(int first, int second);    // three payload fields only
     void updateMovementFlag(bool force);
+    // The formation stops following the leader and restamps its movement. [INFERRED] name.
+    // PE 1019EEC0.
+    void leaveSquadLeader();
     void updateSlotZeroPos();                 // inlined
     void resetTrailingPositions();
 

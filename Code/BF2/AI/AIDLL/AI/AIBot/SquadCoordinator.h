@@ -97,6 +97,23 @@ public:
     // Whether the member's vehicle, or on foot its soldier, can stand at the position on the
     // navigation mesh. [INFERRED] name.
     bool isPositionValidForMember(SquadMember* member, const Vec3& position);
+    // Up to eight random tries in a square of the given half-width around the position, at
+    // terrain height, for a position valid for the member; the position itself first.
+    // [INFERRED] name. PE 101A1F40.
+    bool findValidPositionNear(SquadMember* member, Vec3& position, float halfWidth);
+    // Takes the pending mission: onto the closest strategic object when the position lies in
+    // it or within its reach and the side holds it, otherwise onto a valid nearby position.
+    // Announces and confirms it through the squad courier, or declines it. [INFERRED] name.
+    // PE 101A3120.
+    bool acceptMission(SquadMember* member);
+    // Records an order as the pending mission. A commander order is refused while a bot
+    // commander's squad is busy (near its goal or on a mission); a squad order from a human
+    // leader becomes the secondary goal. [INFERRED] name. PE 101A3000.
+    void setMission(int type, const Vec3& position, int value, bool commander);
+    // Starts a repair request at the position, due in 60 seconds. [INFERRED] name. PE 101A1750.
+    void requestRepair(const Vec3& position);
+    // Clears every member's path. PE 101A2BF0; [INFERRED] name.
+    void clearMemberPaths();
     // Whether the member's vehicle finds material 4 at the position; true without a vehicle.
     // [INFERRED] name.
     bool isMaterialFourAt(SquadMember* member, const Vec3& position);
@@ -114,13 +131,18 @@ public:
     /*  +40 */ int m_i40;                      // = 4 [UNRESOLVED]
     /*  +44 */ int m_i44;                      // = 0 [UNRESOLVED]
     /*  +48 */ double m_d48;                   // = -20.0 a "never happened" sentinel, not a time
-    /*  +56 */ char m_gap56[4];                // never written by the constructor
+    // Copied from m_b92 when a mission is taken; the constructor never writes either flag.
+    /*  +56 */ bool m_b56;                     // [UNRESOLVED] PE +0x48
+    /*  +57 */ char m_pad57[3];
     // Twin of m_strategicAreaAssignment read at PE +0x50 by 101A1280. [INFERRED] name.
     /*  +60 */ AIStrategicArea* m_pendingArea;  // = 0, borrowed
     /*  +64 */ Vec3 m_v64;                     // zeroed [UNRESOLVED]
     /*  +76 */ int m_i76;                      // = 4 [UNRESOLVED] - the twin of m_i40
     /*  +80 */ int m_i80;                      // = 0 [UNRESOLVED]
-    /*  +84 */ char m_gap84[12];               // never written by the constructor
+    // The pending mission's double and flag; the constructor never writes them.
+    /*  +84 */ double m_d84;                   // [UNRESOLVED] PE +0x68
+    /*  +92 */ bool m_b92;                     // [UNRESOLVED] PE +0x70
+    /*  +93 */ char m_pad93[3];
     /*  +96 */ int m_i96;                      // leader member index, initially -1
     /* +100 */ SquadFormation* m_formation;    // new SquadFormation(this)
     /* +104 */ std::list<int> m_list104;       // header only; 4-byte element [UNRESOLVED]

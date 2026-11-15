@@ -5,6 +5,7 @@
 #include "../Main/AIRandom.h"
 #include "SquadManager.h"
 #include "WaypointList.h"
+#include "../../../AIInterface/BFKnowledge/BFSquad.h"
 #include "CommunicationAgent.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
@@ -304,10 +305,13 @@ void SquadMember::update(double time)
         }
         if (member)
         {
-            // The selected member goes to acceptMission before the engine's
-            // accept/decline courier. Neither response is fabricated here.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (SquadCoordinator::acceptMission)");
+            // The answer goes to the engine as this member's accept or decline.
+            const bool accepted = m_squad->acceptMission(member);
+            IBFSquad* const squad = static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad);
+            if (accepted)
+                squad->acceptSquadOrder(m_squadIndex + 1, m_player);
+            else
+                squad->declineSquadOrder(m_squadIndex + 1, m_player);
         }
     }
 
