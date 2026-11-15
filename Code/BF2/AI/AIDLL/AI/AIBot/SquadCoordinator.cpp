@@ -851,6 +851,17 @@ void SquadCoordinator::setMission(int type, const Vec3& position, int value, boo
     m_formation->leaveSquadLeader();
 }
 
+// PE 101A1D60.
+void SquadCoordinator::getPendingMission(PendingMission& mission) const
+{
+    mission.area = m_pendingArea;
+    mission.position = m_v64;
+    mission.type = m_i76;
+    mission.value = m_i80;
+    mission.time = m_d84;
+    mission.commander = m_b92;
+}
+
 // PE 101A1750.
 void SquadCoordinator::requestRepair(const Vec3& position)
 {

@@ -126,6 +126,29 @@ void SquadManager::receiveOrder(int type, int playerId, bool commander)
         squad->setMission(type, position, 0, commander);
 }
 
+// PE 1012BA30.
+void SquadManager::requestNewOrders(int side, int squadId)
+{
+    ISAI* const sai = IAIMain::m_instance->getSAI(side);
+    SquadCoordinator* const squad = m_coordinators[side - 1][squadId - 1];
+    if (!squad || sai->isPlayerCommander() || !squad->getMissionStatus())
+        return;
+    SquadCoordinator::PendingMission mission;
+    squad->getPendingMission(mission);
+    if (!mission.commander)
+        return;
+    if (mission.type == 0)
+    {
+        sai->getCommanderInterface()->giveAttackOrder(mission.position, squad);
+        queueCommanderMessage(side - 1, squadId - 1, 0, 2.0);
+    }
+    else
+    {
+        sai->getCommanderInterface()->giveDefendOrder(mission.position, squad);
+        queueCommanderMessage(side - 1, squadId - 1, 1, 2.0);
+    }
+}
+
 // PE 1012B920. The record is zero-filled before its fields are written.
 void SquadManager::queueCommanderMessage(int side, int squadIndex, int type, double delay)
 {

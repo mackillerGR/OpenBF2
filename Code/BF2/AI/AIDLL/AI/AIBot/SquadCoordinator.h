@@ -112,6 +112,17 @@ public:
     void setMission(int type, const Vec3& position, int value, bool commander);
     // Starts a repair request at the position, due in 60 seconds. [INFERRED] name. PE 101A1750.
     void requestRepair(const Vec3& position);
+    // A copy of the pending mission block. [INFERRED] name. PE 101A1D60.
+    struct PendingMission
+    {
+        AIStrategicArea* area;     // PE +0x00
+        Vec3 position;             // PE +0x04
+        int type;                  // PE +0x10
+        int value;                 // PE +0x14
+        double time;               // PE +0x18 [UNRESOLVED]
+        bool commander;            // PE +0x20
+    };
+    void getPendingMission(PendingMission& mission) const;
     // Clears every member's path. PE 101A2BF0; [INFERRED] name.
     void clearMemberPaths();
     // Whether the member's vehicle finds material 4 at the position; true without a vehicle.

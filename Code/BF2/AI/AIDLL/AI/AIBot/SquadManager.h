@@ -81,6 +81,11 @@ public:
     // squad courier (commander or squad order) and becomes the squad's pending mission, or its
     // repair request for type 3. Players in no squad are ignored. [INFERRED] name. PE 1012ACB0.
     void receiveOrder(int type, int playerId, bool commander);
+    // A human squad leader asks for orders: with a bot commander and a squad on a mission whose
+    // pending order came from a commander, the order is given again (attack for type 0, defend
+    // otherwise) and a commander message is queued for two seconds. The squad id is not
+    // range-checked. [INFERRED] name. PE 1012BA30.
+    void requestNewOrders(int side, int squadId);
     void queueCommanderMessage(int side, int squadIndex, int type, double delay);
     void clearPlayerValidPositions();
 

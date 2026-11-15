@@ -21,6 +21,7 @@
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"            // event_worldReset
 #include "../DrawPrimitives/DPManager.h"                       // event_worldReset
 #include "CommunicationHub.h"                                  // event_worldReset
+#include "../AIStrategic/SAI.h"                                 // event_resignAsCommander
 
 namespace dice {
 namespace hfe {
@@ -178,9 +179,11 @@ int AIEventCourier::event_isRepaired(int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_isRepaired");
 }
 
-void AIEventCourier::event_requestNewOrders(int, int)
+// PE 100BF5D0. The arguments reach the manager swapped.
+void AIEventCourier::event_requestNewOrders(int a, int b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_requestNewOrders");
+    if (SquadManager::m_instance)
+        SquadManager::m_instance->requestNewOrders(b, a);
 }
 
 // PE 100BF440.
@@ -238,9 +241,11 @@ void AIEventCourier::event_commanderOrderAccepted(int squadId)
         IAIMain::m_instance->commanderOrderAccepted(squadId);
 }
 
-void AIEventCourier::event_commanderOrderRejected(int)
+// PE 100BF510.
+void AIEventCourier::event_commanderOrderRejected(int squadId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_commanderOrderRejected");
+    if (IAIMain::m_instance)
+        IAIMain::m_instance->commanderOrderRejected(squadId);
 }
 
 int AIEventCourier::event_appliedForCommander(int)
@@ -253,9 +258,11 @@ int AIEventCourier::event_acceptedCommander(int, int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_acceptedCommander");
 }
 
-void AIEventCourier::event_resignAsCommander(int, int)
+// PE 100BF560. The first argument is unused.
+void AIEventCourier::event_resignAsCommander(int, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_resignAsCommander");
+    if (IAIMain::m_instance)
+        IAIMain::m_instance->getSAI(side)->setPlayerIsCommander(false);
 }
 
 // Only the SquadManager singleton is guarded;
@@ -309,14 +316,14 @@ void AIEventCourier::event_receivedRepairSquadOrder(int playerId)
         SquadManager::m_instance->receiveOrder(3, playerId, false);
 }
 
+// PE 100BF670. The shipped body is empty.
 void AIEventCourier::event_squadOrderAccepted(int, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_squadOrderAccepted");
 }
 
+// PE 100BF680. The shipped body is empty.
 void AIEventCourier::event_squadOrderRejected(int, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_squadOrderRejected");
 }
 
 int AIEventCourier::event_botTeamKilled(int, int)
