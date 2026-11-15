@@ -206,7 +206,7 @@ class BAPALook : public BotScript
 {
 public:
     // PE 101DF6E0.
-    BAPALook(int flag, BAPCondition* until, unsigned long long inputMask, int id);
+    BAPALook(float deadZone, BAPCondition* until, unsigned long long inputMask, int id);
     virtual ~BAPALook();                                               // PE 101DF740
 
     // The fallback when no entry is installed: unfinished and failed.
@@ -217,7 +217,7 @@ public:
     virtual Vec3 getTarget(bool& valid) = 0;
 
     /* +0x18 */ BAPCondition* m_until;
-    /* +0x1C */ int m_flag;          // [UNRESOLVED] passed to the look controller
+    /* +0x1C */ float m_deadZone;     // the look controller's dead zone
     // Controller state the look entry carries between ticks: two values it feeds back to the
     // controller (+0x20 is reset to pi when the look ends) and the last camera forward.
     /* +0x20 */ float m_state20;
@@ -230,7 +230,7 @@ class BAPALookDirection : public BAPALook
 {
 public:
     // PE 101C17B0.
-    BAPALookDirection(const Vec3& direction, int flag, BAPCondition* until,
+    BAPALookDirection(const Vec3& direction, float deadZone, BAPCondition* until,
                       unsigned long long inputMask, int id);
     virtual ~BAPALookDirection();                                      // PE 101C1800
     virtual Vec3 getTarget(bool& valid);                               // PE 101C1780
@@ -243,7 +243,7 @@ class BAPALookAtObject : public BAPALook
 {
 public:
     // PE 101AD7D0.
-    BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
+    BAPALookAtObject(Bot* bot, unsigned int object, float deadZone, BAPCondition* until,
                      unsigned long long inputMask, int id, int arg8, int arg9);
     virtual ~BAPALookAtObject();                                       // PE 101AD850
     virtual Vec3 getTarget(bool& valid);                               // PE 101AD890

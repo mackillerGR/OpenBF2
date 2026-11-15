@@ -424,9 +424,9 @@ bool BAPMergeSoldierInputs::isComposite() { return true; }
 
 // ---- BAPALook ------------------------------------------------------------------------------
 
-BAPALook::BAPALook(int flag, BAPCondition* until, unsigned long long inputMask, int id)
+BAPALook::BAPALook(float deadZone, BAPCondition* until, unsigned long long inputMask, int id)
     : m_until(until)
-    , m_flag(flag)
+    , m_deadZone(deadZone)
 {
     m_state20 = 0.0f;
     m_state24 = 0.0f;
@@ -449,9 +449,9 @@ BAPStatementType BAPALook::getType() { return BAPSTLookAt; }
 bool BAPALook::isComposite() { return false; }
 
 // The condition is claimed without a null check.
-BAPALookDirection::BAPALookDirection(const Vec3& direction, int flag, BAPCondition* until,
+BAPALookDirection::BAPALookDirection(const Vec3& direction, float deadZone, BAPCondition* until,
                                      unsigned long long inputMask, int id)
-    : BAPALook(flag, until, inputMask, id)
+    : BAPALook(deadZone, until, inputMask, id)
     , m_direction(direction)
 {
     m_until->m_owner = this;
@@ -469,9 +469,9 @@ Vec3 BAPALookDirection::getTarget(bool& valid)
     return m_direction;
 }
 
-BAPALookAtObject::BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
+BAPALookAtObject::BAPALookAtObject(Bot* bot, unsigned int object, float deadZone, BAPCondition* until,
                                    unsigned long long inputMask, int id, int arg8, int arg9)
-    : BAPALook(flag, until, inputMask, id)
+    : BAPALook(deadZone, until, inputMask, id)
     , m_bot(bot)
     , m_object(object)
     , m_arg40(arg8)

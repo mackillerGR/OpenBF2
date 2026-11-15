@@ -181,6 +181,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BotScript.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPConditions.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPStatements.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\LookController.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotSubObjects.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\UrgencyMerger.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotBehaviour\BotBehaviour.cpp" ^

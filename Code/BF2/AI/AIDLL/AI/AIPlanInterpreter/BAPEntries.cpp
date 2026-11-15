@@ -4,6 +4,12 @@
 
 #include "../Main/AIDllFrontier.h"
 #include "PlanInterpreter.h"
+#include "../AIBot/SensingAgent.h"
+#include "../AIBotActionPlan/BAPConditions.h"
+#include "../AIBotActionPlan/LookController.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include <cmath>
 #include "../AIBot/BotMain.h"
 #include "../AIBotActionPlan/BAPStatements.h"
 #include "../AIKnowledge/Information.h"
@@ -16,6 +22,26 @@ namespace hfe {
 namespace ai {
 
 namespace {
+
+// PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
+int normaliseVector(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return 0;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        value.z = 0.0f;
+        return -20001;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+    return 0;
+}
 
 // PE 101C4530, a free helper ([INFERRED] name). Releases the soldier's movement group (action,
 // sprint, yaw, pitch, roll, throttle and both mouse-look axes), points the vertical look along the
@@ -493,7 +519,7 @@ bool EntryInfanteryResetControls::execute(BotScript* script, Bot* bot, bool& fin
     BAPResetControls* const reset = static_cast<BAPResetControls*>(script);
     if (reset->hasInputMask())
     {
-        bot->playerInput()->setInput(static_cast<io::PlayerInputMap>(reset->m_input), false);
+        bot->playerInput()->setInput(static_cast<io::PlayerInputMap>(reset->m_input), 0.0f);
         finished = true;
         failed = true;
         return true;
@@ -594,9 +620,55 @@ int EntryMouseTurretLookAt::getTargetId()
     return 23;
 }
 
-bool EntryMouseTurretLookAt::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10132ED0. Holds the sensing agent's override and steers the look toward the statement's
+// target until its condition holds. The controller state resets to pi whenever the look ends or
+// has nothing to look at.
+bool EntryMouseTurretLookAt::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryMouseTurretLookAt::execute");
+    BAPALook* const look = static_cast<BAPALook*>(script);
+    Vec3 direction = {};
+    bot->getSensingAgent()->setOverride(true);
+    if (look->m_until->evaluate(bot))
+    {
+        failed = true;
+        finished = true;
+        look->m_state20 = 3.14159274101257324f;
+        return true;
+    }
+    failed = false;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        failed = true;
+        finished = false;
+        look->m_state20 = 3.14159274101257324f;
+        return true;
+    }
+    direction = look->getTarget(finished);
+    normaliseVector(direction);
+    if (!finished)
+    {
+        failed = false;
+        look->m_state20 = 3.14159274101257324f;
+        return true;
+    }
+    finished = true;
+    IPIControlInfo* const control = equipment->getControlInfo();
+    float pitchError;
+    float yawError;
+    const float previousPitch = look->m_state24;
+    const float previousYaw = look->m_state20;
+    steerLook(bot, direction,
+              *static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation()),
+              pitchError, previousPitch, yawError, previousYaw, look->m_deadZone, control,
+              bot->playerInput(), 0.0f, 0.0f, 0.0f);
+    look->m_state24 = pitchError;
+    look->m_state20 = yawError;
+    const Mat4& camera = *static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation());
+    look->m_lastForward.x = camera.m[8];
+    look->m_lastForward.y = camera.m[9];
+    look->m_lastForward.z = camera.m[10];
+    return true;
 }
 
 

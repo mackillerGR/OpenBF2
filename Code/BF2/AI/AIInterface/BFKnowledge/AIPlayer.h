@@ -107,7 +107,7 @@ public:
     virtual int getScore();                                         // [FRONTIER]
     virtual void setIsAIPlayer(bool isAI);                          // [FRONTIER]
     virtual bool getIsAIPlayer();
-    virtual const void* getCameraTransformation() const;            // [FRONTIER]
+    virtual const void* getCameraTransformation() const;
     virtual const void* getPlayerInput() const;
 
     // ds: - one `Mat4`, allocated by whichever `AIPlayer` is constructed first and never

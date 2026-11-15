@@ -28,6 +28,11 @@ public:
     // Read through to the engine object's control info. PE 1019CA90 / 1019CAB0 / 1019CAD0.
     float getCameraRelativeDofRotationOffset() const;
     unsigned long long getLookControls() const;      // PE 1019C6F0
+    io::PlayerInputMap getLookVerticalControl() const;     // PE 1019CA30
+    io::PlayerInputMap getLookHorizontalControl() const;   // PE 1019CA50
+    float getProportionalConstant() const;           // PE 1019C7D0
+    float getDerivativeConstant() const;             // PE 1019C7F0
+    float getAngleSpeedConstant() const;             // PE 1019C810
     const Vec3& getCameraRelativeMinRotation() const;
     const Vec3& getCameraRelativeMaxRotation() const;
 };
@@ -40,6 +45,31 @@ inline float IPIControlInfo::getCameraRelativeDofRotationOffset() const
 inline unsigned long long IPIControlInfo::getLookControls() const
 {
     return m_information->getAIObject()->getControlInfo()->getLookControls();
+}
+
+inline io::PlayerInputMap IPIControlInfo::getLookVerticalControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getLookVerticalControl();
+}
+
+inline io::PlayerInputMap IPIControlInfo::getLookHorizontalControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getLookHorizontalControl();
+}
+
+inline float IPIControlInfo::getProportionalConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getProportionalConstant();
+}
+
+inline float IPIControlInfo::getDerivativeConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDerivativeConstant();
+}
+
+inline float IPIControlInfo::getAngleSpeedConstant() const
+{
+    return m_information->getAIObject()->getControlInfo()->getAngleSpeedConstant();
 }
 
 inline const Vec3& IPIControlInfo::getCameraRelativeMinRotation() const

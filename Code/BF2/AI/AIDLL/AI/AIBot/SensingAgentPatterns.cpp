@@ -126,7 +126,7 @@ BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot,
         return plan;
     BAPConFalse* const until = new BAPConFalse;
     const int id = getId();
-    BAPALook* const look = new BAPALookDirection(direction, 0, checkPointer(until),
+    BAPALook* const look = new BAPALookDirection(direction, 0.0f, checkPointer(until),
                                                  control->getLookControls(), id);
     return endPlan(checkPointer(look), bot);
 }
@@ -140,7 +140,7 @@ BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent* agent, Bot* bot,
         return plan;
     BAPConFalse* const until = new BAPConFalse;
     const int id = getId();
-    BAPALook* const look = new BAPALookAtObject(bot, object, 0, checkPointer(until),
+    BAPALook* const look = new BAPALookAtObject(bot, object, 0.0f, checkPointer(until),
                                                 control->getLookControls(), id, 0, 0);
     return endPlan(checkPointer(look), bot);
 }

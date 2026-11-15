@@ -16,6 +16,7 @@
 #include "../../../Scene/Object/PlayerManager.h"      // the `playerManager` global
 #include "../../../Scene/Object/ObjectTypes/Game/IPlayerControlObject.h"
 #include "AIPlayerFactory.h"                          // the id-to-player mapping pair
+#include "../../../Game/Objects/ICameraObject.h"
 
 namespace dice {
 namespace hfe {
@@ -312,10 +313,16 @@ bool AIPlayer::getIsAIPlayer()
     return m_player->getIsAIPlayer();
 }
 
+// BF2.exe 826120. The camera's object transform, or the shared identity when the player has no
+// camera. The camera's object interface is not null-checked, as shipped.
 const void* AIPlayer::getCameraTransformation() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getCameraTransformation"
-                    " - read in outline; the camera object's transform slot is not confirmed");
+    world::ICameraObject* const camera = m_player->getCamera();
+    if (!camera)
+        return identityMatrix;
+    world::IObject* const object =
+        static_cast<world::IObject*>(camera->queryInterface(world::IID_IObject));
+    return &object->getAbsoluteTransformation();
 }
 
 } // namespace ai
