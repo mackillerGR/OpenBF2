@@ -1220,17 +1220,63 @@ void SquadFormation::setLineFormation()
     }
 }
 
-// [FRONTIER] Wedge and echelon layouts selected by changeFormation remain unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stops when their layout behavior is recovered.
-void SquadFormation::setWedgeFormation()
+// The wedge and echelon layouts share the line layout's slot walk: slot zero at the origin,
+// then alternate sides, each slot referring back along the chain, spread by both members'
+// vehicle radii. Only the side offsets differ.
+void SquadFormation::layoutAlternating(float positiveX, float positiveZ, float negativeX, float negativeZ)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setWedgeFormation");
+    float offsetX = 0.0f;
+    float offsetZ = 0.0f;
+    bool positiveSide = true;
+    int referenceSlot = 0;
+    for (unsigned int i = 0; i < m_maxSquadMembers; ++i)
+    {
+        Slot* const slot = m_slots[i];
+        if (i)
+        {
+            if (positiveSide)
+            {
+                offsetX = positiveX;
+                offsetZ = positiveZ;
+                slot->m_referenceSlot = referenceSlot;
+                if (i > 2)
+                    ++referenceSlot;
+                positiveSide = false;
+            }
+            else
+            {
+                offsetX = negativeX;
+                offsetZ = negativeZ;
+                slot->m_referenceSlot = referenceSlot++;
+                positiveSide = true;
+            }
+        }
+        slot->m_offset.x = offsetX;
+        slot->m_offset.y = 0.0f;
+        slot->m_offset.z = offsetZ;
+        if (slot->m_occupied)
+        {
+            const float own = m_coordinator->getSquadMember(slot->m_memberIndex)->getVehicleRadius() * 3.0f;
+            Slot* const reference = m_slots[slot->m_referenceSlot];
+            const float scale =
+                m_coordinator->getSquadMember(reference->m_memberIndex)->getVehicleRadius() * 3.0f + own;
+            slot->m_offset.x = scale * slot->m_offset.x + reference->m_offset.x;
+            slot->m_offset.y = scale * slot->m_offset.y + reference->m_offset.y;
+            slot->m_offset.z = scale * slot->m_offset.z + reference->m_offset.z;
+        }
+    }
 }
 
+// PE 1019F0B0. Sides at (x, z) and (-x, z) of the direction.
+void SquadFormation::setWedgeFormation()
+{
+    layoutAlternating(m_direction.x, m_direction.z, -m_direction.x, m_direction.z);
+}
+
+// PE 1019F1E0. Sides at (x, -z) and (-x, z) of the direction.
 void SquadFormation::setEchelonFormation()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::setEchelonFormation");
+    layoutAlternating(m_direction.x, -m_direction.z, -m_direction.x, m_direction.z);
 }
 
 } // namespace ai

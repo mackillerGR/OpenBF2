@@ -81,8 +81,8 @@ public:
     void updateFormationMaxSpeed();
     void setFormation();
     void setLineFormation();
-    void setWedgeFormation();                // [FRONTIER]
-    void setEchelonFormation();              // [FRONTIER]
+    void setWedgeFormation();                // PE 1019F0B0
+    void setEchelonFormation();              // PE 1019F1E0
 
     void joinFormation(int memberIndex);
     bool isInFormation(int memberIndex);      // ignores occupied flag
@@ -98,6 +98,8 @@ public:
     int findFreeSlotTarget(SquadMember* member);
     void swapSlots(int first, int second);    // three payload fields only
     void updateMovementFlag(bool force);
+    // Shared slot walk of the wedge and echelon layouts (each inlines it in PE).
+    void layoutAlternating(float positiveX, float positiveZ, float negativeX, float negativeZ);
     // The formation stops following the leader and restamps its movement. [INFERRED] name.
     // PE 1019EEC0.
     void leaveSquadLeader();
