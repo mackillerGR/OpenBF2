@@ -78,6 +78,37 @@ BotSenses::~BotSenses()
 // [FRONTIER] Remaining sight, hearing and communication operations require implementation.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
+SensedObject* BotSenses::getSensedObject(unsigned int handle) const
+{
+    const SensedObjectMap::const_iterator it = m_sensedObjects.find(handle);
+    if (it == m_sensedObjects.end())
+        return 0;
+    return it->second;
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] The record layouts are not recovered; these stop when
+// the senses first hold a record. [RETIRE-WHEN: bot-senses-records] Recover FireObject and
+// SensedObject and validate a bot that sees and hears an enemy.
+const Vec3& FireObject::getPosition() const
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::FireObject::getPosition");
+}
+
+double FireObject::getTime() const
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::FireObject::getTime");
+}
+
+unsigned int SensedObject::getHandle() const
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SensedObject::getHandle");
+}
+
+unsigned int SensedObject::getSenseFlags() const
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SensedObject::getSenseFlags");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

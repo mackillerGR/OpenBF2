@@ -88,32 +88,32 @@ void SensingAgentNullPattern::reset(int id)
 
 // [FRONTIER] Pattern plan creation and soldier helpers require the look/aim plan runtime.
 // [RETIRE-WHEN: aidll-02-skeleton] Replace each stop when its plan behavior is recovered.
-void SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BotScript* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
 }
 
-void SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BotScript* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
 }
 
-void SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BotScript* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentMouseFreeLookPattern::createPlan");
 }
 
-void SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BotScript* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentMouseFreeLookPattern::createPlan");
 }
 
-void SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
 }
 
-void SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BotScript* SensingAgentSoldierPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentSoldierPattern::createPlan");
 }
@@ -129,12 +129,12 @@ void SensingAgentSoldierPattern::endPlan(BAPALook *, Bot *)
 }
 
 // Null-pattern planning still requires an implementation; these overloads stop visibly.
-void SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+BotScript* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
 }
 
-void SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+BotScript* SensingAgentNullPattern::createPlan(SensingAgent *, Bot *, unsigned int)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentNullPattern::createPlan");
 }

@@ -19,6 +19,7 @@ class BotMain;
 class BotSenses;
 class Information;
 class ISensingAgentPattern;
+class SensedObject;
 
 class SensingAgent
 {
@@ -40,22 +41,61 @@ public:
     void setOverrideLock(bool locked);
     // Runs the agent's own plan through the bot's interpreter. [INFERRED] name.
     void executePlan();
-    // Rebuilds the agent's plan for the current equipment. [INFERRED] name. [FRONTIER]
+    // Rebuilds the agent's look plan for the current equipment. [INFERRED] name.
     void updatePlan();
     bool hasPlan() const { return m_plan != 0; }
     // BotBehaviour::getPlan raises +120 when it replaces a bot's plan. [INFERRED] name.
     void setPlanReplaced() { m_flag120 = true; }
-    // attested as a nested type by `std::vector<SensingAgent::FocusInformation>`; its members are
-    // [UNRESOLVED] - nothing recovered so far constructs one.
-    struct FocusInformation;
+    // A thing worth looking at: its weight and where it is. Attested as a nested type by
+    // `std::vector<SensingAgent::FocusInformation>`; member names are [INFERRED]. 16 bytes in PE.
+    struct FocusInformation
+    {
+        float m_weight;
+        Vec3  m_position;
+    };
+    // The summed attention of one of the eight sectors. [INFERRED] name. 20 bytes in PE.
+    struct QuadrantInformation
+    {
+        float        m_weight;
+        Vec3         m_position;   // the mean of the contributing positions
+        unsigned int m_count;
+    };
+    // The chosen sector: index (-1 for none), weight and position. [INFERRED] name.
+    struct FocusChoice
+    {
+        int   m_quadrant;
+        float m_weight;
+        Vec3  m_position;
+    };
 
 private:
-    /*   0 */ int m_zero0[6];              // +0..+20, all 0
+    void getQuadrantDirection(int quadrant, Vec2& direction);                  // PE 101AE0A0
+    bool isInQuadrant(int quadrant, const Vec2& direction);                    // PE 101AE7E0
+    bool isInQuadrantHalf(int quadrant, const Vec2& direction);                // PE 101AE8C0
+    bool isDirectionAllowed(const Vec2& direction);                            // PE 101AE9A0
+    bool getQuadrantsOf(const Vec3& position, int quadrants[2]);               // PE 101AEBD0
+    bool isQuadrantAllowed(int quadrant);                                      // PE 101AF380
+    void updateReactionTime(const FocusChoice& focus, Information* equipment,
+                            const Vec2& lookDirection);                        // PE 101AF410
+    void createPlanFromFocus(ISensingAgentPattern* pattern, const FocusChoice& focus);   // PE 101AF5E0
+    void chooseQuadrant(const std::vector<QuadrantInformation>& quadrants,
+                        FocusChoice& focus);                                   // PE 101AFCE0
+    void checkPlanValidity(const FocusChoice& focus, bool force);              // PE 101AFF00
+    void clearFocus();                                                         // PE 101B0050
+    void updateQuadrantWeights(Vec2& lookDirection, bool reconsider);          // PE 101B01B0
+    void sumQuadrants(std::vector<QuadrantInformation>& quadrants);            // PE 101B0330
+    void collectSensedFocus();                                                 // PE 101B10D0
+    void collectFireFocus();                                                   // PE 101B1220
+    void decideFocus(FocusChoice& focus, const double& time);                  // PE 101B1470
+    void createPlanTowards(const Vec3& direction, ISensingAgentPattern* pattern);  // PE 101AE290
+
+    /*   0 */ std::vector<FocusInformation> m_sensedFocus;   // PE +0x00
+    /*  12 */ std::vector<FocusInformation> m_fireFocus;     // PE +0x10
     // neither is A gap - the constructor skips them and `reset` writes both. A field the
     // constructor misses is not necessarily unused; check the reset before calling it dead.
     /*  24 */ int m_int24;                 // reset: -1
-    /*  28 */ int m_int28;                 // reset: 0
-    /*  32 */ int m_zero32[3];             // +32, +36, +40
+    /*  28 */ float m_focusWeight;         // reset: 0 - the weight of the sector m_int24
+    /*  32 */ Vec3 m_focusPosition;        // +32, +36, +40
     /*  44 */ bool m_flag44;               // reset: false
     // the eight-quadrant weight ring - the constructor's only container, and the only thing it
     // sizes. Eight zeroed floats; see the header block.
@@ -63,9 +103,12 @@ private:
     // [INFERRED] Plan-target handle, cleared to zero and passed to BotMain when checking
     // plan invalidation; the neighboring words are also cleared.
     /*  60 */ unsigned int m_planTarget60;  // clearPlanTargetInformation: 0
-    /*  64 */ int m_zero64[3];             // +64, +68, +72
-    /*  76 */ unsigned int m_planTarget76;  // clearPlanTargetInformation: 0
-    /*  80 */ int m_zero80[5];             // +80..+96
+    /*  64 */ Vec3 m_planTargetDirection;   // PE +0x4C
+    // Read as a float against the focus weight (PE +0x58). [INFERRED] name.
+    /*  76 */ float m_planTargetWeight;    // clearPlanTargetInformation: 0
+    // The look direction the plan last aimed along (PE +0x5C). [INFERRED] name.
+    /*  80 */ Vec2 m_lookDirection;
+    /*  88 */ int m_zero88[3];             // +88..+96
     /* 100 */ char m_gap100[4];            // [UNRESOLVED] - never written
     /* 104 */ BotSenses* m_senses;         // new(0x94) - the mechanism this agent steers
     /* 108 */ BotMain*   m_bot;            // the ctor argument

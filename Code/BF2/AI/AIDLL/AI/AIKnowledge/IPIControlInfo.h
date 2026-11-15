@@ -5,6 +5,9 @@
 #define AI_AIDLL_AI_AIKNOWLEDGE_IPICONTROLINFO_H
 
 #include "InformationPlugIn.h"
+#include "Information.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
 
 namespace dice { namespace hfe { namespace ai {
 
@@ -21,7 +24,26 @@ public:
     // through to the engine object on every call, so there is nothing to refresh.
     virtual void setTime() {}
     virtual void setTime(double /*time*/) {}
+
+    // Read through to the engine object's control info. PE 1019CA90 / 1019CAB0 / 1019CAD0.
+    float getCameraRelativeDofRotationOffset() const;
+    const Vec3& getCameraRelativeMinRotation() const;
+    const Vec3& getCameraRelativeMaxRotation() const;
 };
 
+inline float IPIControlInfo::getCameraRelativeDofRotationOffset() const
+{
+    return m_information->getAIObject()->getControlInfo()->getCameraRelativeDofRotationOffset();
+}
+
+inline const Vec3& IPIControlInfo::getCameraRelativeMinRotation() const
+{
+    return m_information->getAIObject()->getControlInfo()->getCameraRelativeMinRotation();
+}
+
+inline const Vec3& IPIControlInfo::getCameraRelativeMaxRotation() const
+{
+    return m_information->getAIObject()->getControlInfo()->getCameraRelativeMaxRotation();
+}
 } } }
 #endif

@@ -893,9 +893,10 @@ const std::map<unsigned int, SensedObject*>& BotMain::getSensedObjects() const
 }
 
 // +0x094
+// PE 1017EB00.
 void* BotMain::getSensedObjectFromHandle(unsigned int handle) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getSensedObjectFromHandle");
+    return m_sensingAgent->getSenses()->getSensedObject(handle);
 }
 
 // +0x098

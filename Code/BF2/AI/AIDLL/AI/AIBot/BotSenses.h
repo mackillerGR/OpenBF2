@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../../../../Math/Frustum.h"
+#include "../../../../Math/Vec3.h"
 
 namespace dice {
 namespace hfe {
@@ -19,8 +20,20 @@ class BotMain;
 // The two things a bot's perception owns and deletes. Both are [FRONTIER] classes - `reset` and
 // the destructor delete them through an inlined, non-virtual destructor, so neither can be written
 // until the class itself is recovered. See the reset block in the .cpp.
-class FireObject;
-class SensedObject;
+// Minimal views of the two record types: only the members the sensing agent reads are declared,
+// and their bodies stay frontiers until the records themselves are recovered.
+class FireObject
+{
+public:
+    const Vec3& getPosition() const;         // PE +0x14 [FRONTIER]
+    double getTime() const;                  // PE +0x20 [FRONTIER]
+};
+class SensedObject
+{
+public:
+    unsigned int getHandle() const;          // PE +0x00 [FRONTIER]
+    unsigned int getSenseFlags() const;      // PE +0x50 [FRONTIER]
+};
 
 class BotSenses
 {
@@ -32,6 +45,11 @@ public:
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
+    // PE 101BB7E0: the record for a handle, or null.
+    SensedObject* getSensedObject(unsigned int handle) const;
+    // The incoming-fire records with the handle of the shooter. [INFERRED] accessor; PE reads
+    // +0x6C inline.
+    const std::list<std::pair<FireObject*, unsigned int> >& getFireEntries() const { return m_list84; }
 
 private:
     typedef std::pair<double, SensedObject*>      TimedObject;   // a time and a thing

@@ -91,7 +91,7 @@ public:
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C [FRONTIER]
     // The senses' handle-to-object map; PE callers read its size. [INFERRED] name.
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const = 0;            // +0x090
-    virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094 [FRONTIER]
+    virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle) = 0;                           // +0x098
     virtual unsigned int getUnresolvedCollisionHandle() = 0;                                      // +0x09C
     virtual void* getIncommingFire() = 0;                                                         // +0x0A0 [FRONTIER]
@@ -250,7 +250,7 @@ public:
     virtual SensingAgent* getSensingAgent();                                                      // +0x088
     virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c);             // +0x08C [FRONTIER]
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const;                // +0x090
-    virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094 [FRONTIER]
+    virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle);                               // +0x098
     virtual unsigned int getUnresolvedCollisionHandle();                                          // +0x09C
     virtual void* getIncommingFire();                                                             // +0x0A0 [FRONTIER]
@@ -434,6 +434,8 @@ public:
 private:
     // [INFERRED] friendship: addUnspawnedBot directly replaces +28 in both images.
     friend class BotManager;
+    // [INFERRED] likewise: the sensing agent reads the current equipment (PE +0xA0) inline.
+    friend class SensingAgent;
     // [CHOSEN] Names for fields whose original identifiers are unavailable. Offsets describe the retail x86 layout.
     /*  12 */ void*        m_debugger;              // = 0 getDebugger
     /*  16 */ BotLodLevel  m_lodLevel;              // = 0 get/setLodLevel

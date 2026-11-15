@@ -25,8 +25,8 @@ public:
 
     // Preserve virtual order: reset precedes the other pattern operations.
     virtual void reset(int) = 0;                                        // +0x08
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&) = 0;    // +0x0C
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int) = 0;   // +0x10
+    virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&) = 0;    // +0x0C
+    virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int) = 0;   // +0x10
     virtual int getId() const = 0;                                      // +0x14
 
     // Uninitialised by construction - see the block above.
@@ -42,8 +42,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 
@@ -56,8 +56,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 
@@ -70,8 +70,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 
     // Non-virtual, and unique to this pattern: it brackets the plan it builds.
@@ -88,8 +88,8 @@ public:
 
     // Preserve virtual order: reset occupies the first slot.
     virtual void reset(int);
-    virtual void createPlan(SensingAgent *, Bot *, const Vec3&);
-    virtual void createPlan(SensingAgent *, Bot *, unsigned int);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&);
+    virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
 };
 

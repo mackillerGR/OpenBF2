@@ -37,6 +37,12 @@ public:
         return static_cast<float>(static_cast<double>(next()) * 2.3283064e-10);
     }
 
+    // PE 100C2120: a float in [low, high). [INFERRED] name.
+    float nextRange(float low, float high)
+    {
+        return static_cast<float>(static_cast<double>(next()) * (high - low) * 2.3283064365386963e-10 + low);
+    }
+
     static AIRandom* m_instance;
 
     // n and m are MT19937's, read from the two loop bounds (0xE2 = 226 and 0x26E = 622) and from
