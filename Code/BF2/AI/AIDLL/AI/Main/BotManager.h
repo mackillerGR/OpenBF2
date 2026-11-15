@@ -262,7 +262,7 @@ private:
     /* 216 */ std::vector<BotInfo*> m_selectedBots;
     /* 228 */ Bot*   m_lastCreatedBot;       // addUnspawnedBot / getLastCreatedBot (PE +276)
     /* 232 */ float  m_float232;             // Initially 0.3f. [UNRESOLVED] Purpose is unknown.
-    /* 236 */ bool   m_flag236;              // = false
+    /* 236 */ bool   m_flag236;              // = false; get/setRenderBotSensing (PE +0x11C)
     // [INFERRED] Player-id/object pairs populated by the environment for hearing updates.
     /* 240 */ std::vector<std::pair<int, IAIObject*> > m_occupiedObjects;
     // actionUpdateNavPoints' round-robin position (ELF +0xFC / PE +0x130), advanced with an

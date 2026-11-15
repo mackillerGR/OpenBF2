@@ -3,6 +3,8 @@
 
 #include "BFObjectEnvironment.h"
 
+#include <set>
+
 #include "AIFrontier.h"
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
@@ -20,6 +22,8 @@
 #include "../../../Game/Objects/GameLogicComp/IArmorGLComp.h"          // getHitPoints / getMaxHitPoints
 #include "../../../Game/Objects/GameLogicComp/ArmorGLCompTemplate.h"   // getCanBeDestroyed
 #include "BFTimer.h"                                                   // IBFTimer::getGameTime
+#include "IAIObject.h"
+#include "IAIObjectPlugIn.h"
 
 namespace dice {
 namespace hfe {
@@ -87,9 +91,74 @@ void BFObjectEnvironment::getWorldPlayerIds(std::vector<int>& out) const
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerIds");
 }
 
+// BF2.exe 81C890. The AI objects of living, upright players' vehicles. A player in a secondary
+// seat contributes the vehicle's primary object instead, once, and only when nobody occupies
+// it; those follow the directly occupied objects, in pointer order.
 void BFObjectEnvironment::getWorldPlayerOccupiedObjects(std::vector<IAIObject*>& out, AIObjectPredicate* filter) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerOccupiedObjects");
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();
+    std::set<IAIObject*> primaries;
+
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+    {
+        world::IPlayer* player = *it;
+
+        if (!player || !player->getIsAlive() || player->getIsManDown() || !player->getVehicle())
+            continue;
+
+        IAIObject* aiObject = static_cast<IAIObject*>(player->getVehicle()->getAIComponent());
+
+        if (!aiObject)
+        {
+            world::IObject* occupying = 0;
+            if ((*it)->getVehicle()->getTemplate()->getClassID() == world::CID_LadderContainerTemplate)
+            {
+                occupying = static_cast<world::PlayerControlObject*>(player->getVehicle())->getOccupingObject();
+                if (!occupying)
+                    continue;
+                aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+            }
+            else if ((*it)->getVehicle()->getTemplate()->getClassID() == world::CID_ParachuteTemplate)
+            {
+                // The parachute's occupant is not null-checked.
+                world::IPlayerControlObject* control = static_cast<world::IPlayerControlObject*>(
+                    player->getVehicle()->queryInterface(world::IID_IPlayerControlObject));
+                aiObject = static_cast<IAIObject*>(control->getOccupingObject()->getAIComponent());
+            }
+            else
+            {
+                if ((*it)->getVehicle()->getTemplate()->getClassID() == world::CID_ZiplineContainerTemplate ||
+                    (*it)->getVehicle()->getTemplate()->getClassID() == world::CID_GrapplingHookRopeContainerTemplate)
+                    occupying = static_cast<world::PlayerControlObject*>(player->getVehicle())->getOccupingObject();
+                if (!occupying)
+                    continue;
+                aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+            }
+            if (!aiObject)
+                continue;
+        }
+
+        if (aiObject->isPrimary())
+        {
+            if (filter && !filter->predicate(aiObject))
+                continue;
+            out.push_back(aiObject);
+        }
+        else
+        {
+            primaries.insert(aiObject->getPrimaryObject());
+        }
+    }
+
+    for (std::set<IAIObject*>::iterator it = primaries.begin(); it != primaries.end(); ++it)
+    {
+        IAIObject* const primary = *it;
+        if (primary->getUnit()->isOccupied())
+            continue;
+        if (filter && !filter->predicate(primary))
+            continue;
+        out.push_back(primary);
+    }
 }
 
 // Collects AI objects matching the supplied predicate within the requested region.

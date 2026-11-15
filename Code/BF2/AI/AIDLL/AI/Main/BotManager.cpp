@@ -1133,14 +1133,16 @@ bool BotManager::reset()
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::reset");
 }
 
-void BotManager::setRenderBotSensing(bool)
+// PE 10191230.
+void BotManager::setRenderBotSensing(bool render)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setRenderBotSensing");
+    m_flag236 = render;
 }
 
+// PE 10191240.
 bool BotManager::getRenderBotSensing() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getRenderBotSensing");
+    return m_flag236;
 }
 
 void BotManager::writeBotPlans()
