@@ -40,6 +40,7 @@ public:
     // The leader's own order movement. [INFERRED] name. PE 1017D030.
     void moveLeader(Information* vehicle);
     bool isBot();
+    float getEstimatedArrival() const { return m_estimatedArrival; }   // PE 1017BC00
     Bot* getBot();                           // borrowed
     bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name
     int getMemberIndex();

@@ -940,9 +940,16 @@ bool BotManager::reactivateBot(int playerId, int side, const std::string& name)
     return true;
 }
 
-Bot* BotManager::getBot(IAIObject*) const
+// PE 1018E5D0. The bot whose recorded vehicle is the object, or null.
+Bot* BotManager::getBot(IAIObject* object) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getBot");
+    std::map<IAIObject*, int>::const_iterator it = m_botVehicles.find(object);
+    if (it == m_botVehicles.end())
+        return 0;
+    BotInfo* const info = m_botInfos[it->second];
+    if (!info)
+        return 0;
+    return info->m_bot;
 }
 
 Bot* BotManager::getLastCreatedBot() const

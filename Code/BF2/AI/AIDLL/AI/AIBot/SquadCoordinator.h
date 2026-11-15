@@ -59,6 +59,9 @@ public:
     bool isSquadAssignedToArea(int areaIndex);
     int getStrategicStrength(StrategicStrengthType type); // nonnull vehicle seam
     void getSquadPosition(Vec3& position);       // inferred void
+    // The position getSquadPosition last stored. [INFERRED] name. PE 101A1880.
+    void getLastSquadPosition(Vec3& position) const { position = m_v108; }
+    int getSquadLeaderIndex() const { return m_i96; }   // [INFERRED] name. PE 101A1170
     SquadMember* getSquadLeader();
     int getNumberOfSquadMembers();
     int getSquadId();

@@ -7,6 +7,7 @@
 
 #include "SquadCoordinator.h"
 #include "SquadMember.h"
+#include "../Main/AIRandom.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/InformationManager.h"
@@ -470,23 +471,56 @@ void SquadFormation::updateFormation()
 }
 
 // [INFERRED] void result. The first slot is deliberately excluded from this scan.
+// PE 1019EB20. A human member behind the squad, between 150 and 1500 seconds from the goal,
+// holds the squad for a random 10 to 20 seconds; the squad leader is ignored once the formation
+// has moved.
 void SquadFormation::updateWaitForSquadMembers(double time)
 {
     m_b36 = true;
     Vec3 memberPosition = {};
     Vec3 squadPosition = {};
-    (void)memberPosition;
-    (void)squadPosition;
-    (void)time;
     for (unsigned int index = 1; index < m_maxSquadMembers; ++index)
     {
         Slot* const slot = m_slots[index];
-        if (slot->m_occupied)
+        if (!slot->m_occupied)
+            continue;
+        SquadMember* const member = m_coordinator->getSquadMember(slot->m_memberIndex);
+        bool lagging = false;
+        if (!(m_b56 && slot->m_memberIndex == m_coordinator->getSquadLeaderIndex()) && !member->isBot())
         {
-            // The real member lookup begins an occupied-slot timing policy with
-            // platform-specific time/RNG precision; no deadline or wait is invented.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadFormation::updateWaitForSquadMembers (occupied slot timing)");
+            const float arrival = m_coordinator->getSquadMember(slot->m_memberIndex)->getEstimatedArrival();
+            const bool valid = member->getPosition(memberPosition);
+            m_coordinator->getLastSquadPosition(squadPosition);
+            if (valid && arrival < 1500.0f && arrival > 150.0f)
+            {
+                const Vec3& goal = m_coordinator->getSquadGotoPos();
+                const float mx = memberPosition.x - goal.x;
+                const float my = memberPosition.y - goal.y;
+                const float mz = memberPosition.z - goal.z;
+                const float sx = squadPosition.x - goal.x;
+                const float sy = squadPosition.y - goal.y;
+                const float sz = squadPosition.z - goal.z;
+                lagging = sx * sx + sy * sy + sz * sz < mx * mx + my * my + mz * mz;
+            }
+        }
+        if (!lagging)
+        {
+            slot->m_i28 = 0.0f;
+            slot->m_b24 = false;
+            continue;
+        }
+        if (slot->m_b24)
+        {
+            if (time > slot->m_i28)
+                slot->m_b24 = false;
+            else
+                m_b36 = false;
+        }
+        else if (!(slot->m_i28 >= 0.01f))
+        {
+            m_b36 = false;
+            slot->m_b24 = true;
+            slot->m_i28 = static_cast<float>(AIRandom::m_instance->nextFloat() * 10.0f + time + 10.0f);
         }
     }
 }
