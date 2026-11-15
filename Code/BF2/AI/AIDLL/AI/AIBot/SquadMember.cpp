@@ -4,6 +4,7 @@
 #include "SquadMember.h"
 #include "../Main/AIRandom.h"
 #include "SquadManager.h"
+#include "WaypointList.h"
 #include <cmath>
 
 #include "../Main/AIDllFrontier.h"
@@ -208,6 +209,8 @@ void SquadMember::update(double time)
     updateMemberPos();
     SquadFormation* const formation = m_squad->getSquadFormation();
 
+    // PE 1017DAD8: every 9 seconds a displaced member, a bot already at its waypoint, or a
+    // stationary bot more than 4 from the member's path point loses its path.
     if (memberPathUpdateDue(m_time24, time))
     {
         Vec3 position = {};
@@ -219,11 +222,18 @@ void SquadMember::update(double time)
         else if (m_bot && getPosition(position))
         {
             WaypointList* const waypoints = m_bot->getWaypoints();
-            (void)waypoints;
-            // ELF +0x08 / PE +0x04 takes this position and the freshly read Bot.
-            // Its complete owner interface is not known. The time store is later.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-            BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::update (WaypointList position query)");
+            if (waypoints->update(position, m_bot) < 0.5f)
+            {
+                setHavePath(false);
+            }
+            else if (!m_moved)
+            {
+                const float dx = position.x - m_vector60.x;
+                const float dy = position.y - m_vector60.y;
+                const float dz = position.z - m_vector60.z;
+                if (std::sqrt(dx * dx + dy * dy + dz * dz) > 16.0f)
+                    setHavePath(false);
+            }
         }
         m_time24 = time;
     }

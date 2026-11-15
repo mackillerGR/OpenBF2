@@ -44,7 +44,7 @@ SinglePositionWaypoint::~SinglePositionWaypoint()
 {
 }
 
-float SinglePositionWaypoint::update(const Vec3& position, float)
+float SinglePositionWaypoint::update(const Vec3& position, Bot*)
 {
     m_active = true;
     m_position = position;
@@ -82,7 +82,7 @@ MultiPositionWaypoint::~MultiPositionWaypoint()
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-waypoints] Replace with the PE
 // 1012D290 body once a bot follows a waypoint list.
-float MultiPositionWaypoint::update(const Vec3&, float)
+float MultiPositionWaypoint::update(const Vec3&, Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::MultiPositionWaypoint::update");
 }

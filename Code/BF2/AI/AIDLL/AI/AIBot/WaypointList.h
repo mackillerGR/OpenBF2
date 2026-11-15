@@ -13,6 +13,8 @@ namespace dice {
 namespace hfe {
 namespace ai {
 
+class Bot;
+
 // PE vtable 1027F910; seven slots.
 class WaypointList
 {
@@ -20,8 +22,9 @@ public:
     explicit WaypointList(int kind);
     virtual ~WaypointList();
 
-    // [UNRESOLVED] Advances along the list from the bot's position; returns a distance.
-    virtual float update(const Vec3& position, float elapsed) = 0;
+    // Advances along the list from the bot's position; returns a distance. The second argument
+    // is the bot: the list bodies make Bot virtual calls on it (PE 1012D290, 1012C8C0).
+    virtual float update(const Vec3& position, Bot* bot) = 0;
     // The waypoint the bot is heading for, false when there is none.
     virtual bool getCurrentWaypoint(Vec3& waypoint) const = 0;
     // 8 for a single position, 6 for a list.
@@ -46,7 +49,7 @@ public:
     explicit SinglePositionWaypoint(const Vec3& position);
     virtual ~SinglePositionWaypoint();                               // PE 101DAC10
     // Stores the position and reports no distance left. PE 101DAC40.
-    virtual float update(const Vec3& position, float elapsed);
+    virtual float update(const Vec3& position, Bot* bot);
     virtual bool getCurrentWaypoint(Vec3& waypoint) const;           // PE 101DAC70
     virtual int getType() const;                                     // PE 101DAC00
 
@@ -61,7 +64,7 @@ public:
     MultiPositionWaypoint(float toleranceA, float toleranceB, float distance, bool flag,
                           const std::list<Vec3>& waypoints);
     virtual ~MultiPositionWaypoint();                                // PE 1012D240
-    virtual float update(const Vec3& position, float elapsed);       // PE 1012D290
+    virtual float update(const Vec3& position, Bot* bot);       // PE 1012D290
     virtual bool getCurrentWaypoint(Vec3& waypoint) const;           // PE 1012D110
     virtual int getType() const;                                     // PE 1012D100
     virtual float getTolerance() const;                              // PE 1012CF00
