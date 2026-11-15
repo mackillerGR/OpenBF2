@@ -112,6 +112,17 @@ public:
     // Copies the cached path from `from` to this area for the side into `path` (unless it is that
     // list); false when none is cached. [INFERRED] name. PE 100E6EE0.
     bool findPath(int side, AIStrategicObject* from, std::list<AIStrategicObject*>& path);
+    // Turns a cached strategic path into the bot's strategic waypoint list, through the
+    // designer waypoints between areas and into a held control point's radius. Keeps the bot's
+    // current list when it is the same path. [INFERRED] name. PE 100E5560.
+    void assignPath(int side, const std::list<AIStrategicObject*>& path, int botId, ISAI* sai);
+    // A valid position near the control point for the vehicle: `from` itself when it is close
+    // enough, otherwise up to twenty random tries around the control point before the object's
+    // order position. [INFERRED] name. PE 100E06C0.
+    // A control-point area whose status for the side is set. Inline in PE 100E5560.
+    bool holdsControlPoint(int side) const;
+    void getControlPointApproach(AIStrategicObject* object, int side, int vehicle, int equipment,
+                                 const Vec3& from, Vec3& position);
     // Borrowed; non-virtual. PE 100DECF0.
     const std::vector<AILandingZone*>& getLandingZones() const { return m_landingZones; }
     // Tests a StrategicObjectType bit position, not a mask.

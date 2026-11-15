@@ -23,6 +23,9 @@ public:
     void init();
 
     void draw() const;                           // [FRONTIER]
+    // Read inline by AIStrategicArea::assignPath. [INFERRED] accessor forms.
+    const Vec3& getPosition() const { return m_position; }
+    unsigned int getPolygon() const { return m_polygon; }
     void undraw() const;
 
 private:

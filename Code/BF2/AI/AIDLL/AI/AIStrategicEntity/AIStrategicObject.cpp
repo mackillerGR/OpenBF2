@@ -4,6 +4,7 @@
 #include "AIStrategicObject.h"
 #include "../Main/AIRandom.h"
 
+#include <cmath>
 #include <string>
 
 #include "../AIStrategic/SAI.h"          // EnemyStatistics - the four objects the constructor makes
@@ -286,6 +287,25 @@ void AIStrategicObject::getRandomPosition(int side, float scale, Vec3& position)
     position.x = x + m_position[side - 1].x;
     position.y = m_f148;
     position.z = z + m_position[side - 1].y;
+}
+
+// PE 100E8EA0. The heading is a float and the sine is rounded to float before use; the distance
+// stays wide. The zero terms are those of a rotated unit vector along Z and are kept.
+void AIStrategicObject::addRandomOffset(float scale, float radius, Vec3& position)
+{
+    const float angle = static_cast<float>(static_cast<double>(AIRandom::m_instance->next()) * 1.462918119976564e-09);
+    const double distance =
+        ((radius - 0.5) * static_cast<double>(AIRandom::m_instance->next()) * 2.3283064365386963e-10 + 0.5) * scale;
+    const double c = std::cos(static_cast<double>(angle));
+    const float zeroCos = static_cast<float>(0.0 * c);
+    const float sine = static_cast<float>(std::sin(static_cast<double>(angle)));
+    const float zeroSin = static_cast<float>(0.0 * sine);
+    const float dx = static_cast<float>((static_cast<double>(sine) + zeroCos) * distance);
+    const double dy = (static_cast<double>(zeroSin) + zeroCos) * distance;
+    const float dz = static_cast<float>((static_cast<double>(zeroSin) + c) * distance);
+    position.x = static_cast<float>(static_cast<double>(dx) + position.x);
+    position.y = static_cast<float>(dy + position.y);
+    position.z = static_cast<float>(static_cast<double>(dz) + position.z);
 }
 
 } // namespace ai

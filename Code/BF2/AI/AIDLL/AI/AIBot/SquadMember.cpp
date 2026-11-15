@@ -863,10 +863,11 @@ void SquadMember::moveLeader(Information* vehicle)
     }
     target.y = m_squad->getSquadStrategicAreaAssignment()->m_f148;
     m_vector60 = target;
-    // The cached path becomes the bot's waypoints (PE 100E5560: area, side, path, bot id, SAI).
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: strategic-path-assign]
-    // Recover PE 100E5560 and validate a squad leader routed through cached area paths.
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveLeader (AIStrategicArea path assignment, PE 100E5560)");
+    // The SAI is fetched again for the call, before the bot id.
+    ISAI* const pathSai = IAIMain::m_instance->getSAI(m_side + 1);
+    const int botId = static_cast<int>(m_bot->getBotId());
+    m_squad->getSquadStrategicAreaAssignment()->assignPath(m_side + 1, path, botId, pathSai);
+    announceOrder(6);
 }
 
 void SquadMember::moveWithoutFormation()

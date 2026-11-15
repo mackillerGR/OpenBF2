@@ -2,7 +2,7 @@
 
 #include "AIStrategicArea.h"
 
-#include <cmath>                                          // the two centre-to-corner distances
+#include <cmath>
 
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
@@ -22,6 +22,10 @@
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIBot/BotMain.h"
 #include "../Main/IBotManager.h"
+#include "../Main/AIRandom.h"
+#include "../AIBot/SquadMember.h"
+#include "../AIBot/WaypointList.h"
+#include "SAWayPoint.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"       // IAIGame - the control-point queries
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"    // IAITerrain::getTerrainAltitude
 #include "../../../../Math/Vec3.h"                         // vec3ToVec2XZ / vec2ToVec3XZ
@@ -1020,6 +1024,361 @@ bool AIStrategicArea::isInsideArea(const Vec3& position) const
     if (maxX < px)
         return false;
     return !(py > maxY);
+}
+
+namespace {
+
+typedef std::list<StrategicWaypointList::Point> PointList;
+
+void pushPoint(PointList& points, const Vec3& position, unsigned int object)
+{
+    StrategicWaypointList::Point point;
+    point.position = position;
+    point.strategicObject = object;
+    points.push_back(point);
+}
+
+bool isValidFor(IAIPathfinding* pathfinding, int vehicle, int equipment, const Vec3& position,
+                unsigned int island)
+{
+    return pathfinding->isValidPosition(vehicle, equipment, position, island, true);
+}
+
+// The retry shape assignPath repeats inline: a random point in the object's extent, re-drawn
+// until valid, giving up on the twentieth draw for the object's order position. The island is
+// always the assigning area's.
+void findRandomValidPosition(AIStrategicObject* object, int side, IAIPathfinding* pathfinding,
+                             int vehicle, int equipment, unsigned int island, Vec3& position)
+{
+    object->getRandomPosition(side, 0.8f, position);
+    int tries = 0;
+    if (isValidFor(pathfinding, vehicle, equipment, position, island))
+        return;
+    for (;;)
+    {
+        object->getRandomPosition(side, 0.8f, position);
+        if (++tries >= 20)
+        {
+            position = object->getOrderPos(vehicle, side);
+            return;
+        }
+        if (isValidFor(pathfinding, vehicle, equipment, position, island))
+            return;
+    }
+}
+
+float squaredLength(const Vec3& v)
+{
+    return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
+Vec3 difference(const Vec3& to, const Vec3& from)
+{
+    Vec3 result;
+    result.x = to.x - from.x;
+    result.y = to.y - from.y;
+    result.z = to.z - from.z;
+    return result;
+}
+
+float dot(const Vec3& a, const Vec3& b)
+{
+    return a.z * b.z + a.y * b.y + a.x * b.x;
+}
+
+} // namespace
+
+// The control-point test assignPath repeats inline, in this order.
+bool AIStrategicArea::holdsControlPoint(int side) const
+{
+    return hasObjectTypeFlag(ControlPoint) && m_controlPointId != static_cast<unsigned int>(-1) &&
+           getStatus(side);
+}
+
+// PE 100E06C0. An inactive control point uses twice the area's centre-to-corner distance as its
+// reach and spread; an active one 0.8 of its radius as reach and its radius as spread.
+void AIStrategicArea::getControlPointApproach(AIStrategicObject* object, int side, int vehicle,
+                                              int equipment, const Vec3& from, Vec3& position)
+{
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    float radius = 1.0f;
+    bool active = true;
+    Vec3 point;
+    point.x = 0.0f;
+    point.y = 0.0f;
+    point.z = 0.0f;
+    int tries = 0;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+        ->getControlPointInfo(m_controlPointId, point, radius, active);
+    const unsigned int island = m_mapData[vehicle].m_island;
+
+    float scale;
+    float spread;
+    if (!active)
+    {
+        const float cornerX = m_centre.x;
+        const float cornerY = m_centre.y;
+        const Vec2& centre = getPosition(side);
+        const float cx = centre.x - cornerX;
+        const double cy = static_cast<double>(centre.y) - cornerY;
+        const float extent = static_cast<float>(std::sqrt(cy * cy + static_cast<double>(cx) * cx) * 2.0);
+        const float px = point.x - from.x;
+        const double py = static_cast<double>(point.y) - from.y;
+        const double pz = static_cast<double>(point.z) - from.z;
+        const double distance = std::sqrt(pz * pz + py * py + static_cast<double>(px) * px);
+        if (distance < extent && isValidFor(pathfinding, vehicle, equipment, from, island))
+        {
+            position = from;
+            return;
+        }
+        scale = 1.0f;
+        spread = extent;
+    }
+    else
+    {
+        const float px = point.x - from.x;
+        const double py = static_cast<double>(point.y) - from.y;
+        const double pz = static_cast<double>(point.z) - from.z;
+        const double distance = std::sqrt(pz * pz + py * py + static_cast<double>(px) * px);
+        if (static_cast<double>(radius) * 0.8f > distance &&
+            isValidFor(pathfinding, vehicle, equipment, from, island))
+        {
+            position = from;
+            return;
+        }
+        scale = 0.8f;
+        spread = radius;
+    }
+
+    position.x = point.x;
+    position.y = m_f148;
+    position.z = point.z;
+    object->addRandomOffset(scale, spread, position);
+    if (isValidFor(pathfinding, vehicle, equipment, position, island))
+        return;
+    for (;;)
+    {
+        position.x = point.x;
+        position.y = m_f148;
+        position.z = point.z;
+        object->addRandomOffset(scale, spread, position);
+        if (++tries >= 20)
+        {
+            position = object->getOrderPos(vehicle, side);
+            return;
+        }
+        if (isValidFor(pathfinding, vehicle, equipment, position, island))
+            return;
+    }
+}
+
+// PE 100E5560. The bot's current equipment gives the vehicle map, equipment type and extra
+// tolerance (its physical diameter). An empty path targets this area, a one-object path the next
+// object, and a longer path every object in turn. Between two areas a designer waypoint is picked
+// at random (three tries) that lies ahead of the bot and nearer the target than the bot is; while
+// the bot keeps the same pair of areas its previous waypoint is reused. A held control point of
+// this area ends the list inside its radius. The last point's tolerance is a quarter of the
+// object's side size plus the extra tolerance. The information lookup is not null-checked.
+void AIStrategicArea::assignPath(int side, const std::list<AIStrategicObject*>& path, int botId, ISAI* sai)
+{
+    PointList points;
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    Vec3 approach;
+    approach.x = 0.0f;
+    approach.y = 0.0f;
+    approach.z = 0.0f;
+    float tolerance = 1.0f;
+    BotMain* const bot = static_cast<BotMain*>(IBotManager::instance->getBotFromId(static_cast<unsigned int>(botId)));
+    Information* const information = informationManager->getInformation(bot->getCurrentEquipment());
+    const float extraTolerance = information->getPhysical()->getRadius() * 2.0f;
+    const int vehicle = information->getMobile()->getVehicleNumber();
+    const int equipment = information->getUnit()->getEquipmentType();
+    const Vec3& botPosition = information->getPosition();
+    const unsigned int island = m_mapData[vehicle].m_island;
+    StrategicWaypointList* list;
+
+    if (path.size() == 0)
+    {
+        if (holdsControlPoint(side))
+        {
+            getControlPointApproach(this, side, vehicle, equipment, botPosition, approach);
+            pushPoint(points, approach, static_cast<unsigned int>(m_index));
+            list = checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points));
+        }
+        else
+        {
+            if (isInsideArea(botPosition) &&
+                isValidFor(pathfinding, vehicle, equipment, information->getPosition(), island))
+                position = information->getPosition();
+            else
+                findRandomValidPosition(this, side, pathfinding, vehicle, equipment, island, position);
+            pushPoint(points, position, static_cast<unsigned int>(m_index));
+            list = checkPointer(new StrategicWaypointList(
+                static_cast<float>(m_size[side] * 0.25 + extraTolerance), 60.0f, 2, points));
+        }
+    }
+    else if (path.size() == 1)
+    {
+        AIStrategicObject* const object = path.front();
+        object->getType();   // the shipped body makes this call and discards the result
+        AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+        const int current = sai->getBotCurrentPos(botId);
+        const int next = object->getIndex();
+        if (current != -1 && current != next)
+        {
+            Vec3 target;
+            vec2ToVec3XZ(getPosition(side), target);
+            target.y = m_f148;
+            bot->setNewAssignedAreas(current, next);
+            const std::vector<SAWayPoint*>& waypoints = manager->getWaypoints(vehicle, current, next);
+            const float targetDistance = squaredLength(difference(target, botPosition));
+            if (!bot->hasSameAssignedAreas(vehicle))
+            {
+                bool placed = false;
+                if (!waypoints.empty())
+                {
+                    for (int attempt = 0; attempt < 3; ++attempt)
+                    {
+                        const int index = static_cast<int>(AIRandom::m_instance->nextRange(
+                            0.0f, static_cast<float>(static_cast<unsigned int>(waypoints.size()))));
+                        const SAWayPoint* const waypoint = waypoints[index];
+                        const float waypointDistance = squaredLength(difference(waypoint->getPosition(), target));
+                        if (dot(difference(target, botPosition), difference(waypoints[index]->getPosition(), botPosition)) > 0.0f &&
+                            targetDistance > waypointDistance &&
+                            waypoints[index]->getPolygon() != static_cast<unsigned int>(-1))
+                        {
+                            pushPoint(points, waypoints[index]->getPosition(), static_cast<unsigned int>(-1));
+                            bot->setCurrentWaypoint(waypoints[index]->getPosition(), vehicle);
+                            placed = true;
+                            break;
+                        }
+                    }
+                }
+                if (!placed)
+                    bot->resetAssignedAreas();
+            }
+            else
+            {
+                information->getPosition();   // called and discarded
+                const Vec3 waypoint = bot->getCurrentWaypoint();
+                const float waypointDistance = squaredLength(difference(waypoint, target));
+                if (dot(difference(waypoint, botPosition), difference(target, botPosition)) > 0.0f &&
+                    targetDistance > waypointDistance)
+                {
+                    bot->setCurrentWaypoint(waypoint, vehicle);
+                    pushPoint(points, bot->getCurrentWaypoint(), static_cast<unsigned int>(-1));
+                }
+            }
+            bot->copyAssignedAreas();
+        }
+
+        if (object == this && holdsControlPoint(side))
+        {
+            getControlPointApproach(this, side, vehicle, equipment, botPosition, approach);
+            pushPoint(points, approach, static_cast<unsigned int>(m_index));
+            list = checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points));
+        }
+        else
+        {
+            findRandomValidPosition(object, side, pathfinding, vehicle, equipment, island, position);
+            pushPoint(points, position, static_cast<unsigned int>(m_index));
+            list = checkPointer(new StrategicWaypointList(
+                static_cast<float>(object->m_size[side] * 0.25 + extraTolerance), 60.0f, 2, points));
+        }
+    }
+    else
+    {
+        int current = sai->getBotCurrentPos(botId);
+        bool first = true;
+        bool assigned = false;
+        AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+        for (std::list<AIStrategicObject*>::const_iterator it = path.begin(); it != path.end(); ++it)
+        {
+            AIStrategicObject* const object = *it;
+            const int next = object->getIndex();
+            if (current != -1 && current != next)
+            {
+                Vec3 target;
+                vec2ToVec3XZ(object->getPosition(side), target);
+                target.y = object->m_f148;
+                const std::vector<SAWayPoint*>& waypoints = manager->getWaypoints(vehicle, current, next);
+                const float targetDistance = squaredLength(difference(target, botPosition));
+                bool placed = false;
+                if (!assigned)
+                {
+                    bot->setNewAssignedAreas(current, next);
+                    if (bot->hasSameAssignedAreas(vehicle))
+                    {
+                        information->getPosition();   // called and discarded
+                        const Vec3 waypoint = bot->getCurrentWaypoint();
+                        const float waypointDistance = squaredLength(difference(waypoint, target));
+                        if (dot(difference(waypoint, botPosition), difference(target, botPosition)) > 0.0f &&
+                            targetDistance > waypointDistance)
+                        {
+                            bot->setCurrentWaypoint(waypoint, vehicle);
+                            pushPoint(points, bot->getCurrentWaypoint(), static_cast<unsigned int>(-1));
+                            placed = true;
+                        }
+                    }
+                    bot->copyAssignedAreas();
+                }
+                if (waypoints.empty())
+                    bot->resetAssignedAreas();
+                if (!waypoints.empty() && !placed)
+                {
+                    for (int attempt = 0; attempt < 3; ++attempt)
+                    {
+                        const unsigned int count = static_cast<unsigned int>(waypoints.size());
+                        const double draw = static_cast<double>(AIRandom::m_instance->next());
+                        const int index = static_cast<int>(draw * static_cast<double>(count) * 2.3283064365386963e-10);
+                        if (first &&
+                            !(dot(difference(waypoints[index]->getPosition(), botPosition),
+                                  difference(target, botPosition)) > 0.0f))
+                            continue;
+                        const SAWayPoint* const waypoint = waypoints[index];
+                        if (waypoint->getPolygon() == static_cast<unsigned int>(-1))
+                            continue;
+                        if (!(targetDistance > squaredLength(difference(waypoint->getPosition(), target))))
+                            continue;
+                        pushPoint(points, waypoint->getPosition(), static_cast<unsigned int>(-1));
+                        if (!assigned)
+                            bot->setCurrentWaypoint(waypoint->getPosition(), vehicle);
+                        placed = true;
+                        break;
+                    }
+                    if (!assigned && !placed)
+                        bot->resetAssignedAreas();
+                }
+                assigned = true;
+            }
+            current = next;
+            first = false;
+
+            if (object == this && holdsControlPoint(side))
+            {
+                getControlPointApproach(this, side, vehicle, equipment, botPosition, approach);
+                pushPoint(points, approach, static_cast<unsigned int>(m_index));
+                tolerance = 0.0f;
+            }
+            else
+            {
+                findRandomValidPosition(object, side, pathfinding, vehicle, equipment, island, position);
+                pushPoint(points, position, static_cast<unsigned int>(object->getIndex()));
+                tolerance = static_cast<float>(object->m_size[side] * 0.25 + extraTolerance);
+            }
+        }
+        list = checkPointer(new StrategicWaypointList(tolerance, 60.0f, 2, points));
+    }
+
+    WaypointList* const currentList = bot->getWaypoints();
+    if (!bot->getSquadMember()->isSamePath(currentList, list))
+        bot->setWaypoints(list);
+    else
+        delete list;
 }
 
 // PE 100E6EE0. Side one reads m_mapsA, side two m_mapsB (the PE indexes the pointer pair).

@@ -143,14 +143,14 @@ BotMain::BotMain(IAIPlayer* player,
     m_assignedAreas[0] = -1;
     m_assignedAreas[3] = -1;                   // +396
     m_assignedAreas[2] = -1;                   // +392
-    m_ptr400 = 0;
+    m_currentWaypoint.x = 0.0f;
     m_assignedAreas[1] = -1;                   // +388
     m_manDown = false;                  // +360
     m_isFiring = false;                 // +372
     m_fireAllowed = true;
-    m_ptr404 = 0;
-    m_ptr408 = 0;
-    m_int412 = -1;
+    m_currentWaypoint.y = 0.0f;
+    m_currentWaypoint.z = 0.0f;
+    m_currentWaypointArea = -1;
     m_stalledPlanTicks = 0;
     for (int k = 0; k < 3; ++k)
         m_ptr428[k] = 0;                // +428..+436
@@ -1787,9 +1787,11 @@ void BotMain::setNewAssignedAreas(int a, int b)
 }
 
 // +0x204
+// PE 1017F5C0. Both pairs equal, the waypoint's area is `a`, and both areas are set.
 bool BotMain::hasSameAssignedAreas(int a)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::hasSameAssignedAreas");
+    return m_assignedAreas[0] == m_assignedAreas[2] && m_assignedAreas[1] == m_assignedAreas[3] &&
+           a == m_currentWaypointArea && m_assignedAreas[0] != -1 && m_assignedAreas[2] != -1;
 }
 
 // +0x208
@@ -1800,15 +1802,18 @@ void BotMain::copyAssignedAreas()
 }
 
 // +0x20C
+// PE 101807A0.
 void BotMain::setCurrentWaypoint(Vec3 v, int i)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setCurrentWaypoint");
+    m_currentWaypoint = v;
+    m_currentWaypointArea = i;
 }
 
 // +0x210
-const Vec3& BotMain::getCurrentWaypoint()
+// PE 101807D0.
+Vec3 BotMain::getCurrentWaypoint()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getCurrentWaypoint");
+    return m_currentWaypoint;
 }
 
 // +0x214

@@ -342,10 +342,10 @@ public:
     virtual void setMineTarget(unsigned int h);                                                   // +0x1F8
     virtual unsigned int getMineTarget() const;                                                   // +0x1FC
     virtual void setNewAssignedAreas(int a, int b);                                               // +0x200
-    virtual bool hasSameAssignedAreas(int a);                                                     // +0x204 [FRONTIER]
+    virtual bool hasSameAssignedAreas(int a);                                                     // +0x204
     virtual void copyAssignedAreas();                                                             // +0x208
-    virtual void setCurrentWaypoint(Vec3 v, int i);                                               // +0x20C [FRONTIER]
-    virtual const Vec3& getCurrentWaypoint();                                                     // +0x210 [FRONTIER]
+    virtual void setCurrentWaypoint(Vec3 v, int i);                                               // +0x20C
+    virtual Vec3 getCurrentWaypoint();                                                            // +0x210 by value
     virtual void resetAssignedAreas();                                                            // +0x214
     virtual void setTimeOfLastFailedStaticSkyAttack(double t);                                    // +0x218
     virtual double getTimeOfLastFailedStaticSkyAttack() const;                                    // +0x21C
@@ -561,10 +561,9 @@ private:
     /* 381 */ char         m_pad381[3];
     // four, and the second pair is A copy of the first - see copyAssignedAreas.
     /* 384 */ int          m_assignedAreas[4];      // +384..+396, all = -1
-    /* 400 */ void*        m_ptr400;                // = 0
-    /* 404 */ void*        m_ptr404;                // = 0
-    /* 408 */ void*        m_ptr408;                // = 0
-    /* 412 */ int          m_int412;                // = -1
+    // The strategic waypoint the bot was sent to and the area index it belongs to.
+    /* 400 */ Vec3         m_currentWaypoint;       // zeroed word by word
+    /* 412 */ int          m_currentWaypointArea;   // = -1 [INFERRED] name
     // [INFERRED] Consecutive plan-executor skips, cleared when execution resumes.
     // A signed comparison against 15 decides when a stalled bot stops coasting.
     /* 416 */ int          m_stalledPlanTicks;      // = 0

@@ -92,6 +92,22 @@ const std::vector<SAWayPoint*>& AIStrategicObjectManager::WPContainer::getWayPoi
     return m_wayPointsA;
 }
 
+// PE 10091970. The pair is keyed smaller index first; a nonzero map selects the second list.
+// [CHOSEN, not recovered] The shipped body dereferences the found position unchecked, so a pair
+// with no waypoints reads the MSVC head node's unconstructed value. A static empty list stands in
+// for that read here.
+const std::vector<SAWayPoint*>& AIStrategicObjectManager::getWaypoints(int map, int a, int b) const
+{
+    const std::pair<int, int> key = a < b ? std::make_pair(a, b) : std::make_pair(b, a);
+    const std::map<std::pair<int, int>, WPContainer>::const_iterator it = m_wayPoints.find(key);
+    if (it == m_wayPoints.end())
+    {
+        static const std::vector<SAWayPoint*> s_none;
+        return s_none;
+    }
+    return it->second.getWayPoints(map);
+}
+
 // Initializes strategic-area collections and the active selection.
 
 AIStrategicObjectManager::AIStrategicObjectManager()
