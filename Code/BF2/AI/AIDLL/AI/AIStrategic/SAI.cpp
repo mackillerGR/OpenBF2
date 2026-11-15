@@ -2363,9 +2363,10 @@ void SampleHelper::clear(float* strength, int* count)
     }
 }
 
+// PE 10145B50.
 CommanderInterface* SAI::getCommanderInterface() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getCommanderInterface");
+    return m_commander;
 }
 
 } // namespace ai
