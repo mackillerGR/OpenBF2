@@ -1,5 +1,6 @@
 #include "WaypointList.h"
 #include <cmath>
+#include <sstream>
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIStrategicEntity/AIStrategicArea.h"
 #include "../AIKnowledge/IPIPhysical.h"
@@ -87,11 +88,53 @@ MultiPositionWaypoint::~MultiPositionWaypoint()
 {
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-waypoints] Replace with the PE
-// 1012D290 body once a bot follows a waypoint list.
-float MultiPositionWaypoint::update(const Vec3&, Bot*)
+// PE 1012D290. Returns the urgency: 0 when finished or paused, else the share of the tolerance
+// box still to cover (1 outside it). A single remaining point counts as reached within 50 of an
+// airborne bot. With more points, the front point is dropped once inside the box or once the bot
+// moves away from it; the box test on that path compares the height tolerance the other way
+// round, as shipped. The single-point arm formats a debug line it never uses.
+float MultiPositionWaypoint::update(const Vec3& position, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::MultiPositionWaypoint::update");
+    if (m_paused)
+        return 0.0f;
+    if (m_waypoints.empty())
+    {
+        m_finished = true;
+        return 0.0f;
+    }
+    const float toleranceA = m_toleranceA * m_toleranceA;
+    const float toleranceB = m_toleranceB * m_toleranceB;
+    const Vec3& front = m_waypoints.front();
+    const float fx = position.x - front.x;
+    const float fz = position.z - front.z;
+    const float horizontal = fz * fz + fx * fx;
+    const float dy = position.y - front.y;
+    const float vertical = dy * dy;
+
+    if (m_waypoints.size() == 1)
+    {
+        float urgency;
+        if (horizontal < 2500.0f && bot->isAirBorn())
+            urgency = 0.0f;
+        else if (horizontal < toleranceA && vertical < toleranceB)
+            urgency = (vertical + horizontal) / (toleranceB + toleranceA);
+        else
+            urgency = 1.0f;
+        std::ostringstream debug;
+        debug << "distLeftSquare: " << horizontal << ", MinDist: " << m_toleranceA << ", Urg: " << urgency;
+        return urgency;
+    }
+
+    if ((horizontal < toleranceA && vertical < toleranceB) || m_float18 < horizontal)
+    {
+        if (!m_waypoints.empty())
+            m_waypoints.pop_front();
+        m_active = true;
+    }
+    m_float18 = horizontal;
+    if (horizontal < toleranceA && toleranceB < vertical)
+        return (vertical + horizontal) / (toleranceB + toleranceA);
+    return 1.0f;
 }
 
 bool MultiPositionWaypoint::getCurrentWaypoint(Vec3& waypoint) const
