@@ -11,6 +11,7 @@
 #include "../AIBot/BotCallBack.h"      // setBotIsDead / setBotIsAlive report through these
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"          // setBotChangedVehicle
 #include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
+#include "../../../AIInterface/BFKnowledge/IWeapon.h"
 #include "../AIBot/BotMemory.h"
 #include "../AIBot/BotOrder.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
@@ -478,8 +479,10 @@ void BotManager::actionPathfinding(const double& slice)
     }
 }
 
-// Scans occupied world objects for hearing within the supplied slice.
-// [FRONTIER] The object-query path remains incomplete.
+// PE 101914E0. Resumes the round of occupied world objects where the last slice stopped. A
+// sided object is heard as far as the larger of its mobile sound sphere and, within three
+// seconds of its last shot, its last fired weapon's; every living, upright enemy bot inside
+// that range hears it. Stops once the slice is spent.
 void BotManager::actionHearing(const double& slice)
 {
     const double deadline =
@@ -502,13 +505,45 @@ void BotManager::actionHearing(const double& slice)
         if (++next == m_occupiedObjects.end())
             next = m_occupiedObjects.begin();
         ++visited;
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // The body's first call is `object->getSide` (IAIObject ELF +0x12C / PE +0x128), and
-        // IAIObject has no declaration in this tree; see the outline above.
-        (void)object;
-        (void)gameTime;
-        (void)deadline;
-        BF2_AI_FRONTIER("dice::hfe::ai::BotManager::actionHearing (IAIObject hearing query)");
+        if (!object->getSide())
+            continue;
+        IAIObjectArmament* const armament = object->getArmament();
+        IAIObjectMobile* const mobile = object->getMobile();
+        if (!armament && !mobile)
+            continue;
+        float weaponRadius = 0.0f;
+        if (armament)
+        {
+            IWeapon* const weapon = armament->getLastFiredWeapon();
+            if (weapon && gameTime - weapon->getTimeOfFiring() < 3.0)
+                weaponRadius = weapon->getSoundSphereRadius();
+        }
+        if (!mobile)
+            continue;
+        float radius = mobile->getSoundSphereRadius();
+        if (!(radius >= weaponRadius))
+            radius = weaponRadius;
+        if (!(radius > 0.1f))
+            continue;
+        const float radiusSquared = radius * radius;
+        const int side = object->getSide();
+        const Vec3& position = object->getPosition();
+        for (std::vector<std::pair<int, IAIObject*> >::iterator it = m_occupiedObjects.begin();
+             it != m_occupiedObjects.end(); ++it)
+        {
+            Bot* const bot = getBot(it->second);
+            if (!bot || bot->isDead() || bot->getManDown() || bot->getSide() == side)
+                continue;
+            const Vec3& other = it->second->getPosition();
+            const float dx = other.x - position.x;
+            const float dy = other.y - position.y;
+            const float dz = other.z - position.z;
+            if (dz * dz + dx * dx + dy * dy > radiusSquared)
+                continue;
+            bot->event_heardObject(object->forceGetInformation(bot->getSide(), false));
+        }
+        if (!(static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getUpdateTime() <= deadline))
+            break;
     }
     if (count > 0)
         m_hearingResumeId = next->first;
