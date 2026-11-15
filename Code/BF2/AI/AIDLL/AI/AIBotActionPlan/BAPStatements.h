@@ -213,12 +213,16 @@ public:
     virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101DF6C0
     virtual BAPStatementType getType();
     virtual bool isComposite();
-    // Writes where to look and whether that is known. [INFERRED] name.
-    virtual void getTarget(Vec3& target, bool& valid) = 0;
+    // Where to look, and whether that is known. [INFERRED] name.
+    virtual Vec3 getTarget(bool& valid) = 0;
 
     /* +0x18 */ BAPCondition* m_until;
-    /* +0x1C */ int m_flag;          // [UNRESOLVED]
-    /* +0x20 */ int m_zero20[5];     // [UNRESOLVED] zeroed by the constructor
+    /* +0x1C */ int m_flag;          // [UNRESOLVED] passed to the look controller
+    // Controller state the look entry carries between ticks: two values it feeds back to the
+    // controller (+0x20 is reset to pi when the look ends) and the last camera forward.
+    /* +0x20 */ float m_state20;
+    /* +0x24 */ float m_state24;
+    /* +0x28 */ Vec3  m_lastForward;
 };
 
 // Looks along a fixed direction. PE vtable 10284990. [INFERRED] name.
@@ -229,7 +233,7 @@ public:
     BAPALookDirection(const Vec3& direction, int flag, BAPCondition* until,
                       unsigned long long inputMask, int id);
     virtual ~BAPALookDirection();                                      // PE 101C1800
-    virtual void getTarget(Vec3& target, bool& valid);                 // PE 101C1780
+    virtual Vec3 getTarget(bool& valid);                               // PE 101C1780
 
     /* +0x38 */ Vec3 m_direction;
 };
@@ -242,7 +246,7 @@ public:
     BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
                      unsigned long long inputMask, int id, int arg8, int arg9);
     virtual ~BAPALookAtObject();                                       // PE 101AD850
-    virtual void getTarget(Vec3& target, bool& valid);                 // PE 101AD890
+    virtual Vec3 getTarget(bool& valid);                               // PE 101AD890
 
     /* +0x38 */ Bot* m_bot;
     /* +0x3C */ unsigned int m_object;

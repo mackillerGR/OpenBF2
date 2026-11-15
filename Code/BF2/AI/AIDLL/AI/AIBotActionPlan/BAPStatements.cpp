@@ -428,8 +428,9 @@ BAPALook::BAPALook(int flag, BAPCondition* until, unsigned long long inputMask, 
     : m_until(until)
     , m_flag(flag)
 {
-    for (int i = 0; i < 5; ++i)
-        m_zero20[i] = 0;
+    m_state20 = 0.0f;
+    m_state24 = 0.0f;
+    m_lastForward.x = m_lastForward.y = m_lastForward.z = 0.0f;
     m_inputMask = inputMask;
     m_id = id;
 }
@@ -462,10 +463,10 @@ BAPALookDirection::~BAPALookDirection()
         delete m_until;
 }
 
-void BAPALookDirection::getTarget(Vec3& target, bool& valid)
+Vec3 BAPALookDirection::getTarget(bool& valid)
 {
     valid = true;
-    target = m_direction;
+    return m_direction;
 }
 
 BAPALookAtObject::BAPALookAtObject(Bot* bot, unsigned int object, int flag, BAPCondition* until,
@@ -487,7 +488,7 @@ BAPALookAtObject::~BAPALookAtObject()
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-look-at-object] Recover the body and
 // validate a bot that looks at a sensed object.
-void BAPALookAtObject::getTarget(Vec3&, bool&)
+Vec3 BAPALookAtObject::getTarget(bool&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BAPALookAtObject::getTarget");
 }
