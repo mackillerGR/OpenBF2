@@ -401,6 +401,7 @@ public:
 protected:
     /* +0x24 */ std::vector<int> m_vector24;   // [UNRESOLVED] element type
     /* +0x34 */ int* m_battle34;
+    // The mine each bot means to defuse; -1 for none.
     /* +0x38 */ int* m_int38;   // -1
 };
 

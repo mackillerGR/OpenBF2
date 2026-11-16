@@ -123,11 +123,11 @@ AIMineManager::MineInfo::MineInfo(unsigned int id, MineType type, const Mat4& tr
 AIMineManager::AIMineManager()
     : m_nextUpdateTime(-1000000000.0)
     , m_int60(-1)
-    , m_int72(0)
-    , m_int76(0)
-    , m_int80(0)
     , m_flag84(false)
 {
+    m_noPosition.x = 0.0f;
+    m_noPosition.y = 0.0f;
+    m_noPosition.z = 0.0f;
     // Leaves m_gap64 uninitialized. Creates entries for anti-personnel and anti-tank mines;
     // init later sizes each type's map dimension.
     m_minedPolygons.resize(2);
@@ -164,21 +164,23 @@ const std::set<unsigned int>& AIMineManager::getMinedPolygons(MineType type, uns
     return m_minedPolygons[type][map];
 }
 
-// Writes the latest recorded quad tree and polygon for the mine, or -1 to both outputs when absent.
-void AIMineManager::getPathfindingPositionOfMine(unsigned int mineId, MineType /*type*/,
-                                                 unsigned int& quadTree, unsigned int& polygon)
+// Writes the latest recorded quad tree and polygon for the mine and returns its position, or
+// writes -1 to both outputs and returns the zero position when absent. PE 100B9590.
+const Vec3& AIMineManager::getPathfindingPositionOfMine(unsigned int mineId, MineType /*type*/,
+                                                        unsigned int& quadTree, unsigned int& polygon)
 {
     const std::map<unsigned int, std::list<MineInfo> >::const_iterator i = m_mines.find(mineId);
     if (i == m_mines.end())
     {
         quadTree = 0xFFFFFFFFu;
         polygon  = 0xFFFFFFFFu;
-        return;
+        return m_noPosition;
     }
 
     const MineInfo& info = i->second.back();
     quadTree = info.m_quadTree;
     polygon  = info.m_polygon;
+    return translationOf(info.m_transform);
 }
 
 // Processes pending mine state at two updates per second.

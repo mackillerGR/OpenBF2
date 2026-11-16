@@ -36,7 +36,9 @@ public:
     virtual void mineRemoved(unsigned int) = 0;
     virtual void minePlaced(MineType, unsigned int, const Mat4&, float) = 0;
     virtual const std::set<unsigned int>& getMinedPolygons(MineType, unsigned int) = 0;
-    virtual void getPathfindingPositionOfMine(unsigned int, MineType, unsigned int&, unsigned int&) = 0;
+    // Writes the mine's quad tree and polygon and returns its position. The PE callers read the
+    // returned Vec3 (PE 100B9590; BBDefuseMines, PE 10124670). [INFERRED] for the ELF.
+    virtual const Vec3& getPathfindingPositionOfMine(unsigned int, MineType, unsigned int&, unsigned int&) = 0;
 };
 
 // Mine tracking and polygon counters. Offsets describe the original 88-byte ELF object;
@@ -92,7 +94,7 @@ public:
     virtual void mineRemoved(unsigned int);
     virtual void minePlaced(MineType, unsigned int, const Mat4&, float);
     virtual const std::set<unsigned int>& getMinedPolygons(MineType, unsigned int);
-    virtual void getPathfindingPositionOfMine(unsigned int, MineType, unsigned int&, unsigned int&);
+    virtual const Vec3& getPathfindingPositionOfMine(unsigned int, MineType, unsigned int&, unsigned int&);
 
 private:
     // The secondary counter tracks projections of mines onto another navigation map.
@@ -124,9 +126,8 @@ private:
 
     /* 60 */ int  m_int60;              // = -1 [UNRESOLVED]; reset sets it to -1 as well
     /* 64 */ char m_gap64[8];           // the constructor never writes these eight bytes
-    /* 72 */ int  m_int72;              // = 0 [UNRESOLVED]
-    /* 76 */ int  m_int76;              // = 0 [UNRESOLVED]
-    /* 80 */ int  m_int80;              // = 0 [UNRESOLVED]
+    // The position returned for an unknown mine. [INFERRED] name.
+    /* 72 */ Vec3 m_noPosition;         // = 0
     /* 84 */ bool m_flag84;             // = false [UNRESOLVED]; reset clears it as well
 };
 

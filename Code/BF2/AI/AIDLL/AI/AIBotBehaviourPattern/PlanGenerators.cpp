@@ -575,6 +575,18 @@ BBPDefuseMines::~BBPDefuseMines()
     delete[] m_vec18;
 }
 
+// PE 10124E90.
+void BBPDefuseMines::offerDefuse(unsigned int mine, int weapon, Bot* bot, Vec3 minePosition,
+                                 Vec3 standPosition)
+{
+    const unsigned int id = bot->getBotId();
+    m_hasPlan[id] = true;
+    m_int0C[id] = static_cast<int>(mine);
+    m_int10[id] = weapon;
+    m_vec14[id] = minePosition;
+    m_vec18[id] = standPosition;
+}
+
 BotScript* BBPDefuseMines::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPDefuseMines::generate");

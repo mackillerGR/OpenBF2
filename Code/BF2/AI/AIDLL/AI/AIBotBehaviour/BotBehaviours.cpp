@@ -30,6 +30,7 @@
 #include "../AIKnowledge/IPIUnit.h"
 #include "../AIKnowledge/IPIControlInfo.h"
 #include "../Main/IAIPathfinding.h"
+#include "../Main/AIMineManager.h"
 #include "../Main/AISettingsInterfaces.h"
 #include "../Main/AIMain.h"
 #include "../Main/AIRandom.h"
@@ -3458,9 +3459,129 @@ BBDefuseMines::~BBDefuseMines()
     delete[] m_int38;
 }
 
-float BBDefuseMines::calculateUrgency(Bot*, bool, float)
+// PE 10124670. A usable soldier or engineer vehicle (type flag 6) without a mine target looks for
+// the closest hostile mine, up to 100 candidates, that has a pathfinding position and a valid
+// stand position (0.8 back along the mine's facing unless it faces mostly up or down) within 35
+// of the equipment.
+float BBDefuseMines::calculateUrgency(Bot* bot, bool flag, float elapsed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBDefuseMines::calculateUrgency");
+    if (!flag)
+    {
+        if (m_int38[bot->getBotId()] == -1)
+        {
+            m_targetChanged[bot->getBotId()] = m_urgency[bot->getBotId()] != 0.0f;
+            m_urgency[bot->getBotId()] = 0.0f;
+            m_generator->reset(bot);
+        }
+        else
+        {
+            m_targetChanged[bot->getBotId()] = false;
+            if (!m_generator->hasPlan(bot))
+                m_urgency[bot->getBotId()] = 0.0f;
+        }
+        return m_urgency[bot->getBotId()];
+    }
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const unsigned int id = bot->getBotId();
+    const Vec3 position = equipment->getPosition();
+    static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();   // unused
+    BotMain* const botMain = static_cast<BotMain*>(bot);
+    const unsigned int flags = equipment->getObjectTypeFlags();
+    const bool soldier = (flags >> 21) & 1;
+    if (!isUsable(equipment, bot) || (!soldier && !((flags >> 6) & 1)))
+    {
+        m_urgency[id] = 0.0f;
+        m_targetChanged[id] = m_int38[id] != -1;
+        m_int38[id] = -1;
+        m_generator->reset(bot);
+        botMain->setMineTarget(static_cast<unsigned int>(-1));
+        return 0.0f;
+    }
+    if (soldier && equipment->getSoldierPose() == static_cast<SoldierPose>(4))
+    {
+        m_targetChanged[id] = true;
+        m_generator->reset(bot);
+        m_urgency[id] = 0.0f;
+        return 0.0f;
+    }
+    if (botMain->getMineTarget() != static_cast<unsigned int>(-1))
+        return m_urgency[id];
+
+    Information* const soldierInformation = informationManager->getInformation(
+        bot->getPlayer()->getSoldier()->getInformation(bot->getSide()));
+    std::vector<unsigned int> weapons(soldierInformation->getArmament()->getWeapons());
+    int weaponIndex = -1;
+    for (unsigned int index = 0; weapons.begin() != weapons.end() && index < weapons.size(); ++index)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[index]);
+        if (weapon && weapon->getWeaponType() == 1)
+        {
+            weaponIndex = static_cast<int>(index);
+            break;
+        }
+    }
+
+    IPIMobile* const mobile = soldierInformation->getMobile();
+    SquadMember* const member = bot->getSquadMember();
+    Vec3 minePosition;
+    minePosition.x = minePosition.y = minePosition.z = 0.0f;
+    Vec3 facing;
+    facing.x = facing.y = facing.z = 0.0f;
+    std::vector<unsigned int> rejected;
+    Vec3 stand;
+    stand.x = stand.y = stand.z = 0.0f;
+    for (int attempt = 1; attempt <= 100; ++attempt)
+    {
+        bool found;   // [UNRESOLVED] meaning; selects the mine type
+        unsigned int mine;
+        if (!static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+                 ->getClosestHostileMine(member->getPlayer(), position, found, minePosition, facing,
+                                         mine, rejected))
+            break;
+        unsigned int quadTree;
+        unsigned int polygon;
+        minePosition = static_cast<IAIMineManager*>(CommonSingletonServer::m_iAIMineManager)
+                           ->getPathfindingPositionOfMine(
+                               mine, static_cast<IAIMineManager::MineType>(!found), quadTree, polygon);
+        if (quadTree == static_cast<unsigned int>(-1) || polygon == static_cast<unsigned int>(-1))
+        {
+            rejected.push_back(mine);
+            continue;
+        }
+        if (std::fabs(facing.y) > 0.5f)
+        {
+            stand = minePosition;
+        }
+        else
+        {
+            stand.x = minePosition.x - facing.x * 0.8f;
+            stand.y = minePosition.y - facing.y * 0.8f;
+            stand.z = minePosition.z - facing.z * 0.8f;
+        }
+        if (!IAIPathfinding::instance->isValidPosition(mobile->getVehicleNumber(),
+                                                       soldierInformation->getUnit()->getEquipmentType(),
+                                                       stand, false)
+            || !(vectorLengthSquared(vectorFrom(stand, position)) < 1225.0f))
+        {
+            rejected.push_back(mine);
+            continue;
+        }
+        m_urgency[id] = elapsed * 42.0f;
+        m_targetChanged[id] = m_int38[id] != static_cast<int>(mine);
+        m_int38[id] = static_cast<int>(mine);
+        static_cast<BBPDefuseMines*>(m_generator)->offerDefuse(mine, weaponIndex, bot, minePosition, stand);
+        if (m_urgency[id] == 0.0f)
+            botMain->setMineTarget(static_cast<unsigned int>(-1));
+        return m_urgency[bot->getBotId()];
+    }
+
+    m_urgency[id] = 0.0f;
+    m_targetChanged[id] = m_int38[id] != -1;
+    m_generator->reset(bot);
+    m_int38[id] = -1;
+    botMain->setMineTarget(static_cast<unsigned int>(-1));
+    return 0.0f;
 }
 
 // PE 10124460. Only a living engineer (kit 4) that is up.

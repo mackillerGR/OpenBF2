@@ -468,6 +468,9 @@ public:
     explicit BBPDefuseMines(int behaviourId);                         // PE 10124D10
     virtual ~BBPDefuseMines();                                        // PE 10124E40
     virtual BotScript* generate(Bot* bot);                            // PE 10124F00
+    // Offers to defuse the mine with the weapon from the stand position. PE 10124E90;
+    // [INFERRED] name.
+    void offerDefuse(unsigned int mine, int weapon, Bot* bot, Vec3 minePosition, Vec3 standPosition);
 private:
     /* +0x0C */ int*  m_int0C;                // -1
     /* +0x10 */ int*  m_int10;                // -1
