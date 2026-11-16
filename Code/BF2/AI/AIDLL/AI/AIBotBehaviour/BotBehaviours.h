@@ -92,8 +92,9 @@ public:
     virtual bool isApplicable(Information* equipment, Bot* bot);          // PE 100FD160
 
 protected:
-    // The medic's own pass, for kit 3. PE 100FD5C0; [INFERRED] name. [FRONTIER]
-    float calculateMedicUrgency(Bot* bot, float elapsed);
+    // The support kit's (kit 3) pass: friendly units short of ammunition that a supply weapon
+    // (type 2) can reach. PE 100FD5C0; [INFERRED] name.
+    float calculateSupplyUrgency(Bot* bot, float elapsed);
     // Whether a human occupies the object's primary or one of its seats. PE 100FCE70;
     // [INFERRED] name.
     bool hasHumanOccupant(Information* information, int side);
