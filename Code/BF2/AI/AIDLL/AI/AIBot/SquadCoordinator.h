@@ -125,6 +125,8 @@ public:
     void getPendingMission(PendingMission& mission) const;
     // Clears every member's path. PE 101A2BF0; [INFERRED] name.
     void clearMemberPaths();
+    void squadManeuverStaticFlank();          // PE 101A4310
+    void squadManeuverAlternateFire();        // PE 101A4DF0
     // Whether the member's vehicle finds material 4 at the position; true without a vehicle.
     // [INFERRED] name.
     bool isMaterialFourAt(SquadMember* member, const Vec3& position);

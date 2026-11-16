@@ -685,9 +685,20 @@ bool AIPathfinding::MapContainer::getPolygonFromIsland(const Vec3&, unsigned int
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getPolygonFromIsland");
 }
 
-bool AIPathfinding::MapContainer::getMaterial(const Vec3&, MaterialManager*, unsigned char&) const
+// PE 1009BDE0. The polygon under the position on any island; a miss writes material 0.
+bool AIPathfinding::MapContainer::getMaterial(const Vec3& position, MaterialManager* materials,
+                                               unsigned char& material) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getMaterial");
+    unsigned int polygon;
+    const unsigned int island = m_quadTreeManager->findPolygon(
+        position, polygon, materials, m_properties->m_allowedHeightDiff);
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+    {
+        material = 0;
+        return false;
+    }
+    material = m_quadTreeManager->getIsland(island)->getMaterialOfPolygon(polygon);
+    return true;
 }
 
 // UINT_MAX in either index is the only rejected input. Other
@@ -903,9 +914,15 @@ int AIPathfinding::getPolygonFromIsland(const Vec3&, int, unsigned int&, unsigne
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getPolygonFromIsland");
 }
 
-bool AIPathfinding::getMaterial(const Vec3&, int, int, unsigned char&) const
+// PE 100A49A0. An out-of-range map, either side, answers false without touching the output.
+bool AIPathfinding::getMaterial(const Vec3& position, int map, int equipmentType,
+                                unsigned char& material) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getMaterial");
+    if (map < 0 || static_cast<int>(m_maps.size()) <= map)
+        return false;
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->getMaterial(position, materials, material);
 }
 
 void* AIPathfinding::getQuadTree(int, unsigned int) const

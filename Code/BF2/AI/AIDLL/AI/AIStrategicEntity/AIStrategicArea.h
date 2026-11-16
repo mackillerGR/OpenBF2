@@ -44,7 +44,9 @@ public:
 
     // [UNRESOLVED] List payloads whose original element types have not been identified.
     struct AreaWord   { int m_word; };
-    struct AreaRecord { int m_words[6]; };
+    // A pair of flank positions; the pair whose first point is nearest is used. [INFERRED]
+    // from PE 100E2A30.
+    struct AreaRecord { Vec3 first; Vec3 second; };
 
     AIStrategicArea(const std::string& name, unsigned int controlPointId, float radius);
     // Explicit-bounds area from `aiStrategicArea.create`. The first corner is kept as the centre
@@ -119,6 +121,9 @@ public:
     // A valid position near the control point for the vehicle: `from` itself when it is close
     // enough, otherwise up to twenty random tries around the control point before the object's
     // order position. [INFERRED] name. PE 100E06C0.
+    // The flank pair whose first point is nearest the position; false when there is none.
+    // [INFERRED] name. PE 100E2A30.
+    bool getClosestFlankPositions(Vec3 position, Vec3& first, Vec3& second) const;
     // A control-point area whose status for the side is set. Inline in PE 100E5560.
     bool holdsControlPoint(int side) const;
     void getControlPointApproach(AIStrategicObject* object, int side, int vehicle, int equipment,
@@ -185,7 +190,7 @@ public:
     /* +380 */ std::map<AIStrategicObject*, std::list<AIStrategicObject*> >* m_mapsD; // [group]
     // Per-side distance records, indexed by side - 1 like m_distancesDirty.
     /* +384 */ std::list<AreaDistanceInfo> m_distances[2];
-    /* +392 */ std::list<AreaRecord> m_list392;    // node
+    /* +392 */ std::list<AreaRecord> m_list392;    // flank position pairs; PE +0x1C4
     // Stored doubled extent, initialized to twice m_size[1].
     // Exposed to scripts as `vehicleSearchRadius`; internalConstructorCall initializes it.
     /* +396 */ float m_vehicleSearchRadius;

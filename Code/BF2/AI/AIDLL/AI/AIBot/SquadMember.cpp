@@ -436,7 +436,7 @@ void normalise(Vec3& value)
     const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
     if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
         return;
-    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    if (std::fabs(lengthSquared) < 1.1920928955078125e-07f)
     {
         value.x = value.y = value.z = 0.0f;
         return;

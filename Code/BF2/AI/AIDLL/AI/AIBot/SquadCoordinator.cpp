@@ -489,12 +489,171 @@ void SquadCoordinator::updateSquadManeuver()
         }
         break;
     case 1:
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadManeuver (squadManeuverAlternateFire)");
+        squadManeuverAlternateFire();
+        break;
     case 2:
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadManeuver (squadManeuverStaticFlank)");
+        squadManeuverStaticFlank();
+        break;
     }
+}
+
+namespace {
+
+// PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
+void normaliseDirection(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (std::fabs(lengthSquared) < 1.1920928955078125e-07f)
+    {
+        value.x = value.y = value.z = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+}
+
+Information* lookupInformation(unsigned int handle)
+{
+    return informationManager->getInformation(handle);
+}
+
+} // namespace
+
+// PE 101A4DF0. Every four seconds at most: every bot may fire, then the firing bot foot soldiers
+// within 90 of the squad position are collected. With two or more, a four-step cycle holds half
+// of them back at a time - the first half for 1.5 s, a random 1-3 s pause, the second half for
+// 1.5 s, another pause. A held member stops firing only while it faces its target (cosine above
+// 0.85) from more than 40 away. A stale target handle skips the member; the facing lookup is
+// not null-checked.
+void SquadCoordinator::squadManeuverAlternateFire()
+{
+    if (!(m_d124 > m_d140))
+        return;
+    m_d140 = m_d124 + 4.0;
+    std::vector<SquadMember*> firing;
+    Vec3 position;
+    position.x = 0.0f;
+    position.y = 0.0f;
+    position.z = 0.0f;
+    for (unsigned int index = 0; index < m_squadMembers.size(); ++index)
+    {
+        SquadMember* const member = m_squadMembers[index];
+        if (member->isBot())
+            member->getBot()->setAllowFire(true);
+    }
+    for (unsigned int index = 0; index < m_squadMembers.size(); ++index)
+    {
+        SquadMember* member = m_squadMembers[index];
+        if (!member->isBot() || !member->getPlayer()->getIsAlive())
+            continue;
+        Bot* const bot = member->getBot();
+        Information* const information = lookupInformation(bot->getCurrentEquipment());
+        if (!bot->isFiring() || !information->isPrimary() || !information->getMobile())
+            continue;
+        const unsigned int flags = information->getObjectTypeFlags();
+        if ((flags & 0x10u) || (flags & 0x20u) || (flags & 0x80u))
+            continue;
+        if (!member->getPosition(position))
+            continue;
+        const float dx = m_v108.x - position.x;
+        const float dy = m_v108.y - position.y;
+        const float dz = m_v108.z - position.z;
+        if (!(dx * dx + dy * dy + dz * dz < 8100.0f))
+            continue;
+        firing.push_back(member);
+    }
+    if (firing.size() <= 1)
+        return;
+
+    Vec3 direction;
+    direction.x = 0.0f;
+    direction.y = 0.0f;
+    direction.z = 0.0f;
+    unsigned int first = 0;
+    unsigned int end = 0;
+    const unsigned int count = static_cast<unsigned int>(firing.size());
+    switch (m_i152)
+    {
+    case 0:
+        end = count >> 1;
+        m_d140 = m_d124 + 1.5;
+        m_i152 = 1;
+        break;
+    case 1:
+    {
+        const double draw = static_cast<double>(AIRandom::m_instance->next());
+        ++m_i152;
+        m_d140 = draw * 2.3283064365386963e-10 * 2.0 + m_d124 + 1.0;
+        break;
+    }
+    case 2:
+        first = count >> 1;
+        end = count;
+        m_d140 = m_d124 + 1.5;
+        m_i152 = 3;
+        break;
+    case 3:
+    {
+        const double draw = static_cast<double>(AIRandom::m_instance->next());
+        m_i152 = 0;
+        m_d140 = draw * 2.3283064365386963e-10 * 2.0 + m_d124 + 1.0;
+        break;
+    }
+    }
+
+    for (unsigned int index = first; index < end; ++index)
+    {
+        SquadMember* const member = firing[index];
+        Information* const target = lookupInformation(member->getBot()->getFiringTarget());
+        if (!target || !member->getPosition(position))
+            continue;
+        const Vec3& targetPosition = target->getPosition();
+        direction.x = targetPosition.x - position.x;
+        direction.y = targetPosition.y - position.y;
+        direction.z = targetPosition.z - position.z;
+        normaliseDirection(direction);
+        const Vec3 facing = lookupInformation(member->getBot()->getCurrentEquipment())->getFaceing();
+        if (!(direction.x * facing.x + direction.z * facing.z + direction.y * facing.y > 0.85000002f))
+            continue;
+        const Vec3& again = target->getPosition();
+        const float tx = again.x - position.x;
+        const double ty = static_cast<double>(again.y) - position.y;
+        const double tz = static_cast<double>(again.z) - position.z;
+        if (!(static_cast<double>(tx) * tx + ty * ty + tz * tz > 1600.0f))
+            continue;
+        firing[index]->getBot()->setAllowFire(false);
+    }
+}
+
+// PE 101A4310. Every bot may fire. Once per flank, on a mission with the lead slot filled and an
+// assigned area, a 65% draw sends the lead slot's member along the area's nearest flank pair
+// when both points are valid for it.
+void SquadCoordinator::squadManeuverStaticFlank()
+{
+    for (unsigned int index = 0; index < m_squadMembers.size(); ++index)
+    {
+        SquadMember* const member = m_squadMembers[index];
+        if (member->isBot())
+            member->getBot()->setAllowFire(true);
+    }
+    if (m_b157 || m_i120 != 2 || !m_formation->isLeadSlotOccupied() || !m_strategicAreaAssignment)
+        return;
+    m_b157 = true;
+    if (!(static_cast<double>(AIRandom::m_instance->next()) * 2.3283064365386963e-10 < 0.64999998f))
+        return;
+    SquadMember* const member = m_squadMembers[m_formation->getSquadMemberIndexAtSlot(0)];
+    if (!m_strategicAreaAssignment->getClosestFlankPositions(m_v108, m_positions[0], m_positions[1]))
+        return;
+    if (!isPositionValidForMember(member, m_positions[0]))
+        return;
+    if (!isPositionValidForMember(member, m_positions[1]))
+        return;
+    m_b156 = true;
+    member->setHavePath(false);
 }
 
 // Return carries the full integer selector; the source enum name remains unknown.
@@ -536,12 +695,29 @@ int SquadCoordinator::chooseSquadManeuver()
     if (m_i120 != 2)
         return 0;
 
-    Vec3 target = m_v28;
-    (void)target;
-    // The remaining terrain-altitude/distance/assignment policy is evidenced but
-    // not implemented here. Preserve its entry before any height call or flag store.
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::chooseSquadManeuver (terrain altitude and flank policy)");
+    // PE 101A29E1. A static flank is chosen while the squad's position is more than 50 and
+    // under sqrt(30000) from the goal (taken at terrain height), the mission flag is set and the side holds
+    // the assigned area outright (status 1). Entering it clears both flank flags.
+    const float targetX = m_v28.x;
+    const float targetZ = m_v28.z;
+    const float height =
+        static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->getTerrainAltitude(targetX, targetZ);
+    const double dx = static_cast<double>(targetX) - m_v108.x;
+    const double dy = static_cast<double>(height) - m_v108.y;
+    const double dz = static_cast<double>(targetZ) - m_v108.z;
+    const double distanceSq = dz * dz + dy * dy + dx * dx;
+    if (!(distanceSq < 30000.0f))
+        return 0;
+    if (!(distanceSq > 2500.0f))
+        return 0;
+    if (!m_b56 || !m_strategicAreaAssignment || m_strategicAreaAssignment->getStatus(m_side + 1) != 1)
+        return 0;
+    if (m_i148 != 2)
+    {
+        m_b156 = false;
+        m_b157 = false;
+    }
+    return 2;
 }
 
 // [INFERRED] void return, as above.

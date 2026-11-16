@@ -1088,6 +1088,28 @@ float dot(const Vec3& a, const Vec3& b)
 
 } // namespace
 
+// PE 100E2A30. Squared distances sum z, y, then x; a tie keeps the earlier pair.
+bool AIStrategicArea::getClosestFlankPositions(Vec3 position, Vec3& first, Vec3& second) const
+{
+    bool found = false;
+    float best = 3.40282347e+38f;
+    for (std::list<AreaRecord>::const_iterator it = m_list392.begin(); it != m_list392.end(); ++it)
+    {
+        const double dx = static_cast<double>(it->first.x) - position.x;
+        const double dy = static_cast<double>(it->first.y) - position.y;
+        const double dz = static_cast<double>(it->first.z) - position.z;
+        const float distanceSq = static_cast<float>(dz * dz + dy * dy + dx * dx);
+        if (distanceSq < best)
+        {
+            first = it->first;
+            second = it->second;
+            best = distanceSq;
+            found = true;
+        }
+    }
+    return found;
+}
+
 // The control-point test assignPath repeats inline, in this order.
 bool AIStrategicArea::holdsControlPoint(int side) const
 {

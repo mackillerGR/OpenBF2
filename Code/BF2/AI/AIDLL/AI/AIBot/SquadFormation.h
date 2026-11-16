@@ -78,6 +78,7 @@ public:
     float getFormationMaxSpeed();
     bool shouldSquadMoveOut() const { return m_b36; }   // PE 1019D4B0
     bool hasFormationMoved() const { return m_b56; }    // PE 1019D490
+    bool isLeadSlotOccupied() const { return m_slots[0]->m_occupied; }   // PE 1019EF60 [INFERRED] name
     void updateFormationMaxSpeed();
     void setFormation();
     void setLineFormation();
