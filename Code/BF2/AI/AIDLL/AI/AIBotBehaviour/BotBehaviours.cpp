@@ -601,7 +601,7 @@ BBRevive::BBRevive(int behaviourId, int priority, PlanGenerator* generator, Urge
     : BotBehaviour(weights, urgeCurve, configuredBotCount())
 {
     m_battle34 = checkPointer(new int[configuredBattleStrengthCount()]);
-    m_battle38 = checkPointer(new int[configuredBattleStrengthCount()]);
+    m_battle38 = checkPointer(new float[configuredBattleStrengthCount()]);
     m_battle3C = checkPointer(new int[configuredBattleStrengthCount()]);
     m_behaviourId = static_cast<unsigned char>(behaviourId);
     m_priority = static_cast<unsigned char>(priority);
@@ -623,10 +623,6 @@ BBRevive::~BBRevive()
     delete[] m_battle3C;
 }
 
-float BBRevive::calculateUrgency(Bot*, bool, float)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRevive::calculateUrgency");
-}
 
 BBBridgeRepair::BBBridgeRepair(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
            float* weights)
@@ -3853,6 +3849,169 @@ float BBMedicAssist::calculateUrgency(Bot* bot, bool flag, float elapsed)
             bot->setWantedRepairTarget(best);
     }
     return m_urgency[bot->getBotId()];
+}
+
+// Whether a human player occupies the object. Inlined twice into BBRevive's pass;
+// [CHOSEN, not recovered] helper.
+bool isHumanOccupied(Information* information)
+{
+    IPIUnit* const unit = information->getUnit();
+    if (!unit || !unit->isOccupied())
+        return false;
+    IAIPlayer* const player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                  ->getPlayerFromId(unit->getOccupyingPlayerId(information->getSide()));
+    return player && !player->getIsAIPlayer();
+}
+
+// PE 10120650. Looks for downed friendly soldiers that the equipment's revive weapons (type 3)
+// can reach before their man-down time runs out; humans are preferred tenfold.
+float BBRevive::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    if (!flag)
+    {
+        Information* const target = informationManager->getInformation(m_targets[bot->getBotId()]);
+        if (target && target->getSide() == bot->getSide())
+        {
+            m_targetChanged[bot->getBotId()] = false;
+            if (!m_generator->hasPlan(bot))
+                m_urgency[bot->getBotId()] = 0.0f;
+        }
+        else
+        {
+            m_targetChanged[bot->getBotId()] = m_urgency[bot->getBotId()] != 0.0f;
+            m_urgency[bot->getBotId()] = 0.0f;
+            m_generator->reset(bot);
+        }
+        return m_urgency[bot->getBotId()];
+    }
+
+    const int strengthCount = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();
+    for (int i = 0; i < strengthCount; ++i)
+    {
+        m_battle34[i] = -1;
+        m_battle3C[i] = 0;
+    }
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    const Vec3& position = equipment->getPosition();
+    m_vector24.resize(0, 0);
+    static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+        ->getFriendlyUnits(m_vector24, position, bot, 40.0f);
+    if (m_vector24.size() == 0)
+    {
+        m_targetChanged[bot->getBotId()] = m_urgency[bot->getBotId()] != 0.0f;
+        m_urgency[bot->getBotId()] = 0.0f;
+        m_generator->reset(bot);
+        return 0.0f;
+    }
+
+    std::vector<unsigned int> weapons(armament->getWeapons());
+    const int kit = bot->getPlayer()->getSpawnKit();
+    for (unsigned int index = 0; weapons.begin() != weapons.end() && index < weapons.size(); ++index)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[index]);
+        if (!weapon || weapon->getWeaponType() != 3)
+            continue;
+        for (int kind = 0; kind < strengthCount; ++kind)
+        {
+            if (weapon->getStrength(kind) > m_battle3C[kind])
+            {
+                m_battle34[kind] = static_cast<int>(index);
+                m_battle3C[kind] = weapon->getStrength(kind);
+                const float range = weapon->getMaxRange();
+                m_battle38[kind] = range * range;
+            }
+        }
+    }
+
+    int bestWeapon = -1;
+    unsigned int best = static_cast<unsigned int>(-1);
+    float bestValue = 0.0f;
+    unsigned int ordersMatched = 0;
+    const float speed = equipment->getMobile()->getMaxSpeed();
+    float bestDistance = 100.0f;
+    for (std::vector<unsigned int>::iterator it = m_vector24.begin(); it != m_vector24.end(); ++it)
+    {
+        Information* const target = informationManager->getInformation(*it);
+        if (!target)
+            continue;
+        IPIPhysical* const physical = target->getPhysical();
+        if (!physical || target == equipment || !target->getMobile()
+            || !((target->getObjectTypeFlags() >> 21) & 1) || !physical->getManDown()
+            || target->getSoldierPose() == static_cast<SoldierPose>(4))
+            continue;
+        const Vec3& targetPosition = target->getPosition();
+        IAITerrain* const terrain = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+        const float water = terrain->getWaterLevel(targetPosition.x, targetPosition.z);
+        const float depth = water - terrain->getHeight(targetPosition.x, targetPosition.z);
+        // Under the surface in water deeper than 0.75 is out of reach.
+        if (water + 0.5f > targetPosition.y && depth > 0.75f)
+            continue;
+        const int strengthType = physical->getStrengthType();
+        if (m_battle34[strengthType] == -1)
+            continue;
+        const float timeLeft = physical->getManDownTimeLeft();
+        if (timeLeft < 0.001f)
+            continue;
+        const float distance = vectorLength(vectorFrom(targetPosition, position));
+        float value = 1.0f - std::min(1.0f, distance / speed / timeLeft);
+        if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+            && ordersMatched < bot->getOrderList(m_behaviourId)->size())
+        {
+            std::list<unsigned int>* const orders = bot->getOrderList(m_behaviourId);
+            if (std::find(orders->begin(), orders->end(), *it) != orders->end())
+            {
+                ++ordersMatched;
+                value = value * bot->getMemory()->m_float8;
+            }
+        }
+        if (isHumanOccupied(target))
+            value = value * 10.0f;
+        if (value > bestValue)
+        {
+            bestDistance = distance;
+            bestWeapon = m_battle34[strengthType];
+            bestValue = value;
+            best = *it;
+        }
+    }
+
+    const unsigned int id = bot->getBotId();
+    if (best == static_cast<unsigned int>(-1))
+    {
+        m_urgency[id] = 0.0f;
+        m_targetChanged[id] = m_targets[id] != static_cast<unsigned int>(-1);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        m_generator->reset(bot);
+        return 0.0f;
+    }
+    Information* const bestInformation = informationManager->getInformation(best);
+    const bool human = bestInformation && isHumanOccupied(bestInformation);
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+        && bot->getOrderList(m_behaviourId)->size() == 0)
+        bestValue = bestValue * bot->getMemory()->m_float8;
+    float urgency;
+    if (human)
+    {
+        if (bestDistance < 50.0f)
+            urgency = 100.0f;
+        else
+            urgency = DecleiningSlopeCurve::calculate(bestValue) * elapsed * 5.0f;
+    }
+    else
+    {
+        urgency = DecleiningSlopeCurve::calculate(bestValue) * elapsed;
+        urgency = urgency + urgency;
+    }
+    m_urgency[id] = urgency;
+    m_targetChanged[id] = m_targets[id] != best;
+    m_targets[id] = best;
+    static_cast<BBPRevive*>(m_generator)->offerRevive(m_targets[id], bestWeapon, bot);
+    if (kit == 5)
+        m_urgency[id] = SquadManager::m_instance->getSupportDemand(bot->getSquadMember(), best, 1,
+                                                                  bot->getSide())
+                        * m_urgency[id];
+    return m_urgency[id];
 }
 
 } // namespace ai

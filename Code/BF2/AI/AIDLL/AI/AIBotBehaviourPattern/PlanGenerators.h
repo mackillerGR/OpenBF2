@@ -408,6 +408,8 @@ public:
     explicit BBPRevive(int behaviourId);                              // PE 10121000
     virtual ~BBPRevive();                                             // PE 10121060
     virtual BotScript* generate(Bot* bot);                            // PE 101210A0
+    // Offers to revive the target with the weapon. PE 10120EB0; [INFERRED] name.
+    void offerRevive(unsigned int target, int weapon, Bot* bot);
 private:
     /* +0x0C */ int* m_int0C;
     /* +0x10 */ int* m_int10;

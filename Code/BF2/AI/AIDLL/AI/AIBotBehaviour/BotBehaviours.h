@@ -331,9 +331,12 @@ public:
     virtual bool isApplicable(Information* equipment, Bot* bot);          // PE 10120410
 
 protected:
-    /* +0x24 */ std::vector<int> m_vector24;   // [UNRESOLVED] element type
+    // Friendly units around the bot.
+    /* +0x24 */ std::vector<unsigned int> m_vector24;
+    // Per battle-strength kind: the best revive weapon's index, its squared range and its
+    // strength.
     /* +0x34 */ int* m_battle34;
-    /* +0x38 */ int* m_battle38;
+    /* +0x38 */ float* m_battle38;
     /* +0x3C */ int* m_battle3C;
 };
 

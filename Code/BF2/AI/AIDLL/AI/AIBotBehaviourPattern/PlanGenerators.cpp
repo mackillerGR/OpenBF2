@@ -425,6 +425,14 @@ BBPRevive::~BBPRevive()
     delete[] m_int0C;
     delete[] m_int10;
 }
+// PE 10120EB0.
+void BBPRevive::offerRevive(unsigned int target, int weapon, Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = static_cast<int>(target);
+    m_int10[bot->getBotId()] = weapon;
+}
+
 
 BotScript* BBPRevive::generate(Bot*)
 {
