@@ -3331,9 +3331,67 @@ BBC4::~BBC4()
     delete[] m_targets;
 }
 
-float BBC4::calculateUrgency(Bot*, bool, float)
+// PE 10122060. With a charge placed, detonate it when the enemy is taking over the area it was
+// placed for and no friendly vehicle is within 15 m (urgency 100); otherwise, with C4 left, place
+// it on an owned control point within 10 m (urgency 500). The scan for the C4 weapon keeps the
+// last weapon looked at when none is type 4, as shipped.
+float BBC4::calculateUrgency(Bot* bot, bool flag, float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBC4::calculateUrgency");
+    if (!flag)
+    {
+        m_urgency[bot->getBotId()] = 0.0f;
+        return m_urgency[bot->getBotId()];
+    }
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    AIStrategicObject* target = 0;
+    float urgency = 0.0f;
+    ISAI* const sai = IAIMain::m_instance->getSAI(bot->getSide());
+    bool offer = false;
+    bool detonate = false;
+    if (equipment && ((equipment->getObjectTypeFlags() >> 21) & 1) && isUsable(equipment, bot))
+    {
+        WeaponInfo* c4 = 0;
+        std::vector<unsigned int>& weapons = equipment->getArmament()->getWeapons();
+        for (unsigned int i = 0; i < weapons.size(); ++i)
+        {
+            c4 = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+            if (c4 && c4->getWeaponType() == 4)
+                break;
+        }
+        const C4Info charge = bot->getC4();
+        const Vec3 position = equipment->getPosition();
+        if (charge.placed)
+        {
+            target = charge.object;
+            if (charge.placementType == 0)
+            {
+                AIStrategicObject* contested = 0;
+                Vec2 where;
+                where.x = 0.0f;
+                where.y = 0.0f;
+                if (sai->hostileTakeoveInProgress(contested, where) && charge.object
+                    && contested->m_index == charge.object->m_index
+                    && !SquadManager::m_instance->isFriendlyNearPosition(charge.position, 15.0f, bot->getSide()))
+                {
+                    detonate = true;
+                    urgency = 100.0f;
+                    offer = true;
+                }
+            }
+        }
+        else if (c4->getCurrentAmmo() > 0
+                 && sai->isPosInsideOwnedControlPoint(target, position, 10.0f))
+        {
+            urgency = 500.0f;
+            offer = true;
+        }
+    }
+    if (offer)
+        static_cast<BBPC4*>(m_generator)->offerPlan(bot, detonate, target);
+    else
+        m_generator->reset(bot);
+    m_urgency[bot->getBotId()] = urgency;
+    return m_urgency[bot->getBotId()];
 }
 
 // PE 101222E0. A living bot that is up and has C4 (weapon type 4) with ammunition left.

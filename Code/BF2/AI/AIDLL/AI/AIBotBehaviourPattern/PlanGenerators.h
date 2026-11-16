@@ -22,6 +22,7 @@ namespace hfe {
 namespace ai {
 
 class BotBehaviour;
+class AIStrategicObject;
 
 // Avoid-collision family. PE vtable 10282A98, constructor 10198DD0.
 class AvoidCollisionPlanGenerator : public PlanGenerator
@@ -422,8 +423,13 @@ public:
     explicit BBPC4(int behaviourId);                                  // PE 10122460
     virtual ~BBPC4();                                                 // PE 101224A0
     virtual BotScript* generate(Bot* bot);                            // PE 101224E0
+    // Offers a plan: detonate a placed charge (true) or place one at the object. Both values
+    // are kept once for all bots, as shipped. PE 101223B0; [INFERRED] name.
+    void offerPlan(Bot* bot, bool detonate, AIStrategicObject* object);
 private:
     /* +0x0C */ int* m_int0C;
+    /* +0x10 */ bool m_detonate;              // not initialised by the constructor
+    /* +0x14 */ AIStrategicObject* m_object;  // not initialised by the constructor
 };
 
 class BBPRunOverSoldier : public PlanGenerator

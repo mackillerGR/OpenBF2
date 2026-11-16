@@ -152,8 +152,9 @@ BotMain::BotMain(IAIPlayer* player,
     m_currentWaypoint.z = 0.0f;
     m_currentWaypointArea = -1;
     m_stalledPlanTicks = 0;
-    for (int k = 0; k < 3; ++k)
-        m_ptr428[k] = 0;                // +428..+436
+    m_c4Position.x = 0.0f;              // +428..+436
+    m_c4Position.y = 0.0f;
+    m_c4Position.z = 0.0f;
     m_moveToStatus = 0;
     m_timeOfLastFailedStaticAttack = 0.0;
     m_timeOfLastFailedStaticSkyAttack = 0.0;
@@ -1710,9 +1711,16 @@ void BotMain::setBotStuck(bool b)
 }
 
 // +0x14C
+// PE 10180440.
 void BotMain::placeC4(int placementType, Vec3 v, AIStrategicObject* o)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::placeC4");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_c4PlacementType = placementType;
+    m_c4Object = o;
+    m_c4Placed = true;
+    m_c4Position = v;
+    m_c4Time = now;
+    m_c4Lifetime = 240.0;
 }
 
 // +0x150
@@ -1722,21 +1730,38 @@ bool BotMain::isC4Placed()
 }
 
 // +0x154
+// PE 1017E950.
 void BotMain::removeC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::removeC4");
+    m_c4Time = 0.0;
+    m_c4Placed = false;
+    m_c4Object = 0;
+    m_c4Lifetime = 0.0;
 }
 
 // +0x158
-void* BotMain::getC4()
+// PE 10180A50.
+C4Info BotMain::getC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getC4");
+    C4Info info;
+    info.placed = m_c4Placed;
+    info.placementType = m_c4PlacementType;
+    info.position = m_c4Position;
+    info.object = m_c4Object;
+    info.time = m_c4Time;
+    info.lifetime = m_c4Lifetime;
+    return info;
 }
 
 // +0x15C
+// PE 1017E990. Removes the charge once its lifetime has passed.
 void BotMain::updateC4()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updateC4");
+    if (!m_c4Placed)
+        return;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now > m_c4Lifetime + m_c4Time)
+        removeC4();
 }
 
 // +0x160

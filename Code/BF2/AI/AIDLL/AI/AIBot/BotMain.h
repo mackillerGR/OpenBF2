@@ -48,6 +48,17 @@ enum BotLodLevel : int { BotLodFull = 0, BotLodMedium = 1, BotLodLight = 2 };  /
 
 // Base interface used by the bot manager to schedule and query bots.
 // [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
+// A placed charge, returned by value from Bot::getC4. PE layout: 0x28 bytes from BotMain +0x1D8.
+struct C4Info
+{
+    bool               placed;
+    int                placementType;
+    Vec3               position;
+    AIStrategicObject* object;
+    double             time;       // when it was placed
+    double             lifetime;   // 240 s; updateC4 removes it afterwards
+};
+
 class Bot
 {
 public:
@@ -137,11 +148,11 @@ public:
     virtual SquadMember* getSquadMember() = 0;                                                    // +0x140
     virtual bool isBotStuck() = 0;                                                                // +0x144
     virtual void setBotStuck(bool b) = 0;                                                         // +0x148
-    virtual void placeC4(int placementType, Vec3 v, AIStrategicObject* o) = 0;                    // +0x14C [FRONTIER]
+    virtual void placeC4(int placementType, Vec3 v, AIStrategicObject* o) = 0;                    // +0x14C
     virtual bool isC4Placed() = 0;                                                                // +0x150
-    virtual void removeC4() = 0;                                                                  // +0x154 [FRONTIER]
-    virtual void* getC4() = 0;                                                                    // +0x158 [FRONTIER]
-    virtual void updateC4() = 0;                                                                  // +0x15C [FRONTIER]
+    virtual void removeC4() = 0;                                                                  // +0x154
+    virtual C4Info getC4() = 0;                                                                   // +0x158
+    virtual void updateC4() = 0;                                                                  // +0x15C
     virtual void enableBotScriptDebugger(bool /*enable*/) = 0;                                    // +0x160
     virtual void* getDebugger() = 0;                                                              // +0x164
     virtual BAPContext* getScriptContext();                                                       // +0x168
@@ -296,11 +307,11 @@ public:
     virtual SquadMember* getSquadMember();                                                        // +0x140
     virtual bool isBotStuck();                                                                    // +0x144
     virtual void setBotStuck(bool b);                                                             // +0x148
-    virtual void placeC4(int placementType, Vec3 v, AIStrategicObject* o);                        // +0x14C [FRONTIER]
+    virtual void placeC4(int placementType, Vec3 v, AIStrategicObject* o);                        // +0x14C
     virtual bool isC4Placed();                                                                    // +0x150
-    virtual void removeC4();                                                                      // +0x154 [FRONTIER]
-    virtual void* getC4();                                                                        // +0x158 [FRONTIER]
-    virtual void updateC4();                                                                      // +0x15C [FRONTIER]
+    virtual void removeC4();                                                                      // +0x154
+    virtual C4Info getC4();                                                                          // +0x158
+    virtual void updateC4();                                                                      // +0x15C
     virtual void enableBotScriptDebugger(bool /*enable*/);                                        // +0x160
     virtual void* getDebugger();                                                                  // +0x164
     // Inherits Bot::getScriptContext; do not add a derived override for that slot.
@@ -575,9 +586,13 @@ private:
     /* 416 */ int          m_stalledPlanTicks;      // = 0
 
     /* 420 */ bool         m_c4Placed;              // = false - the ctor's last field store
-    /* 421 */ char         m_pad421[7];
-    /* 428 */ void*        m_ptr428[3];             // +428..+436, all = 0
-    /* 440 */ char         m_gap440[20];            // [UNRESOLVED]
+    // The rest of the C4 record (PE +0x1D8..+0x200). Offsets here are the ELF ones.
+    /* 421 */ char         m_pad421[3];
+    /* 424 */ int          m_c4PlacementType;
+    /* 428 */ Vec3         m_c4Position;            // zeroed by the constructor
+    /* 440 */ AIStrategicObject* m_c4Object;
+    /* 444 */ double       m_c4Time;
+    /* 452 */ double       m_c4Lifetime;
     // Three grenade timestamps. getTimeOfGrenadeThrown requires an index in [0, 3);
     // it performs no bounds check and larger indices read adjacent attack timestamps.
     /* 460 */ double       m_grenadeThrownTime[3];  // +460, +468, +476

@@ -433,6 +433,14 @@ BBPC4::~BBPC4()
     delete[] m_int0C;
 }
 
+// PE 101223B0.
+void BBPC4::offerPlan(Bot* bot, bool detonate, AIStrategicObject* object)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_detonate = detonate;
+    m_object = object;
+}
+
 BotScript* BBPC4::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPC4::generate");
