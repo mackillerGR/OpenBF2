@@ -10,6 +10,7 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIPhysical.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 #include "../AIKnowledge/AIInformationGrid.h"
@@ -82,6 +83,25 @@ BotNavigation::BotNavigation(BotMain* owner)
 BotNavigation::~BotNavigation()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::~BotNavigation");
+}
+
+// PE 101742E0.
+bool BotNavigation::isInsideObstacle(const Vec3& position) const
+{
+    for (unsigned int i = 0; i < m_obstacles.size(); ++i)
+    {
+        Information* const obstacle = informationManager->getInformation(m_obstacles[i]);
+        if (!obstacle || ((obstacle->getObjectTypeFlags() >> 21) & 1) || !obstacle->getPhysical())
+            continue;
+        const Vec3& centre = obstacle->getPosition();
+        const float dx = position.x - centre.x;
+        const float dy = position.y - centre.y;
+        const float dz = position.z - centre.z;
+        const float radius = obstacle->getPhysical()->getSmallestRadius();
+        if (radius * radius > dz * dz + dx * dx + dy * dy)
+            return true;
+    }
+    return false;
 }
 
 // PE 101729D0.

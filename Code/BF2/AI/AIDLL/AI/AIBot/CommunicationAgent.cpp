@@ -143,6 +143,39 @@ void CommunicationAgent::popQueuedMessage()
     m_queue.pop();
 }
 
+// PE 101481B0.
+bool CommunicationAgent::handleMessages(AIRadioMessageType type)
+{
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[type];
+    bool handled = false;
+    for (std::list<AIRadioMessageInfo>::iterator it = inbox.begin(); it != inbox.end(); ++it)
+    {
+        if (!it->m_handled && !it->m_flag17)
+        {
+            it->m_handled = true;
+            handled = true;
+        }
+    }
+    return handled;
+}
+
+// PE 10148200. The search compares the time for exact equality.
+bool CommunicationAgent::handleMessage(const AIRadioMessageInfo& message)
+{
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[message.m_type];
+    std::list<AIRadioMessageInfo>::iterator it = inbox.begin();
+    for (; it != inbox.end(); ++it)
+    {
+        if (it->m_type == message.m_type && it->m_senderPlayerId == message.m_senderPlayerId
+            && it->m_time == message.m_time)
+            break;
+    }
+    if (it == inbox.end() || it->m_handled || it->m_flag17)
+        return false;
+    it->m_handled = true;
+    return true;
+}
+
 // PE 1014A230.
 void CommunicationAgent::enqueueRadioMessage(int type, int channel, unsigned int priority,
                                              float delay, int flag)

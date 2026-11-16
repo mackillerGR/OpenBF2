@@ -10,6 +10,7 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/IPIUnit.h"
 #include "../AIKnowledge/WeaponInfo.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../AIPlanInterpreter/BAPContext.h"
@@ -530,6 +531,30 @@ IdlePlanGenerator::~IdlePlanGenerator()
 {
 }
 
+// PE 101A8DF0.
+bool IdlePlanGenerator::hasFreeSeat(unsigned int handle, int side)
+{
+    Information* information = informationManager->getInformation(handle);
+    if (!information)
+        return false;
+    if (!information->isPrimary())
+        information = informationManager->getInformation(information->getPrimaryObject(side));
+    if (!information->getUnit())
+        return false;
+    if (!information->getUnit()->isOccupied())
+        return true;
+    int iterator;
+    for (Information* secondary =
+             informationManager->getInformation(information->getFirstSecondaryObject(iterator, side));
+         secondary;
+         secondary = informationManager->getInformation(information->getSecondaryObject(iterator, side)))
+    {
+        if (secondary->getUnit() && !secondary->getUnit()->isOccupied())
+            return true;
+    }
+    return false;
+}
+
 int IdlePlanGenerator::getIdleType()
 {
     return 0;
@@ -551,6 +576,13 @@ BBPIdle2d::~BBPIdle2d()
 int BBPIdle2d::getIdleType()
 {
     return 1;
+}
+
+// PE 100F6390.
+void BBPIdle2d::setTarget(Bot* bot, int target)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = target;
 }
 
 BotScript* BBPIdle2d::generate(Bot*)
@@ -581,6 +613,14 @@ int BBPIdle3d::getIdleType()
     return 2;
 }
 
+// PE 100F5A70.
+void BBPIdle3d::setTarget(float distance, Bot* bot, int target)
+{
+    m_float0C[bot->getBotId()] = distance;
+    m_hasPlan[bot->getBotId()] = true;
+    m_int10[bot->getBotId()] = target;
+}
+
 BotScript* BBPIdle3d::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPIdle3d::generate");
@@ -598,6 +638,12 @@ BBPIdleInfantery::~BBPIdleInfantery()
 int BBPIdleInfantery::getIdleType()
 {
     return 3;
+}
+
+// PE 100F51C0.
+void BBPIdleInfantery::offerPlan(Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
 }
 
 // PE 100F5510. A bot standing at its strategic object zooms its active weapon (when it has a

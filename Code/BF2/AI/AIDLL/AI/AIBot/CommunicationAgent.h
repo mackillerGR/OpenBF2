@@ -26,10 +26,13 @@ enum AIRadioMessageType : int;
 // Radio-message record. [UNRESOLVED] Some fields are not yet identified.
 struct AIRadioMessageInfo
 {
-    /*  0 */ unsigned char m_opaque0[4];   // [UNRESOLVED]
+    /*  0 */ float m_weight;               // [UNRESOLVED] meaning; BBIdle scales its urgency by it
     /*  4 */ int m_senderPlayerId;
     /*  8 */ double m_time;                // when it was received; inboxes are newest first
-    /* 16 */ unsigned char m_opaque16[4];  // [UNRESOLVED]
+    // Set when a behaviour answers the message. [INFERRED] name.
+    /* 16 */ bool m_handled;
+    /* 17 */ bool m_flag17;                // [UNRESOLVED] a set flag also blocks answering
+    /* 18 */ unsigned char m_pad18[2];
     /* 20 */ int m_type;                   // [INFERRED] the message type; indexes the send periods
 };
 
@@ -69,6 +72,15 @@ public:
     // attested by a 7-byte body: `return m_receivedMessages.data + type;`
     const std::list<AIRadioMessageInfo>& getReceivedMessages(AIRadioMessageType type) const
     { return m_receivedMessages[type]; }
+    // Marks every inbox message of the type that is neither handled nor flagged; false when there
+    // was none. PE 101481B0; [INFERRED] name.
+    bool handleMessages(AIRadioMessageType type);
+    // Marks the inbox copy of the message (same type, sender and time) as handled unless it
+    // already is or is flagged; false when that fails. PE 10148200; [INFERRED] name.
+    bool handleMessage(const AIRadioMessageInfo& message);
+    // [UNRESOLVED] meaning; reset stores -1. BBIdle compares a requester's equipment player id
+    // against it. [INFERRED] accessor; read inline.
+    int getInt92() const { return m_int92; }
 
 private:
     void expireReceivedMessages(double time);

@@ -33,6 +33,11 @@ public:
     SampledFunction(Function function, float low, float high, float step);
     ~SampledFunction();
 
+    // The table value at x, linearly interpolated when `interpolate` is set. Outside [low, high],
+    // and at or past the last interval when interpolating, it returns the bits of its second
+    // argument read as a float, as shipped. PE 101B17B0; [INFERRED] name.
+    float sample(float x, bool interpolate) const;
+
 private:
     void build();
 
@@ -99,9 +104,17 @@ public:
     virtual void reset(Bot* bot);                                       // PE 100F46C0
 
 protected:
-    /* +0x24 */ double* m_double24;   // 0
-    /* +0x28 */ bool*   m_bool28;     // false
-    /* +0x2C */ int*    m_int2C;      // 0
+    // Answers the bot's ride requests: accepts the first one it can serve, or acknowledges one
+    // it cannot and returns. PE 100F4910; [INFERRED] name.
+    void answerRideRequests(Bot* bot, unsigned int equipmentHandle, Information* equipment,
+                            PlanGenerator* generator, bool moving, float elapsed, float& urgency,
+                            int& target, bool& keep);
+
+    /* +0x24 */ double* m_double24;   // per bot: when the current wait began, 0 for none
+    /* +0x28 */ bool*   m_bool28;     // per bot: a ride request was accepted
+    // Per bot: the health when the wait for repairs began. The constructor, reset and the
+    // shipped body store the integer zero. [INFERRED] meaning.
+    /* +0x2C */ float*  m_float2C;
 };
 
 class BBFire : public BotBehaviour
@@ -117,9 +130,17 @@ public:
     virtual void fireAtTarget(Bot* bot, int weapon, bool flagA, bool flagB);  // PE 10100C30
 
 protected:
-    /* +0x24 */ unsigned int* m_int24;   // -1
-    /* +0x28 */ double m_double28;   // 0
-    /* +0x30 */ std::map<int, int> m_map30;   // [UNRESOLVED] key and value types
+    // The time recorded against a target handle, created at -10000 on first use. PE 101028F0;
+    // [INFERRED] name.
+    double* getTargetTime(unsigned int handle);
+    // The index of the weapon to fire at the target from the given distance, -1 for none.
+    // PE 101015F0; [INFERRED] name. [FRONTIER]
+    int chooseWeapon(Bot* bot, unsigned int target, float distance);
+
+    /* +0x24 */ unsigned int* m_int24;   // per-bot weapon index, -1 for none
+    /* +0x28 */ double m_double28;   // last sweep of m_map30
+    // Per-target times, each an owned double. The sweep deletes entries for vanished targets.
+    /* +0x30 */ std::map<unsigned int, double*> m_map30;
     /* +0x3C */ SampledFunction* m_curve;   // fire curve; BBFire only
 };
 

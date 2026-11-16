@@ -83,6 +83,10 @@ float JCurve::calculate(float x)
 
 // Has no NaN guard and reads past the table at x == 1. Preserves the interpolation
 // term order, which is reversed relative to the other curves.
+// [UNRESOLVED] The PE body at 101937C0, called by BBFire, compares against doubles, truncates
+// x * -100 and returns curveValues[k] plus curveValues[k + 1] times the constant zero: it does
+// not interpolate. The interpolating form here predates that reading; which port ships which form
+// is not yet settled from the ELF.
 float DecleiningSlopeCurve::calculate(float x)
 {
     if (x > 1.0f)

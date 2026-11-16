@@ -62,6 +62,10 @@ public:
     /* +0x2C */ Vec3   m_lastPosition;
     /* +0x38 */ double m_lastSeen;
     /* +0x40 */ double m_double40;          // = -1000.0 [UNRESOLVED]
+    /* +0x48 */ unsigned char m_unresolved48[4];   // not written by the constructor
+    // Read by BBFire under sense flag 0x20, which skips the record when negative. Neither is
+    // written by the constructor. [UNRESOLVED]
+    /* +0x4C */ int    m_int4C;
     // Bit 1 direct, 2 seen, 4 sided, 8 reported only, 0x10 not direct, 0x40 seen through cover.
     /* +0x50 */ unsigned int m_senseFlags;
     /* +0x54 */ unsigned int m_lastSense;   // the flag of the last sense
@@ -93,6 +97,9 @@ public:
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
+    // Whether a shot from `handle` is on record; `time` gets that shot's time, or -1000 when there
+    // is none. PE 101BB790; [INFERRED] name.
+    bool isAttacking(unsigned int handle, double& time) const;
     // PE 101BB7E0: the record for a handle, or null.
     SensedObject* getSensedObject(unsigned int handle) const;
     // The incoming-fire records with the handle of the shooter. [INFERRED] accessor; PE reads

@@ -22,6 +22,9 @@ class BotNavigation
 public:
     // The obstacles gathered by updateObstacles. [INFERRED] accessor; read inline in PE.
     const std::vector<unsigned int>& getObstacles() const { return m_obstacles; }
+    // Whether the position lies within the smallest radius of a gathered obstacle that is not a
+    // soldier. PE 101742E0; [INFERRED] name.
+    bool isInsideObstacle(const Vec3& position) const;
     // The avoid position and the time left (2.8 s from when it was set); true while time is
     // left. [INFERRED] name. PE 101729D0.
     bool getAvoidPosition(Vec3& position, double& timeLeft) const;

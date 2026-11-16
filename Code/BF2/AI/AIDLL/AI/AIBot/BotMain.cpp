@@ -2273,10 +2273,10 @@ void BotMain::setQuadSeen()
     m_sensingAgent->setQuadSeen();
 }
 
-// +0x2A0
+// +0x2A0. Forwards to the senses. PE 1017EF60.
 bool BotMain::isAttacking(unsigned int handle, double& out) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::isAttacking");
+    return m_sensingAgent->getSenses()->isAttacking(handle, out);
 }
 
 // +0x2A4

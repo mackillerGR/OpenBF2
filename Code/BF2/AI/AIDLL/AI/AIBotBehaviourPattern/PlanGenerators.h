@@ -138,6 +138,10 @@ public:
     virtual ~IdlePlanGenerator();                                     // PE 101A8DB0
     // 1 for 2d, 2 for 3d and 3 for infantry; the family base reports 0. [INFERRED] name.
     virtual int getIdleType();                                        // PE 101A8DA0
+    // Whether the object's primary, or one of the primary's secondary objects, has an unoccupied
+    // unit. A secondary object whose primary is unknown is dereferenced as shipped. PE 101A8DF0;
+    // [INFERRED] name.
+    bool hasFreeSeat(unsigned int handle, int side);
 };
 
 class BBPIdle2d : public IdlePlanGenerator
@@ -147,6 +151,8 @@ public:
     virtual ~BBPIdle2d();                                             // PE 100F6450
     virtual BotScript* generate(Bot* bot);                            // PE 100F6490
     virtual int getIdleType();                                        // PE 100F6380
+    // Offers a plan toward the target player. PE 100F6390; [INFERRED] name.
+    void setTarget(Bot* bot, int target);
 private:
     /* +0x0C */ int* m_int0C;                 // -1
 };
@@ -158,6 +164,8 @@ public:
     virtual ~BBPIdle3d();                                             // PE 100F5CA0
     virtual BotScript* generate(Bot* bot);                            // PE 100F5CE0
     virtual int getIdleType();                                        // PE 100F5A60
+    // Offers a plan toward the target player at the given distance. PE 100F5A70; [INFERRED] name.
+    void setTarget(float distance, Bot* bot, int target);
 private:
     /* +0x0C */ float* m_float0C;             // 100; never released, as shipped
     /* +0x10 */ int*   m_int10;               // -1
@@ -170,6 +178,8 @@ public:
     virtual ~BBPIdleInfantery();                                      // PE 100F54E0
     virtual BotScript* generate(Bot* bot);                            // PE 100F5510
     virtual int getIdleType();                                        // PE 100F51A0
+    // Offers a plan. PE 100F51C0; [INFERRED] name.
+    void offerPlan(Bot* bot);
 };
 
 // Fire family. PE vtable 10283DB0, constructor 101B1F10. The owning behaviour registers itself

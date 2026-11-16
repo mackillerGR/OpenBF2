@@ -638,7 +638,7 @@ BotManager::BotManager()
     , m_ptr200(0)
     // m_selectedBots: the three zero stores at +216..+224 are its default construction.
     , m_lastCreatedBot(0)
-    , m_float232(0.3f)
+    , m_vehicleBailValue(0.3f)
     , m_flag236(false)
     // m_occupiedObjects: the three zero stores at +240..+248 are its default construction.
     , m_navPointCursor(0)
@@ -1125,9 +1125,10 @@ void BotManager::registerDamageOnBot(float, int, int)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::registerDamageOnBot");
 }
 
+// PE 1018A6B0.
 float BotManager::getVehicleBailValue()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getVehicleBailValue");
+    return m_vehicleBailValue;
 }
 
 void BotManager::removeMineTarget(unsigned int)

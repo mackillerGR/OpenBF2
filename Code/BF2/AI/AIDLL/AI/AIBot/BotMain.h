@@ -381,7 +381,7 @@ public:
     virtual void setTakeOffPosition(const Vec3& v);                                               // +0x294 [FRONTIER]
     virtual const Vec3& getTakeOffPosition() const;                                               // +0x298
     virtual void setQuadSeen();                                                                   // +0x29C
-    virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0 [FRONTIER]
+    virtual bool isAttacking(unsigned int handle, double& out) const;                             // +0x2A0
     virtual void event_shotTimeOut(int i);                                                        // +0x2A4 [FRONTIER]
     virtual void event_firing(bool& b, int i, const Vec3& v);                                     // +0x2A8 [FRONTIER]
 
@@ -398,6 +398,12 @@ public:
     void  clearPoseChangeAllowance();
     // The senses ignore sounds for 1.5 seconds after this time. PE 1017F2D0. [INFERRED] name.
     double getDouble172() const { return m_double172; }
+    // The constructor's `i` argument; BBFire compares it with a target's occupant strength.
+    // PE 1017EF00. [INFERRED] name.
+    int getInt40() const { return m_int40; }
+    // BBFire stamps the time when it keeps a recently engaged target in view. PE 1017F2F0.
+    // [INFERRED] name.
+    void setTime276(double time) { m_time276 = time; }
     void  addBehaviour(BotBehaviour* b, int i);
     void  removeBehaviour(BotBehaviour* b);
     void  uninitAllBehaviours();
