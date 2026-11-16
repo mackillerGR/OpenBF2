@@ -83,6 +83,11 @@ public:
 
     // Writes the control-point position and radius; returns false for an unassigned id.
     bool getControlPointPosAndRadius(Vec3& position, float& radius);
+    // Whether the area is a control-point area whose order position lies outside the control
+    // point's radius. PE 100E05C0; [INFERRED] name.
+    bool isOrderPosOutsideControlPoint(int vehicle, int side);
+    // Read inline at PE +0x124 by the vehicle evaluation. [INFERRED] accessor.
+    const std::vector<AIStrategicObject*>& getNeighbours() const { return m_neighbours; }
 
     // Virtual declaration order: thirty-four ELF slots.
     virtual ~AIStrategicArea();                                    // slots 0/1,

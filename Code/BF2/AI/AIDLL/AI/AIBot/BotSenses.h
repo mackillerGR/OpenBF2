@@ -97,6 +97,11 @@ public:
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }
+    // The incoming-fire records and their summed strengths. Read inline by BotMain (PE +0x6C,
+    // +0x78, +0x7C).
+    std::list<std::pair<FireObject*, unsigned int> >& getIncomingFire() { return m_list84; }
+    float getAttackerStrength() const { return m_attackerStrength; }
+    float getAttackerStrengthOwnKind() const { return m_attackerStrengthOwnKind; }
     // Whether a shot from `handle` is on record; `time` gets that shot's time, or -1000 when there
     // is none. PE 101BB790; [INFERRED] name.
     bool isAttacking(unsigned int handle, double& time) const;

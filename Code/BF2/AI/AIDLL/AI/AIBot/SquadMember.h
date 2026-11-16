@@ -64,6 +64,11 @@ public:
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
     // PE 1017BB00. Plan roots raise this while they live. [INFERRED] name.
     void setFlag49(bool value) { m_flag49 = value; }
+    bool getFlag49() const { return m_flag49; }   // PE 1017BB10
+    // Whether the member stands within the assigned area's control point (radius squared plus 5)
+    // while alive and standing, and the area has a status for the member's side. PE 1017C700;
+    // [INFERRED] name.
+    bool isAtSquadArea();
     // PE 1017BB70: no action, no handle. [INFERRED] name.
     void clearRequest() { m_request->m_action = 0; m_request->m_handle = static_cast<unsigned int>(-1); }
     // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.

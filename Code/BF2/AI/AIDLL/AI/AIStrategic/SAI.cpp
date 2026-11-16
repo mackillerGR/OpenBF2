@@ -713,24 +713,28 @@ bool SAI::isFriend(int side) const
     return (static_cast<unsigned int>(m_sideMask) & (1u << (side & 31))) != 0;
 }
 
+// PE 10139FE0. The array is returned for writing through a const member, as shipped.
 float* SAI::getEnemyStrengths(int) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getEnemyStrengths");
+    return const_cast<float*>(m_enemyStrengths);
 }
 
-int* SAI::getEnemyTypes(int) const
+// PE 10139FF0.
+float* SAI::getEnemyTypes(int) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getEnemyTypes");
+    return const_cast<float*>(m_enemyCounts);
 }
 
+// PE 1013A000.
 float* SAI::getFriendlyStrengths(int) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getFriendlyStrengths");
+    return const_cast<float*>(m_friendlyStrengths);
 }
 
-int* SAI::getFriendlyTypes(int) const
+// PE 1013A010.
+float* SAI::getFriendlyTypes(int) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::getFriendlyTypes");
+    return const_cast<float*>(m_friendlyCounts);
 }
 
 void SAI::setBotHasChangedEquipment(int)

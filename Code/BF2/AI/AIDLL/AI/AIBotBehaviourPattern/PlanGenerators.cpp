@@ -307,6 +307,32 @@ BBPChange::~BBPChange()
     delete[] m_bool18;
 }
 
+// PE 100F8CE0.
+void BBPChange::offerChange(unsigned int target, bool samePrimary, bool viaRequest, Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_bool14[bot->getBotId()] = samePrimary;
+    m_int0C[bot->getBotId()] = static_cast<int>(target);
+    m_bool18[bot->getBotId()] = viaRequest;
+}
+
+// PE 100F8D40.
+void BBPChange::setViaRequest(bool viaRequest, Bot* bot)
+{
+    m_bool18[bot->getBotId()] = viaRequest;
+}
+
+// PE 100F9280.
+void BBPChange::offerChange(unsigned int target, const Vec3* entry, bool samePrimary,
+                            bool viaRequest, Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_bool14[bot->getBotId()] = samePrimary;
+    m_int0C[bot->getBotId()] = static_cast<int>(target);
+    m_vec10[bot->getBotId()] = *entry;
+    m_bool18[bot->getBotId()] = viaRequest;
+}
+
 BotScript* BBPChange::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::generate");

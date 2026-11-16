@@ -68,6 +68,8 @@ public:
     // Queues a radio message of one type unless that type is still in its send period or
     // already queued. The message goes out once `delay` seconds have passed.
     void enqueueRadioMessage(int type, int channel, unsigned int priority, float delay, int flag);
+    // Sends a message at once, stamped with the current time. PE 10146F10; [INFERRED] name.
+    void sendRadioMessageNow(int type, int channel, unsigned int priority, int flag);
 
     // attested by a 7-byte body: `return m_receivedMessages.data + type;`
     const std::list<AIRadioMessageInfo>& getReceivedMessages(AIRadioMessageType type) const

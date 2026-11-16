@@ -348,6 +348,13 @@ public:
     explicit BBPChange(int behaviourId);                              // PE 100F9160
     virtual ~BBPChange();                                             // PE 100F9230
     virtual BotScript* generate(Bot* bot);                            // PE 100F95E0
+    // Offers a change to the target without an entry position. PE 100F8CE0; [INFERRED] name.
+    void offerChange(unsigned int target, bool samePrimary, bool viaRequest, Bot* bot);
+    // PE 100F8D40; [INFERRED] name.
+    void setViaRequest(bool viaRequest, Bot* bot);
+    // Offers a change to the target through the entry position. PE 100F9280; [INFERRED] name.
+    void offerChange(unsigned int target, const Vec3* entry, bool samePrimary, bool viaRequest,
+                     Bot* bot);
 private:
     /* +0x0C */ int*  m_int0C;
     /* +0x10 */ Vec3* m_vec10;                // zeroed

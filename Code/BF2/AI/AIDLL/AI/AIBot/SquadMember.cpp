@@ -346,6 +346,27 @@ void SquadMember::updateFormationStatus()
 
 // Copy all coordinates before
 // returning the stored validity flag; false does not preserve the caller's old output.
+// PE 1017C700.
+bool SquadMember::isAtSquadArea()
+{
+    AIStrategicArea* const area = m_squad->getSquadStrategicAreaAssignment();
+    const Vec3 position = m_position;
+    if (!m_positionValid || !area || area->getStatus(m_side + 1) == 0)
+        return false;
+    Vec3 point;
+    point.x = point.y = point.z = 0.0f;
+    float radius;
+    if (!area->getControlPointPosAndRadius(point, radius))
+        return false;
+    radius = radius * radius;
+    if (!m_player->getIsAlive() || m_player->isManDown())
+        return false;
+    const float dx = position.x - point.x;
+    const float dy = position.y - point.y;
+    const float dz = position.z - point.z;
+    return radius + 5.0f > dx * dx + dy * dy + dz * dz;
+}
+
 bool SquadMember::getPosition(Vec3& position)
 {
     position = m_position;

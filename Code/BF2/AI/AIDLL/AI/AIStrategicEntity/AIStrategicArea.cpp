@@ -144,6 +144,23 @@ bool AIStrategicArea::setOrderPosition(int map, const Vec3& position)
     return true;
 }
 
+// PE 100E05C0. The radius slot reuses the vehicle argument's storage in the shipped body.
+bool AIStrategicArea::isOrderPosOutsideControlPoint(int vehicle, int side)
+{
+    if (!hasObjectTypeFlag(static_cast<StrategicObjectType>(0x10)))
+        return false;
+    const Vec3 order = getOrderPos(vehicle, side);
+    Vec3 point;
+    point.x = point.y = point.z = 0.0f;
+    float radius = 0.0f;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(m_controlPointId, point, radius, active);
+    const float dx = order.x - point.x;
+    const float dy = order.y - point.y;
+    const float dz = order.z - point.z;
+    return static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz)) > radius;
+}
+
 // PE 100E53F0.
 void AIStrategicArea::addNeighbour(AIStrategicObject* neighbour)
 {
@@ -824,9 +841,17 @@ int AIStrategicArea::getTacticalStatus(int) const
     BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::getTacticalStatus");
 }
 
+// PE 100E0670. Whether the area's control point reports itself active; false without one.
 bool AIStrategicArea::isAreaTakeable()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::isAreaTakeable");
+    if (m_controlPointId == static_cast<unsigned int>(-1))
+        return false;
+    Vec3 position;
+    position.x = position.y = position.z = 0.0f;
+    float radius;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(m_controlPointId, position, radius, active);
+    return active;
 }
 
 // PE 100E7DC0. The dirty flag is left as found.

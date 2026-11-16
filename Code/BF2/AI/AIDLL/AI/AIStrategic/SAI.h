@@ -102,9 +102,9 @@ public:
     virtual bool isEnemy(int side) const = 0;                              // +10
     virtual bool isFriend(int side) const = 0;                             // +11
     virtual float* getEnemyStrengths(int index) const = 0;                 // +12
-    virtual int*   getEnemyTypes(int index) const = 0;                     // +13
+    virtual float* getEnemyTypes(int index) const = 0;                     // +13
     virtual float* getFriendlyStrengths(int index) const = 0;              // +14
-    virtual int*   getFriendlyTypes(int index) const = 0;                  // +15
+    virtual float* getFriendlyTypes(int index) const = 0;                  // +15
     virtual void setBotHasChangedEquipment(int botId) = 0;                 // +16
     virtual void setNewBotKit(int botId, int kit) = 0;                     // +17
     // Borrowed map address: ELF +0x48 / PE +0x44; caller copies map<int,pair<int,int>>.
@@ -224,10 +224,11 @@ public:
     virtual void setMapYDimension(int y);                              // - empty
     virtual bool isEnemy(int side) const;
     virtual bool isFriend(int side) const;
+    // The four per-kind arrays; the index is not read. PE 10139FE0, 10139FF0, 1013A000, 1013A010.
     virtual float* getEnemyStrengths(int index) const;
-    virtual int*   getEnemyTypes(int index) const;
+    virtual float* getEnemyTypes(int index) const;
     virtual float* getFriendlyStrengths(int index) const;
-    virtual int*   getFriendlyTypes(int index) const;
+    virtual float* getFriendlyTypes(int index) const;
     virtual void setBotHasChangedEquipment(int botId);
     virtual void setNewBotKit(int botId, int kit);
     virtual const std::map<int, std::pair<int, int> >& getDeadBots() const;

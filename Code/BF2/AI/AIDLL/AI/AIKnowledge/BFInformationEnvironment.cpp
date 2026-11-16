@@ -8,6 +8,9 @@
 #include "AIInformationGrid.h"                             // the grids the constructor builds
 #include "Information.h"
 #include "InformationManager.h"
+#include "ObjectOccupancy.h"
+#include "UnitPredicate.h"
+#include "../AIBot/BotMain.h"
 #include "../AIUtils/checkPointer.h"                       // inlined four times by the constructor
 #include "../../../../Core/ClassManager.h"
 #include "../../../../Core/SmartItf.h"           // the classManager global
@@ -119,25 +122,100 @@ void BFInformationEnvironment::getCover(const Bot&, std::vector<unsigned int>&) 
     BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getCover");
 }
 
-void BFInformationEnvironment::getHardware(std::vector<unsigned int>&, const Vec3&, Bot*) const
+namespace {
+
+// The query predicates the environment builds on the stack. Each is a one-slot class at PE
+// 10282860..1028286C; names [INFERRED].
+
+// PE 10191BF0: both predicates hold.
+class BothPredicate : public IAIInformationGridPredicate
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getHardware");
+public:
+    BothPredicate(IAIInformationGridPredicate* first, IAIInformationGridPredicate* second)
+        : m_first(first), m_second(second) {}
+    bool includeInformation(Information* information) const override
+    {
+        return m_first->includeInformation(information) && m_second->includeInformation(information);
+    }
+private:
+    IAIInformationGridPredicate* m_first;
+    IAIInformationGridPredicate* m_second;
+};
+
+// PE 10191C50: anything but the given information.
+class OtherThanPredicate : public IAIInformationGridPredicate
+{
+public:
+    explicit OtherThanPredicate(Information* excluded) : m_excluded(excluded) {}
+    bool includeInformation(Information* information) const override
+    {
+        return m_excluded != information;
+    }
+private:
+    Information* m_excluded;
+};
+
+// PE 10191CA0: a unit of another side that is occupied.
+class OccupiedEnemyPredicate : public IAIInformationGridPredicate
+{
+public:
+    explicit OccupiedEnemyPredicate(int side) : m_side(side) {}
+    bool includeInformation(Information* information) const override
+    {
+        return information->getUnit() && m_side != information->getSide()
+               && isOccupiedObject(information->getHandle(), m_side);
+    }
+private:
+    int m_side;
+};
+
+} // anonymous namespace
+
+// PE 10192160. Units within 75 m of the position, other than the bot's equipment; 0 without
+// equipment.
+float BFInformationEnvironment::getHardware(std::vector<unsigned int>& out, const Vec3& position,
+                                            Bot* bot) const
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return 0.0f;
+    return getHardware(out, position, 75.0f, bot->getSide(), equipment);
 }
 
-void BFInformationEnvironment::getHardware(std::vector<unsigned int>&, const Vec3&, float, int, Information*) const
+// PE 101921D0. Units within the radius on both grids, excluding the given information when
+// there is one; returns the radius.
+float BFInformationEnvironment::getHardware(std::vector<unsigned int>& out, const Vec3& position,
+                                            float radius, int side, Information* excluded) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getHardware (Information*)");
+    UnitPredicate units;
+    OtherThanPredicate other(excluded);
+    BothPredicate both(&units, &other);
+    getObjectsWithinRadius(out, position, radius, side, true,
+                           excluded ? static_cast<IAIInformationGridPredicate*>(&both) : &units);
+    return radius;
 }
 
-void BFInformationEnvironment::getEnemyObjects(std::vector<unsigned int>&, Bot*, float) const
+// PE 10192230. Occupied enemy units around the bot; a negative radius means 600 m for
+// equipment with flag bit 4 and 75 m otherwise.
+void BFInformationEnvironment::getEnemyObjects(std::vector<unsigned int>& out, Bot* bot,
+                                               float radius) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getEnemyObjects");
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (radius < 0.0f)
+        radius = ((equipment->getObjectTypeFlags() >> 4) & 1) ? 600.0f : 75.0f;
+    OccupiedEnemyPredicate enemies(bot->getSide());
+    getObjectsWithinRadius(out, radius, *bot, true, &enemies);
 }
 
-void BFInformationEnvironment::getObjectsWithinRadius(std::vector<unsigned int>&, float, const Bot&,
-                                                     bool, IAIInformationGridPredicate*) const
+// PE 101922D0. Around the bot's equipment, when it has one.
+void BFInformationEnvironment::getObjectsWithinRadius(std::vector<unsigned int>& out, float radius,
+                                                     const Bot& bot, bool which,
+                                                     IAIInformationGridPredicate* keep) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getObjectsWithinRadius (Bot&)");
+    Bot& mutableBot = const_cast<Bot&>(bot);
+    Information* const equipment = informationManager->getInformation(mutableBot.getCurrentEquipment());
+    if (equipment)
+        getObjectsWithinRadius(out, equipment->getPosition(), radius, mutableBot.getSide(), which, keep);
 }
 
 // flatten XZ, then delegate

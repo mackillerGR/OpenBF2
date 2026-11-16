@@ -94,9 +94,9 @@ public:
     virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle) = 0;                           // +0x098
     virtual unsigned int getUnresolvedCollisionHandle() = 0;                                      // +0x09C
-    virtual void* getIncommingFire() = 0;                                                         // +0x0A0 [FRONTIER]
-    virtual float getIncommingFireTotalStrength() = 0;                                            // +0x0A4 [FRONTIER]
-    virtual float getIncommingFireTotalStrengthAgainstSelf() = 0;                                 // +0x0A8 [FRONTIER]
+    virtual void* getIncommingFire() = 0;                                                         // +0x0A0
+    virtual float getIncommingFireTotalStrength() = 0;                                            // +0x0A4
+    virtual float getIncommingFireTotalStrengthAgainstSelf() = 0;                                 // +0x0A8
     virtual float getAttackerStrength() const = 0;                                                // +0x0AC [FRONTIER]
     virtual CommunicationAgent* getCommunicationAgent() = 0;                                      // +0x0B0
     virtual int getPlayerId() const = 0;                                                          // +0x0B4
@@ -253,9 +253,9 @@ public:
     virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle);                               // +0x098
     virtual unsigned int getUnresolvedCollisionHandle();                                          // +0x09C
-    virtual void* getIncommingFire();                                                             // +0x0A0 [FRONTIER]
-    virtual float getIncommingFireTotalStrength();                                                // +0x0A4 [FRONTIER]
-    virtual float getIncommingFireTotalStrengthAgainstSelf();                                     // +0x0A8 [FRONTIER]
+    virtual void* getIncommingFire();                                                             // +0x0A0
+    virtual float getIncommingFireTotalStrength();                                                // +0x0A4
+    virtual float getIncommingFireTotalStrengthAgainstSelf();                                     // +0x0A8
     virtual float getAttackerStrength() const;                                                    // +0x0AC [FRONTIER]
     virtual CommunicationAgent* getCommunicationAgent();                                          // +0x0B0
     virtual int getPlayerId() const;                                                              // +0x0B4

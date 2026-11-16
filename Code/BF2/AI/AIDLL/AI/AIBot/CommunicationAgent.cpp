@@ -256,6 +256,19 @@ void CommunicationAgent::releaseFire(Information* equipment)
         m_bot->m_playerInput->setInput(io::PIFire, 0.0f);
 }
 
+// PE 10146F10.
+void CommunicationAgent::sendRadioMessageNow(int type, int channel, unsigned int priority, int flag)
+{
+    CAPrioMessage message;
+    message.m_type = type;
+    message.m_channel = channel;
+    message.m_sendTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    message.m_flag = flag;
+    message.m_priority = priority;
+    message.m_delay = 0.0f;
+    sendRadioMessage(message);
+}
+
 // PE 10146270. The player id is read twice, as shipped.
 void CommunicationAgent::sendRadioMessage(const CAPrioMessage& message)
 {

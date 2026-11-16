@@ -14,6 +14,7 @@
 
 #include "../../../../Math/Vec3.h"
 
+#include <list>
 #include <map>
 #include <vector>
 
@@ -22,6 +23,9 @@ namespace hfe {
 namespace ai {
 
 class PlanGenerator;
+class CommunicationAgent;
+struct AIRadioMessageInfo;
+class IAITerrain;
 
 // A function sampled over [low, high] in fixed steps. PE constructor 101B1D50 (the table is
 // built by 101B1CB0), destructor 101B17A0. [INFERRED] name.
@@ -234,8 +238,36 @@ public:
     virtual float calculateUrgency(Bot* bot, bool flag, float elapsed);  // PE 100F76B0
 
 protected:
-    /* +0x24 */ std::vector<int> m_vector24;   // [UNRESOLVED] element type
-    /* +0x34 */ std::vector<int> m_vector34;   // [UNRESOLVED] element type
+    // The stored urgency, or 0 while another player has booked the target. PE 100F6D90.
+    float acceptedUrgency(Bot* bot);
+    // How much a seat in the vehicle is worth relative to others: 1, or less for some vehicle
+    // kinds a player held within the last 15 s. PE 100F6950; [INFERRED] name.
+    float seatFactor(Information* vehicle, bool allowOccupied);
+    // Whether the bot may get out of its equipment here; false while an aircraft hovers between
+    // 2 m and 12 m. PE 100F6E60; [INFERRED] name.
+    bool canLeaveEquipment(Bot* bot);
+    // Whether an unanswered request in the list came from an occupant of the object.
+    // PE 100F71B0; [INFERRED] name.
+    bool isRequestedByOccupant(unsigned int handle, const std::list<AIRadioMessageInfo>* requests,
+                               int side);
+    // PE 100F6A10; [INFERRED] name.
+    bool isEnemyOccupied(const unsigned int* handle, Information* information, const int* side);
+    // Whether the vehicle lies on its side or roof; the other arguments are not read.
+    // PE 100F6A50; [INFERRED] name.
+    bool isOverturned(Information* vehicle, IAITerrain* terrain, float limit);
+    // Whether the ground below an aircraft is clear for landing. PE 100F7570; [INFERRED] name.
+    // [FRONTIER]
+    bool isLandingAreaClear(Information* vehicle, Information* equipment, int side);
+    // Answers a pending pick-up request from a soldier within 15 m. PE 100F6F60; [INFERRED] name.
+    void answerPickUp(Information* equipment, unsigned int requester, CommunicationAgent* agent);
+    // Whether the requester's object is the target or one of its seats. PE 100F7030;
+    // [INFERRED] name.
+    bool isRequesterAboard(unsigned int target, unsigned int requester, int side);
+
+    // Candidate vehicles gathered by the information environment.
+    /* +0x24 */ std::vector<unsigned int> m_vector24;
+    // Objects found by the landing-area query.
+    /* +0x34 */ std::vector<unsigned int> m_vector34;
     /* +0x44 */ BotBehaviour* m_owned44;   // [UNRESOLVED] type; owned, deleted through its virtual destructor
     /* +0x48 */ BotBehaviour* m_owned48;   // [UNRESOLVED] type; as above
 };

@@ -1295,21 +1295,24 @@ unsigned int BotMain::getUnresolvedCollisionHandle()
 }
 
 // +0x0A0
+// The senses' incoming-fire list, a std::list<BotSenses::FireEntry>. PE 1017EF20.
 void* BotMain::getIncommingFire()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getIncommingFire");
+    return &m_sensingAgent->getSenses()->getIncomingFire();
 }
 
 // +0x0A4
+// PE 1017EF30.
 float BotMain::getIncommingFireTotalStrength()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getIncommingFireTotalStrength");
+    return m_sensingAgent->getSenses()->getAttackerStrength();
 }
 
 // +0x0A8
+// PE 1017EF40.
 float BotMain::getIncommingFireTotalStrengthAgainstSelf()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::getIncommingFireTotalStrengthAgainstSelf");
+    return m_sensingAgent->getSenses()->getAttackerStrengthOwnKind();
 }
 
 // +0x0AC

@@ -25,8 +25,9 @@ class IAIStrategicEnvironment
 public:
     IAIStrategicEnvironment();
     virtual ~IAIStrategicEnvironment();
-    virtual int getEnemyStrengths(Bot *) = 0;
-    virtual int getEnemyTypes(Bot *) = 0;
+    // The bot's side's per-kind enemy strengths and counts, from its SAI.
+    virtual float* getEnemyStrengths(Bot *) = 0;
+    virtual float* getEnemyTypes(Bot *) = 0;
     virtual int getTemperature(Bot *) = 0;
     virtual float getTemperature(int, int) = 0;
     virtual int getSecurity(Bot *) = 0;
@@ -47,8 +48,8 @@ public:
     virtual ~BFStrategicEnvironment();
 
     // IAIStrategicEnvironment
-    virtual int getEnemyStrengths(Bot *);
-    virtual int getEnemyTypes(Bot *);
+    virtual float* getEnemyStrengths(Bot *);   // PE 100D2180
+    virtual float* getEnemyTypes(Bot *);       // PE 100D21C0
     virtual int getTemperature(Bot *);
     virtual float getTemperature(int, int);
     virtual int getSecurity(Bot *);

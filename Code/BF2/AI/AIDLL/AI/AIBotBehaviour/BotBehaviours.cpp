@@ -45,6 +45,12 @@
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../AIKnowledge/ObjectOccupancy.h"
+#include "../AIStrategicMap/AerialHeightMap.h"
+#include "../AIStrategicMap/BFStrategicEnvironment.h"
+#include "../AIKnowledge/BFInformationEnvironment.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../../../AIInterface/BFKnowledge/BFGame.h"
 #include <cmath>
 
 namespace dice {
@@ -1019,31 +1025,6 @@ void transformByMatrix(const Mat4& matrix, const Vec3& in, Vec3& out)
     out.z = z;
 }
 
-// Whether the object, or the primary object it belongs to, or any of that primary's secondary
-// objects, is occupied. A secondary object whose primary is unknown is dereferenced as shipped.
-// PE 101989B0; [INFERRED] name.
-bool isOccupiedObject(unsigned int handle, int side)
-{
-    Information* information = lookupInformation(handle);
-    if (!information)
-        return false;
-    if (!information->isPrimary())
-        information = lookupInformation(information->getPrimaryObject(side));
-    if (!information->getUnit())
-        return false;
-    if (information->getUnit()->isOccupied())
-        return true;
-    int iterator;
-    for (Information* secondary =
-             lookupInformation(information->getFirstSecondaryObject(iterator, side));
-         secondary;
-         secondary = lookupInformation(information->getSecondaryObject(iterator, side)))
-    {
-        if (secondary->getUnit() && secondary->getUnit()->isOccupied())
-            return true;
-    }
-    return false;
-}
 
 } // anonymous namespace
 
@@ -2053,6 +2034,491 @@ float BBFireDriver::calculateUrgency(Bot*, bool, float)
     BF2_AI_FRONTIER("dice::hfe::ai::BBFireDriver::calculateUrgency");
 }
 
+namespace {
+
+// PE 102ACFA8: a writable double that only the equipment evaluation reads. [INFERRED] name.
+double s_possessionGrace = 15.0;
+
+// PE 1006EEC0: normalises in place and returns 0, or zeroes the vector and returns -20001 when
+// it has no length.
+int normaliseVector(Vec3& v)
+{
+    const float length = static_cast<float>(std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z));
+    if (length < 1e-6f)
+    {
+        v.x = v.y = v.z = 0.0f;
+        return -20001;
+    }
+    const float inverse = 1.0f / length;
+    v.x *= inverse;
+    v.y *= inverse;
+    v.z *= inverse;
+    return 0;
+}
+
+// Whether a human player, alive and standing, sent the first message in the list.
+IAIPlayer* humanRequester(const std::list<AIRadioMessageInfo>& messages)
+{
+    IAIPlayer* const player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                  ->getPlayerFromId(messages.front().m_senderPlayerId);
+    if (player && !player->getIsAIPlayer() && player->getIsAlive() && !player->isManDown())
+        return player;
+    return 0;
+}
+
+// Whether a vehicle is kept for the bot's squad: inside the squad's assigned area while the
+// squad stands near its order position, or near the area's control point. Soldiers and aircraft
+// are never kept. PE 101AA350; [INFERRED] name.
+bool isHeldForSquadArea(Information* candidate, int side, Bot* bot)
+{
+    bool held = false;
+    Information* const primary = informationManager->getInformation(candidate->getPrimaryObject(side));
+    const unsigned int flags = primary->getObjectTypeFlags();
+    if (((flags >> 21) & 1) || ((flags >> 4) & 1) || ((flags >> 5) & 1))
+        return false;
+    IPIMobile* const primaryMobile = primary->getMobile();
+    AIStrategicArea* const area = bot->getSquadMember()->getSquad()->getSquadStrategicAreaAssignment();
+    if (!area || !area->isAreaTakeable() || !primaryMobile
+        || !area->isOrderPosOutsideControlPoint(primaryMobile->getVehicleNumber(), side))
+        return false;
+    Vec3 squadPosition;
+    squadPosition.x = squadPosition.y = squadPosition.z = 0.0f;
+    if (!bot->getSquadMember()->getPosition(squadPosition))
+        return false;
+    Vec3 target;
+    target.x = target.y = target.z = 0.0f;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (equipment->getPrimaryObject(side) == primary->getPrimaryObject(side))
+    {
+        target = area->getOrderPos(primaryMobile->getVehicleNumber(), side);
+        if (vectorLengthSquared(vectorFrom(target, squadPosition)) < 625.0f)
+        {
+            held = true;
+            if (equipment->isPrimary() && equipment->getArmament()
+                && IAIMain::m_instance->getSAI(side)->haveAnyOwnedCps(side))
+                held = false;
+        }
+        return held;
+    }
+    float radius = 1.0f;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+        ->getControlPointInfo(area->m_controlPointId, target, radius, active);
+    if (vectorLengthSquared(vectorFrom(target, primary->getPosition())) < 4900.0f)
+        held = true;
+    else if (vectorLengthSquared(vectorFrom(squadPosition, target)) < 4900.0f)
+        held = true;
+    return held;
+}
+
+// The worth of a seat for getting somewhere: the vehicle's top speed, scaled by who drives it.
+// PE 101AABD0; [INFERRED] name.
+float seatSpeedValue(Information* candidate, int side, Bot* bot, bool requireFree, Information* current)
+{
+    if (isHeldForSquadArea(candidate, side, bot))
+        return 0.0f;
+    const int botId = bot->getBotId();
+    if (candidate->isPrimary())
+        return candidate->getMobile() ? candidate->getMobile()->getMaxSpeed() * 5.0f : 0.0f;
+    Information* const primary = informationManager->getInformation(candidate->getPrimaryObject(side));
+    IPIMobile* const primaryMobile = primary->getMobile();
+    if (!primaryMobile)
+        return 0.0f;
+    if (primary == current && requireFree)
+        return 0.0f;
+    IPIUnit* const unit = primary->getUnit();
+    if (!unit->isOccupied())
+    {
+        if (primary->getSide() == side)
+        {
+            const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+            const double since = now - unit->getLastPlayerPossesionTime();
+            if (since < 15.0)
+            {
+                const float fraction = static_cast<float>(since * (1.0 / 15.0));
+                return (1.0f - fraction) * primaryMobile->getMaxSpeed() * 4.0f;
+            }
+        }
+        return 0.0f;
+    }
+    Bot* const driver = IBotManager::instance->getBot(primary->getAIObject());
+    ISAI* const sai = IAIMain::m_instance->getSAI(side);
+    if (driver && sai->getBotOrderedPos(driver->getBotId()) != sai->getBotOrderedPos(botId))
+        return primaryMobile->getMaxSpeed() * 2.5f;
+    return primaryMobile->getMaxSpeed() * 4.0f;
+}
+
+// The fighting worth of a seat: the summed battle strengths of the seat, its vehicle and the
+// occupied seats, against what the bot senses, its incoming fire, or the enemy picture of its
+// side. PE 101AAE20; [INFERRED] name.
+float combatValue(Bot* bot, Information* candidate, int side, const float* enemyStrengths,
+                  const float* enemyCounts, bool requireFree, Information* current)
+{
+    const std::map<unsigned int, SensedObject*>& sensed = bot->getSensedObjects();
+    const int kinds = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();
+    float fireMax = 0.0f;
+    bool engaged = false;
+    const Vec3& position = candidate->getPosition();
+    IPIArmament* armament = candidate->getArmament();
+    IPIUnit* const unit = candidate->getUnit();
+    IPIPhysical* const physical = candidate->getPhysical();
+    IPIControlInfo* const controlInfo = candidate->getControlInfo();
+    float maxRange = 50.0f;
+    float minRange = 0.1f;
+    bool antiAir = false;
+    bool guided = false;
+    if (armament)
+    {
+        if (armament->isAntiAircraft() == 1)
+            antiAir = true;
+        std::vector<unsigned int>& weapons = armament->getWeapons();
+        for (unsigned int i = 0; i < weapons.size(); ++i)
+        {
+            WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+            if (!weapon)
+                continue;
+            if (weapon->getWeaponGuidanceType())
+                guided = true;
+            const float range = weapon->getMaxRange();
+            const float minimum = weapon->getMinRange();
+            if (range > maxRange)
+                maxRange = range;
+            if (minimum < minRange)
+                minRange = minimum;
+        }
+    }
+    if (!(guided || antiAir) && candidate->isPrimary() && !candidate->getMobile())
+    {
+        // A fixed emplacement counts only within 12 m and 2 m of height of the current equipment.
+        if (vectorLengthSquared(vectorFrom(current->getPosition(), position)) > 144.0f)
+            return 0.0f;
+        if (std::fabs(current->getPosition().y - position.y) > 2.0f)
+            return 0.0f;
+    }
+    const bool countSeat = !(candidate == current && requireFree);
+    IPIMobile* vehicleMobile;
+    bool noVehicle;
+    if (candidate->isPrimary())
+    {
+        vehicleMobile = candidate->getMobile();
+        noVehicle = vehicleMobile == 0;
+    }
+    else
+    {
+        Information* const primary = informationManager->getInformation(candidate->getPrimaryObject(bot->getSide()));
+        if (primary->getUnit() && current != primary && primary->getUnit()->isOccupied())
+        {
+            vehicleMobile = primary->getMobile();
+            noVehicle = false;
+        }
+        else
+        {
+            vehicleMobile = 0;
+            noVehicle = true;
+        }
+    }
+    const int strengthType = physical->getStrengthType();
+    const bool exposed = unit->hasExposedSoldier();
+    int soldierStrengthType = 0;
+    if (exposed)
+        soldierStrengthType = informationManager->getInformation(bot->getPlayer()->getSoldier()->getInformation(side))
+                                  ->getPhysical()->getStrengthType();
+    IAIObject* const object = candidate->getAIObject();
+    IPIUnit* strengthSource = unit;
+    if (countSeat && object->getUnit()->mustBorrowArmament(object))
+    {
+        Information* const soldier = informationManager->getInformation(bot->getPlayer()->getSoldier()->getInformation(side));
+        strengthSource = soldier->getUnit();
+        armament = soldier->getArmament();
+        maxRange = 50.0f;
+        minRange = 0.1f;
+        if (armament)
+        {
+            std::vector<unsigned int>& weapons = armament->getWeapons();
+            for (unsigned int i = 0; i < weapons.size(); ++i)
+            {
+                WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+                if (!weapon)
+                    continue;
+                const float range = weapon->getMaxRange();
+                const float minimum = weapon->getMinRange();
+                if (range > maxRange)
+                    maxRange = range;
+                if (minimum < minRange)
+                    minRange = minimum;
+            }
+        }
+    }
+    float strengths[32];
+    for (int i = 0; i < kinds; ++i)
+        strengths[i] = countSeat ? strengthSource->getBattleStrengths()[i] : 0.0f;
+
+    Information* vehicle;
+    float seatShare;
+    if (candidate->isPrimary())
+    {
+        vehicle = candidate;
+        seatShare = candidate->getArmament() ? 0.4f : 0.9f;
+    }
+    else
+    {
+        vehicle = informationManager->getInformation(candidate->getPrimaryObject(side));
+        IPIUnit* const vehicleUnit = vehicle->getUnit();
+        seatShare = 0.4f;
+        if (!(vehicle == current && requireFree) && vehicleUnit->isOccupied())
+            for (int i = 0; i < kinds; ++i)
+                strengths[i] = vehicleUnit->getBattleStrengths()[i] * 0.4f + strengths[i];
+    }
+    int iterator;
+    for (Information* seat = informationManager->getInformation(vehicle->getFirstSecondaryObject(iterator, side)); seat;
+         seat = informationManager->getInformation(vehicle->getSecondaryObject(iterator, side)))
+    {
+        if (seat == candidate)
+            continue;
+        IPIUnit* const seatUnit = seat->getUnit();
+        if (seat == current && requireFree)
+            continue;
+        if (!seatUnit->isOccupied())
+            continue;
+        for (int i = 0; i < kinds; ++i)
+            strengths[i] = seatShare * seatUnit->getBattleStrengths()[i] + strengths[i];
+    }
+
+    if (sensed.size() != 0)
+    {
+        IPIUnit* const currentUnit = current->getUnit();
+        bool canFire = true;
+        float best = 0.0f;
+        const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        for (std::map<unsigned int, SensedObject*>::const_iterator it = sensed.begin(); it != sensed.end(); ++it)
+        {
+            Information* const target = informationManager->getInformation(it->first);
+            if (!target || !(it->second->m_senseFlags & 4))
+                continue;
+            if (!candidate->getMobile() && armament)
+            {
+                const Vec3& targetPosition = target->getPosition();
+                const float dx = targetPosition.x - position.x;
+                const float dy = targetPosition.y - position.y;
+                const float dz = targetPosition.z - position.z;
+                const float distance = static_cast<float>(std::sqrt(dz * dz + dy * dy + dx * dx));
+                if (distance > maxRange || distance < minRange)
+                    continue;
+                if ((it->second->m_senseFlags & 8) && it->second->m_firstSensed + 20.0 > now)
+                    continue;
+            }
+            IPIUnit* const targetUnit = target->getUnit();
+            IPIPhysical* const targetPhysical = target->isPrimary()
+                ? target->getPhysical()
+                : informationManager->getInformation(target->getPrimaryObject(side))->getPhysical();
+            if (!targetUnit || !targetPhysical)
+                continue;
+            if (!vehicleMobile)
+            {
+                canFire = false;
+                Vec3 direction = vectorFrom(position, target->getPosition());
+                if (normaliseVector(direction) == 0 && controlInfo->validateCameraDirection(direction))
+                {
+                    noVehicle = false;
+                    canFire = true;
+                }
+            }
+            const float own = strengths[targetPhysical->getStrengthType()];
+            const float againstCurrent = currentUnit->getBattleStrengths()[targetPhysical->getStrengthType()];
+            const int kind = targetPhysical->getStrengthType();
+            float value = 0.0f;
+            if (canFire && againstCurrent <= unit->getBattleStrengths()[kind])
+            {
+                engaged = true;
+                if (!exposed)
+                    value = own * own - targetUnit->getBattleStrengths()[strengthType];
+                else
+                    value = own * own - std::max(targetUnit->getBattleStrengths()[soldierStrengthType],
+                                                 targetUnit->getBattleStrengths()[strengthType]);
+            }
+            if (value > best)
+                best = value;
+        }
+        fireMax = 0.0f;
+        std::list<std::pair<FireObject*, unsigned int> > fire =
+            *static_cast<std::list<std::pair<FireObject*, unsigned int> >*>(static_cast<BotMain*>(bot)->getIncommingFire());
+        for (std::list<std::pair<FireObject*, unsigned int> >::iterator it = fire.begin(); it != fire.end(); ++it)
+        {
+            const float strength = it->first->getStrength(strengthType);
+            if (strength > fireMax)
+                fireMax = strength;
+            sensed.find(it->second);   // the shipped body makes this lookup and discards it
+            Information* const shooter = informationManager->getInformation(it->second);
+            if (shooter)
+            {
+                bot->getSide();         // both calls are made and discarded, as shipped
+                shooter->getSide();
+            }
+        }
+        if (!vehicleMobile && noVehicle)
+            return 0.0f;
+        if (engaged || !vehicleMobile)
+        {
+            if (isHeldForSquadArea(candidate, side, bot))
+                return 0.0f;
+            return best * 4.0f;
+        }
+    }
+    else if (!vehicleMobile)
+    {
+        if (!armament && !object->getUnit()->mustBorrowArmament(object))
+            return 0.0f;
+        if (!armament)
+            armament = informationManager->getInformation(bot->getPlayer()->getSoldier()->getInformation(side))->getArmament();
+        float reach = 0.0f;
+        const std::vector<unsigned int> weapons = armament->getWeapons();
+        for (std::vector<unsigned int>::const_iterator it = weapons.begin(); it != weapons.end(); ++it)
+        {
+            if (*it == static_cast<unsigned int>(-1))
+                continue;
+            WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(*it);
+            if (weapon && weapon->getMaxRange() > reach)
+                reach = weapon->getMaxRange();
+        }
+        std::vector<unsigned int> nearby;
+        static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+            ->getEnemyObjects(nearby, bot, reach);
+        float value = 0.0f;
+        float best = 0.0f;
+        if (!nearby.empty())
+        {
+            for (std::vector<unsigned int>::iterator it = nearby.begin(); it != nearby.end(); ++it)
+            {
+                Information* const target = informationManager->getInformation(*it);
+                if (!target)
+                    continue;
+                const Vec3& targetPosition = target->getPosition();
+                const float dx = targetPosition.x - position.x;
+                const float dy = targetPosition.y - position.y;
+                const float dz = targetPosition.z - position.z;
+                const float distance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
+                if (distance > maxRange || distance < minRange)
+                    continue;
+                IPIUnit* const targetUnit = target->getUnit();
+                IPIPhysical* const targetPhysical = target->isPrimary()
+                    ? target->getPhysical()
+                    : informationManager->getInformation(target->getPrimaryObject(side))->getPhysical();
+                if (!targetUnit || !targetPhysical)
+                    continue;
+                Vec3 direction = vectorFrom(position, target->getPosition());
+                if (normaliseVector(direction) == 0)
+                    controlInfo->validateCameraDirection(direction);
+                const float own = strengths[targetPhysical->getStrengthType()];
+                // Both shipped branches compute the same value; only a NaN strength skips it.
+                if (own == strengths[targetPhysical->getStrengthType()])
+                {
+                    if (!exposed)
+                        value = own * own - targetUnit->getBattleStrengths()[strengthType];
+                    else
+                        value = own * own - std::max(targetUnit->getBattleStrengths()[soldierStrengthType],
+                                                     targetUnit->getBattleStrengths()[strengthType]);
+                }
+                if (value > best)
+                    best = value;
+            }
+            return best;
+        }
+        ISAI* const sai = IAIMain::m_instance->getSAI(side);
+        int area = sai->getBotOrderedPos(bot->getBotId());
+        bool skip = false;
+        if (area == -1 && sai->getBotCurrentPos(bot->getBotId()) != area)
+            skip = true;
+        if (!skip)
+        {
+            AIStrategicObject* const object2 = AIStrategicObjectManager::getInstance()->getStrategicObject(area);
+            if (object2)
+            {
+                const Vec2 centre = object2->getPosition(side);
+                const std::vector<AIStrategicObject*>& neighbours =
+                    static_cast<AIStrategicArea*>(object2)->getNeighbours();
+                for (std::vector<AIStrategicObject*>::const_iterator it = neighbours.begin(); it != neighbours.end(); ++it)
+                {
+                    if ((*it)->getStatus(side) == 0)
+                        continue;
+                    const Vec2& other = (*it)->getPosition(side);
+                    Vec2 flat;
+                    flat.x = other.x - centre.x;
+                    flat.y = other.y - centre.y;
+                    Vec3 direction;
+                    direction.x = direction.y = direction.z = 0.0f;
+                    vec2ToVec3XZ(flat, direction);
+                    if (normaliseVector(direction) == 0 && controlInfo->validateCameraDirection(direction))
+                        noVehicle = false;
+                }
+            }
+        }
+        if (!noVehicle)
+            return 0.0f;
+    }
+
+    if (candidate->isPrimary() && !candidate->getMobile())
+        return 0.0f;
+    if (isHeldForSquadArea(candidate, side, bot))
+        return 0.0f;
+    float result = 0.0f;
+    float running = 0.0f;
+    for (int i = 0; i < kinds; ++i)
+    {
+        const float scaled = enemyCounts[i] > 0.5f ? strengths[i] * enemyCounts[i] * 3.0f : strengths[i] * 6.0f;
+        if (running < scaled)
+            running = scaled;
+        if (enemyCounts[i] > 0.0f && result < running)
+            result = running;
+    }
+    if (!(result > 0.0f))
+        return result;
+    if (!exposed)
+        return result - (fireMax + enemyStrengths[strengthType]);
+    return result - (std::max(enemyStrengths[soldierStrengthType], enemyStrengths[strengthType]) + fireMax);
+}
+
+// The worth of the seat to the bot: zero when booked by another player, under deep water, taken
+// when a free seat is required, or team-locked; otherwise combat and speed worth, weighted by
+// health and by how recently a team-mate held it. PE 101AC1D0; [INFERRED] name.
+float equipmentValue(Bot* bot, Information* candidate, const float* enemyStrengths,
+                     const float* enemyCounts, bool requireFree, Information* current, float, float,
+                     int side)
+{
+    IPIPhysical* const physical = candidate->getPhysical();
+    IPIUnit* const unit = candidate->getUnit();
+    if (candidate->isBooked() && !candidate->isBookedBy(bot->getPlayerId()))
+        return 0.0f;
+    if (candidate != current && !((candidate->getObjectTypeFlags() >> 4) & 1)
+        && static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->getAltitude(candidate->getPosition()) > 8.0f)
+        return 0.0f;
+    if (requireFree && unit->isOccupied())
+        return 0.0f;
+    if (!unit->isTeamLocked(side))
+        return 0.0f;
+    const float combat = combatValue(bot, candidate, side, enemyStrengths, enemyCounts, requireFree, current);
+    float value = seatSpeedValue(candidate, side, bot, requireFree, current) + combat;
+    if (value > 0.01f)
+        value = candidate->getStrength() * 4.0f + value;
+    const float health = physical->getHealth();
+    float bail = IBotManager::instance->getVehicleBailValue();
+    if (!((candidate->getObjectTypeFlags() >> 21) & 1) && candidate->isPrimary()
+        && candidate->getHandle() == current->getHandle())
+        bail = bail * 0.3f;
+    if (health < bail && !((candidate->getObjectTypeFlags() >> 21) & 1))
+        return 0.0f;
+    value = health * value;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (candidate->getSide() == side)
+    {
+        const double since = now - unit->getLastPlayerPossesionTime();
+        if (since < s_possessionGrace)
+            return static_cast<float>(1.0 / s_possessionGrace * since) * value;
+    }
+    return value;
+}
+
+} // anonymous namespace
+
 BBChange::BBChange(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
            float* weights)
     : BotBehaviour(weights, urgeCurve, configuredBotCount())
@@ -2081,9 +2547,635 @@ BBChange::~BBChange()
         delete m_owned48;
 }
 
-float BBChange::calculateUrgency(Bot*, bool, float)
+// PE 100F6D90.
+float BBChange::acceptedUrgency(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBChange::calculateUrgency");
+    const int id = bot->getBotId();
+    const float urgency = m_urgency[id];
+    Information* const target = informationManager->getInformation(m_targets[id]);
+    if (target && target->isBooked() && !target->isBookedBy(bot->getPlayerId()) && m_urgency[id] > 0.0f)
+        return 0.0f;
+    return urgency;
+}
+
+// PE 100F6950. The possession time is read before the unit is checked, as shipped.
+float BBChange::seatFactor(Information* vehicle, bool allowOccupied)
+{
+    if (!vehicle)
+        return 1.0f;
+    IPIUnit* const unit = vehicle->getUnit();
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const double since = now - vehicle->getUnit()->getLastPlayerPossesionTime();
+    if (!unit)
+        return 1.0f;
+    if (!allowOccupied && unit->isOccupied())
+        return 1.0f;
+    if (!vehicle->getMobile())
+        return 1.0f;
+    if (!(since < 15.0))
+        return 1.0f;
+    const unsigned int flags = vehicle->getObjectTypeFlags();
+    if ((flags >> 7) & 1)
+        return 1.0f;
+    if ((flags >> 6) & 1)
+        return 0.77f;
+    if ((flags >> 4) & 1)
+        return 0.5f;
+    return 1.0f;
+}
+
+// PE 100F6E60.
+bool BBChange::canLeaveEquipment(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const unsigned int soldier = bot->getPlayer()->getSoldier()->getInformation(bot->getSide());
+    if (!informationManager->getInformation(soldier))
+        return false;
+    if (equipment->isPrimary())
+    {
+        const Vec3& position = equipment->getPosition();
+        equipment->getUnit()->useNoPathfindingToGetToObject();   // discarded, as shipped
+        equipment->isPrimary();                                  // discarded, as shipped
+        if ((equipment->getObjectTypeFlags() >> 4) & 1)
+        {
+            const float altitude = AerialHeightMap::m_instance->getAltitude(position);
+            if (altitude > 2.0f && altitude < 12.0f)
+                return false;
+        }
+    }
+    if (!equipment->getMobile())
+        equipment->isPrimary();                                  // discarded, as shipped
+    return true;
+}
+
+// PE 100F71B0.
+bool BBChange::isRequestedByOccupant(unsigned int handle, const std::list<AIRadioMessageInfo>* requests,
+                                     int side)
+{
+    Information* const information = informationManager->getInformation(handle);
+    if (information->getSide() != side && isOccupiedObject(handle, side))
+        return false;
+    for (std::list<AIRadioMessageInfo>::const_iterator it = requests->begin(); it != requests->end(); ++it)
+    {
+        if (it->m_handled)
+            continue;
+        if (information->getPlayerId() == it->m_senderPlayerId)
+            return true;
+        int iterator;
+        for (Information* seat = informationManager->getInformation(information->getFirstSecondaryObject(iterator, side));
+             seat; seat = informationManager->getInformation(information->getSecondaryObject(iterator, side)))
+        {
+            if (seat->getPlayerId() == it->m_senderPlayerId)
+                return true;
+        }
+    }
+    return false;
+}
+
+// PE 100F6A10.
+bool BBChange::isEnemyOccupied(const unsigned int* handle, Information* information, const int* side)
+{
+    return information->getSide() != *side && isOccupiedObject(*handle, *side);
+}
+
+// PE 100F6A50.
+bool BBChange::isOverturned(Information* vehicle, IAITerrain*, float)
+{
+    return vehicle->getTransformation().m[5] < 0.01f;
+}
+
+bool BBChange::isLandingAreaClear(Information*, Information*, int)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BBChange::isLandingAreaClear");
+}
+
+// PE 100F6F60.
+void BBChange::answerPickUp(Information* equipment, unsigned int requester, CommunicationAgent* agent)
+{
+    if (!agent->handleMessages(static_cast<AIRadioMessageType>(1)))
+        return;
+    Information* const other = informationManager->getInformation(requester);
+    const Vec3& own = equipment->getPosition();
+    const Vec3& theirs = other->getPosition();
+    const float dx = own.x - theirs.x;
+    const float dy = own.y - theirs.y;
+    const float dz = own.z - theirs.z;
+    if (dz * dz + dx * dx + dy * dy < 225.0f)
+        agent->enqueueRadioMessage(7, 6, 3, 1.0f, -1);
+}
+
+// PE 100F7030.
+bool BBChange::isRequesterAboard(unsigned int target, unsigned int requester, int side)
+{
+    Information* const requesterInformation = informationManager->getInformation(requester);
+    Information* const primary =
+        informationManager->getInformation(requesterInformation->getPrimaryObject(side));
+    if (primary == informationManager->getInformation(target))
+        return true;
+    int iterator;
+    unsigned int seat = primary->getFirstSecondaryObject(iterator, side);
+    while (informationManager->getInformation(seat))
+    {
+        if (seat == target)
+            return true;
+        seat = primary->getSecondaryObject(iterator, side);
+    }
+    return false;
+}
+
+// PE 100F76B0. Weighs the bot's current seat against getting out, the other seats of its vehicle
+// and the vehicles nearby, using the side's enemy picture. The unflagged pass keeps or drops the
+// chosen target; the flagged pass picks the best seat and offers the change to it, with urgency
+// from how much better it is than the current seat.
+float BBChange::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    const int side = bot->getSide();
+    const int id = bot->getBotId();
+    bot->getSquadMember();   // the shipped body makes this call and discards the result
+    const float fire = bot->getFireInclination();
+    const float move = bot->getMoveInclination();
+    float fireShare;
+    float moveShare;
+    if (move > 0.0f)
+    {
+        if (fire > 0.0f)
+        {
+            const float scale = 1.0f / (move + fire);
+            fireShare = fire * scale;
+            moveShare = scale * move;
+        }
+        else
+        {
+            fireShare = 0.0f;
+            moveShare = 1.0f;
+        }
+    }
+    else if (fire > 0.0f)
+    {
+        fireShare = 1.0f;
+        moveShare = 0.0f;
+    }
+    else
+    {
+        fireShare = 0.5f;
+        moveShare = 0.5f;
+    }
+    IAIStrategicEnvironment* const environment =
+        static_cast<IAIStrategicEnvironment*>(AISingletonServer::m_iaiStrategicEnvironment);
+    CommunicationAgent* const agent = bot->getCommunicationAgent();
+    const float* const enemyCounts = environment->getEnemyTypes(bot);
+    const float* const enemyStrengths = environment->getEnemyStrengths(bot);
+    PlanGenerator* const generator = m_generator;
+
+    if (!flag)
+    {
+        const unsigned int current = bot->getCurrentEquipment();
+        const unsigned int soldier = bot->getPlayer()->getSoldier()->getInformation(side);
+        const bool onFoot = soldier == current;
+        if (!onFoot && canLeaveEquipment(bot))
+        {
+            Information* const currentInformation = informationManager->getInformation(current);
+            float stay = equipmentValue(bot, currentInformation, enemyStrengths, enemyCounts, false,
+                                        currentInformation, fireShare, moveShare, side) * 2.5f;
+            if (!currentInformation->isPrimary())
+                stay = seatFactor(informationManager->getInformation(currentInformation->getPrimaryObject(side)), false) * stay;
+            const float leave = equipmentValue(bot, informationManager->getInformation(soldier), enemyStrengths,
+                                               enemyCounts, false, currentInformation, fireShare, moveShare,
+                                               side) * 0.2f;
+            if (stay > leave)
+            {
+                Information* const target = informationManager->getInformation(m_targets[id]);
+                if (target)
+                {
+                    if (!target->getUnit()->isOccupied() && generator->hasPlan(bot))
+                    {
+                        m_targetChanged[id] = false;
+                        m_urgency[id] = acceptedUrgency(bot);
+                        return m_urgency[id];
+                    }
+                    m_targetChanged[id] = true;
+                }
+                m_targetChanged[id] = generator->hasPlan(bot);
+                m_targets[id] = static_cast<unsigned int>(-1);
+                generator->reset(bot);
+                m_urgency[id] = 0.0f;
+                return 0.0f;
+            }
+            m_targetChanged[id] = m_targets[id] != soldier;
+            m_targets[id] = soldier;
+            static_cast<BBPChange*>(generator)->offerChange(soldier, false, false, bot);
+            if (stay == 0.0f)
+                m_urgency[id] = DecleiningSlopeCurve::calculate(leave * 0.5f) * elapsed * 4.0f;
+            else
+                m_urgency[id] = DecleiningSlopeCurve::calculate(leave / stay * 0.5f) * elapsed * 4.0f;
+            m_urgency[id] = acceptedUrgency(bot);
+            return m_urgency[id];
+        }
+        Information* const target = informationManager->getInformation(m_targets[id]);
+        if (onFoot && target)
+        {
+            if (target->getUnit() && !target->getUnit()->isOccupied() && generator->hasPlan(bot))
+            {
+                m_targetChanged[id] = false;
+                m_urgency[id] = acceptedUrgency(bot);
+                if ((informationManager->getInformation(current)->getObjectTypeFlags() >> 21) & 1)
+                {
+                    const std::list<AIRadioMessageInfo>& pickUps =
+                        agent->getReceivedMessages(static_cast<AIRadioMessageType>(1));
+                    if (pickUps.size() != 0 && isRequestedByOccupant(m_targets[id], &pickUps, side))
+                        static_cast<BBPChange*>(generator)->setViaRequest(true, bot);
+                }
+                m_urgency[id] = acceptedUrgency(bot);
+                return m_urgency[id];
+            }
+            m_targetChanged[id] = true;
+        }
+        m_targetChanged[id] = generator->hasPlan(bot);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        generator->reset(bot);
+        m_urgency[id] = 0.0f;
+        return 0.0f;
+    }
+
+    SquadManager* const squadManager = SquadManager::m_instance;
+    float currentValue = 0.0f;
+    bool viaRequest = false;
+    bool leaveVehicle = false;
+    Vec3 entry;
+    entry.x = entry.y = entry.z = -666.0f;
+    Vec3 bestEntry;
+    bestEntry.x = bestEntry.y = bestEntry.z = -666.0f;
+    const unsigned int currentHandle = bot->getCurrentEquipment();
+    Information* const currentInformation = informationManager->getInformation(currentHandle);
+    const Vec3& position = currentInformation->getPosition();
+    double zoneTime = 0.0;
+    int zoneSide = -1;
+    IAITerrain* const terrain = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    const bool soldier = (currentInformation->getObjectTypeFlags() >> 21) & 1;
+    bool underArtillery = false;
+    if (!((currentInformation->getObjectTypeFlags() >> 4) & 1))
+    {
+        if (squadManager->isInArtilleryDangerZone(position, bot->getSide(), zoneTime, zoneSide) && zoneTime > 4.0)
+            underArtillery = true;
+    }
+    if (!soldier && !canLeaveEquipment(bot))
+    {
+        m_targetChanged[id] = generator->hasPlan(bot);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        generator->reset(bot);
+        m_urgency[id] = 0.0f;
+        return 0.0f;
+    }
+    const unsigned int primaryHandle = currentInformation->getPrimaryObject(side);
+    Information* const primary = informationManager->getInformation(primaryHandle);
+    Information* const ownPrimary = informationManager->getInformation(currentInformation->getPrimaryObject(side));
+    unsigned int bestHandle = primaryHandle;
+    float seatValue;
+    int vehicleNumber;
+    if (currentHandle == primaryHandle)
+    {
+        seatValue = equipmentValue(bot, primary, enemyStrengths, enemyCounts, false, currentInformation,
+                                   fireShare, moveShare, side) * 2.0f;
+        currentValue = seatValue;
+        if (seatValue < 0.0f)
+            currentValue = 0.0f;
+        if (primary->getMobile())
+        {
+            vehicleNumber = primary->getMobile()->getVehicleNumber();
+            primary->getUnit()->getEquipmentType();   // discarded, as shipped
+        }
+        else
+        {
+            vehicleNumber = -1;
+        }
+    }
+    else
+    {
+        seatValue = equipmentValue(bot, primary, enemyStrengths, enemyCounts, true, currentInformation,
+                                   fireShare, moveShare, side) * 2.0f;
+        vehicleNumber = -1;
+    }
+
+    // An overturned vehicle is worth nothing; otherwise compare its seats.
+    bool overturned = false;
+    float bestValue;
+    if (!soldier && primary->getTransformation().m[5] < 0.01f)
+    {
+        overturned = true;
+        seatValue = 0.0f;
+        if (((primary->getObjectTypeFlags() >> 4) & 1) && !primary->getPhysical()->isInAir())
+            overturned = false;
+        bestValue = 0.0f;
+    }
+    else
+    {
+        bestValue = seatValue;
+    }
+    Information* bestInformation = primary;
+    if (!overturned)
+    {
+        int iterator;
+        unsigned int seatHandle = primary->getFirstSecondaryObject(iterator, side);
+        Information* seat = informationManager->getInformation(seatHandle);
+        const float factor = seatFactor(primary, primaryHandle == currentHandle);
+        while (seat)
+        {
+            float value;
+            if (seatHandle == currentHandle)
+            {
+                value = equipmentValue(bot, seat, enemyStrengths, enemyCounts, false, currentInformation,
+                                       fireShare, moveShare, side) * 2.0f * factor;
+                currentValue = value;
+                if (value < 0.0f)
+                    currentValue = 0.0f;
+            }
+            else
+            {
+                value = equipmentValue(bot, seat, enemyStrengths, enemyCounts, true, currentInformation,
+                                       fireShare, moveShare, side) * factor;
+            }
+            if (!soldier && bot->getSquadMember()->isAtSquadArea() && bot->getSquadMember()->getFlag49()
+                && !primary->getArmament())
+                value = value * 5.0f;
+            if (bestValue < value)
+            {
+                bestValue = value;
+                bestHandle = seatHandle;
+                bestInformation = seat;
+                bestEntry.x = bestEntry.y = bestEntry.z = -666.0f;
+            }
+            seatHandle = primary->getSecondaryObject(iterator, side);
+            seat = informationManager->getInformation(seatHandle);
+        }
+    }
+
+    // Getting out on foot.
+    const unsigned int soldierHandle = bot->getPlayer()->getSoldier()->getInformation(side);
+    const std::list<AIRadioMessageInfo>& bailOrders = agent->getReceivedMessages(static_cast<AIRadioMessageType>(0));
+    bool ordered = false;
+    if (bailOrders.size() != 0 && humanRequester(bailOrders))
+        ordered = true;
+    if (soldierHandle != currentHandle)
+    {
+        Information* const soldierInformation = informationManager->getInformation(soldierHandle);
+        float value = equipmentValue(bot, soldierInformation, enemyStrengths, enemyCounts, false,
+                                     currentInformation, fireShare, moveShare, side) * 0.2f;
+        if (bailOrders.size() != 0)
+        {
+            if (ordered && !((currentInformation->getObjectTypeFlags() >> 21) & 1))
+                value = value * bailOrders.front().m_weight * 100.0f;
+            if (ordered && ((currentInformation->getObjectTypeFlags() >> 4) & 1))
+                value = 10000.0f;
+        }
+        if (underArtillery)
+            value = 10000.0f;
+        if (bot->isBotStuck() && soldierInformation)
+        {
+            bot->setBotStuck(false);
+            value = 10000.0f;
+        }
+        AIStrategicArea* const area = bot->getSquadMember()->getSquad()->getSquadStrategicAreaAssignment();
+        if (area)
+        {
+            const Vec3 first = area->getOrderPos(0, bot->getSide());
+            const Vec3 second = area->getOrderPos(1, bot->getSide());
+            if (std::fabs(first.y - second.y) > 3.0f && isHeldForSquadArea(ownPrimary, ownPrimary->getSide(), bot))
+                value = 10000.0f;
+        }
+        if (currentValue < 0.001f)
+            value = 10000.0f;
+        soldierInformation->getMobile()->getVehicleNumber();      // discarded, as shipped
+        soldierInformation->getUnit()->getEquipmentType();        // discarded, as shipped
+        if (bestValue < value)
+        {
+            bestValue = value;
+            bestHandle = soldierHandle;
+            bestInformation = soldierInformation;
+            leaveVehicle = true;
+        }
+    }
+
+    float orderFactor;
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+        && bot->getOrderList(m_behaviourId)->size() == 0)
+        orderFactor = bot->getMemory()->m_float8;
+    else
+        orderFactor = 1.0f;
+
+    // A pick-up request from a human in the vehicle the bot is heading for.
+    bool pickUp = false;
+    unsigned int targetPrimary = static_cast<unsigned int>(-1);
+    if (informationManager->getInformation(m_targets[id]))
+    {
+        targetPrimary = informationManager->getInformation(m_targets[id])->getPrimaryObject(side);
+        const std::list<AIRadioMessageInfo>& pickUps = agent->getReceivedMessages(static_cast<AIRadioMessageType>(1));
+        if (pickUps.size() != 0 && ((currentInformation->getObjectTypeFlags() >> 21) & 1))
+        {
+            IAIPlayer* const requester = humanRequester(pickUps);
+            if (requester && targetPrimary == requester->getCurrentVehicle()->getPrimaryObject()->getInformation(side))
+                pickUp = true;
+        }
+    }
+
+    unsigned int requesting = static_cast<unsigned int>(-1);
+    if (!leaveVehicle && !(bailOrders.size() != 0 && ordered)
+        && !((currentInformation->getObjectTypeFlags() >> 4) & 1) && !underArtillery
+        && !bot->getSquadMember()->isNearSquadGoal())
+    {
+        // Other vehicles nearby.
+        m_vector24.resize(0, 0);
+        float radius = static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+                           ->getHardware(m_vector24, position, bot);
+        const std::list<AIRadioMessageInfo>& pickUps = agent->getReceivedMessages(static_cast<AIRadioMessageType>(1));
+        const float radiusSquared = radius * radius;
+        bool reachable = false;
+        Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+        for (std::vector<unsigned int>::iterator it = m_vector24.begin(); it != m_vector24.end(); ++it)
+        {
+            requesting = static_cast<unsigned int>(-1);
+            if (pickUps.size() != 0 && ((currentInformation->getObjectTypeFlags() >> 21) & 1)
+                && isRequestedByOccupant(*it, &pickUps, side))
+                requesting = *it;
+            unsigned int handle = *it;
+            Information* const candidate = informationManager->getInformation(handle);
+            if (!candidate || candidate == ownPrimary || ((candidate->getObjectTypeFlags() >> 21) & 1))
+                continue;
+            if (pickUp && handle != targetPrimary)
+                continue;
+            if ((candidate->getObjectTypeFlags() >> 7) & 1)
+            {
+                if (pickUps.size() == 0)
+                    continue;
+                IAIPlayer* const requester = humanRequester(pickUps);
+                if (!requester)
+                    continue;
+                const unsigned int vehicle = requester->getCurrentVehicle()->getPrimaryObject()->getInformation(side);
+                Information* const vehicleInformation = informationManager->getInformation(vehicle);
+                if (handle != vehicle || !vehicleInformation)
+                    continue;
+                IPIPhysical* const vehiclePhysical = vehicleInformation->getPhysical();
+                if (!vehiclePhysical || !vehiclePhysical->isInAir() || !vehiclePhysical->isInWater())
+                    continue;
+            }
+            if (!candidate->getAIObject()->getIsAllowedByBots())
+                continue;
+            if (isEnemyOccupied(&handle, candidate, &side))
+                continue;
+            const Vec3& candidatePosition = candidate->getPosition();
+            IPIMobile* const candidateMobile = candidate->getMobile();
+            if (candidateMobile)
+            {
+                if (!((candidate->getObjectTypeFlags() >> 4) & 1))
+                {
+                    const IPIMobile::ValidPos valid = candidateMobile->getLastValidPosition();
+                    if (valid.quadTree == static_cast<unsigned int>(-1))
+                    {
+                        if (pickUps.size() == 0)
+                            continue;
+                        IAIPlayer* const requester = humanRequester(pickUps);
+                        if (!requester)
+                            continue;
+                        const unsigned int vehicle =
+                            requester->getCurrentVehicle()->getPrimaryObject()->getInformation(side);
+                        const unsigned int seat = requester->getCurrentVehicle()->getInformation(side);
+                        if (handle != vehicle || vehicle != seat)
+                            continue;
+                    }
+                }
+                if (!((candidate->getObjectTypeFlags() >> 4) & 1) && !((candidate->getObjectTypeFlags() >> 21) & 1)
+                    && isOverturned(candidate, terrain, 0.70710677f))
+                    continue;
+            }
+            IPIUnit* const unit = candidate->getUnit();
+            const float distanceSquared = vectorLengthSquared(vectorFrom(position, candidatePosition));
+            const float nearness =
+                std::max(minValue((radiusSquared - distanceSquared * 0.8f) / radiusSquared, 0.5f) + 0.5f, 0.0f);
+            if (vehicleNumber == -1)
+            {
+                reachable = true;
+            }
+            else if (unit)
+            {
+                if (unit->useNoPathfindingToGetToObject())
+                {
+                    reachable = true;
+                    entry = unit->getEntryPositionOfNonMobile();
+                }
+                else if (!candidate->getMobile())
+                {
+                    reachable = true;
+                    entry = unit->getEntryPositionOfNonMobile();
+                }
+                else
+                {
+                    const IPIMobile::ValidPos& valid = candidateMobile->getLastValidPosition(0);
+                    if (candidate->getPhysical())
+                    {
+                        const float candidateRadius = candidate->getPhysical()->getRadius();
+                        if (equipment->getPhysical())
+                        {
+                            const float reach = equipment->getPhysical()->getRadius() + candidateRadius;
+                            reachable = reach * reach > vectorLengthSquared(vectorFrom(valid.position, candidatePosition));
+                        }
+                    }
+                }
+            }
+            if (!reachable)
+                continue;
+            float value = equipmentValue(bot, candidate, enemyStrengths, enemyCounts, true, currentInformation,
+                                         fireShare, moveShare, side) * nearness;
+            if (pickUp)
+                value = value * 5.0f;
+            if (soldier && distanceSquared < 400.0f && currentInformation->getPhysical()->getHealth() < 0.25f)
+                value = value * 50.0f;
+            if (requesting != static_cast<unsigned int>(-1))
+                value = value * pickUps.front().m_weight;
+            if (bestValue < value)
+            {
+                if (!((candidate->getObjectTypeFlags() >> 4) & 1) || ((candidate->getObjectTypeFlags() >> 5) & 1)
+                    || isLandingAreaClear(candidate, currentInformation, side))
+                {
+                    bestValue = value;
+                    bestHandle = handle;
+                    viaRequest = requesting != static_cast<unsigned int>(-1);
+                    bestInformation = candidate;
+                    bestEntry = entry;
+                }
+            }
+            int iterator;
+            unsigned int seatHandle = candidate->getFirstSecondaryObject(iterator, side);
+            Information* seat = informationManager->getInformation(seatHandle);
+            const float factor = seatFactor(candidate, false);
+            while (seat)
+            {
+                float seatValueHere = equipmentValue(bot, seat, enemyStrengths, enemyCounts, true,
+                                                     currentInformation, fireShare, moveShare, side)
+                                      * nearness * factor;
+                if (pickUp)
+                    seatValueHere = seatValueHere * 5.0f;
+                else if (soldier && distanceSquared < 400.0f && currentInformation->getPhysical()
+                         && currentInformation->getPhysical()->getHealth() < 0.25f)
+                    seatValueHere = seatValueHere * 50.0f;
+                if (requesting != static_cast<unsigned int>(-1))
+                    seatValueHere = seatValueHere * pickUps.front().m_weight;
+                if (bestValue < seatValueHere)
+                {
+                    bestValue = seatValueHere;
+                    bestHandle = seatHandle;
+                    viaRequest = requesting != static_cast<unsigned int>(-1);
+                    bestInformation = seat;
+                    bestEntry = entry;
+                }
+                seatHandle = candidate->getSecondaryObject(iterator, side);
+                seat = informationManager->getInformation(seatHandle);
+            }
+        }
+    }
+
+    if (bestHandle == currentHandle)
+    {
+        if (soldier && requesting != static_cast<unsigned int>(-1))
+            answerPickUp(currentInformation, requesting, agent);
+        m_targetChanged[id] = generator->hasPlan(bot);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        generator->reset(bot);
+        m_urgency[id] = 0.0f;
+        return 0.0f;
+    }
+    const bool samePrimary = bestInformation->getPrimaryObject(side) == currentInformation->getPrimaryObject(side);
+    m_targetChanged[id] = m_targets[id] != bestHandle;
+    m_targets[id] = bestHandle;
+    if (soldier && requesting != static_cast<unsigned int>(-1) && !isRequesterAboard(m_targets[id], requesting, side))
+        answerPickUp(currentInformation, requesting, agent);
+    static_cast<BBPChange*>(generator)->offerChange(bestHandle, &bestEntry, samePrimary, viaRequest, bot);
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (currentValue == 0.0f)
+        m_urgency[id] = DecleiningSlopeCurve::calculate(bestValue * 0.5f) * orderFactor * elapsed * 4.0f;
+    else
+        m_urgency[id] = DecleiningSlopeCurve::calculate(bestValue / currentValue * 0.5f) * orderFactor * elapsed * 4.0f;
+    if (now - currentInformation->getUnit()->getLastPlayerPossesionTime() < 15.0)
+        m_urgency[id] = m_urgency[id] * 6.0f;
+    if (leaveVehicle)
+    {
+        Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+        if (equipment)
+        {
+            if (equipment->getPhysical())
+            {
+                const float health = equipment->getPhysical()->getHealth();
+                if (!(IBotManager::instance->getVehicleBailValue() + 0.1f < health))
+                    agent->sendRadioMessageNow(0, 7, 10, 0);
+            }
+            m_urgency[id] = m_urgency[id] * 5.0f;
+        }
+    }
+    if (soldier && vectorLengthSquared(vectorFrom(position, bestInformation->getPosition())) < 400.0f
+        && currentInformation->getPhysical() && currentInformation->getPhysical()->getHealth() < 0.25f)
+        m_urgency[id] = m_urgency[id] * 5.0f;
+    bot->insertBehaviourInformation(0.5f, informationManager->getInformation(m_targets[bot->getBotId()])->getPosition(),
+                                    m_behaviourId);
+    m_urgency[id] = acceptedUrgency(bot);
+    return m_urgency[id];
 }
 
 BBChangeLandingCraft::BBChangeLandingCraft(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,

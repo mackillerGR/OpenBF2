@@ -7,6 +7,9 @@
 #include "../../../../Core/ClassManager.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../Main/AIDllFrontier.h"
+#include "../Main/AIMain.h"
+#include "../AIStrategic/SAI.h"
+#include "../AIBot/BotMain.h"
 
 namespace dice {
 namespace hfe {
@@ -39,14 +42,14 @@ BFStrategicEnvironment::~BFStrategicEnvironment()
 {
 }
 
-int BFStrategicEnvironment::getEnemyStrengths(Bot *)
+float* BFStrategicEnvironment::getEnemyStrengths(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFStrategicEnvironment::getEnemyStrengths");
+    return IAIMain::m_instance->getSAI(bot->getSide())->getEnemyStrengths(bot->getBotId());
 }
 
-int BFStrategicEnvironment::getEnemyTypes(Bot *)
+float* BFStrategicEnvironment::getEnemyTypes(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFStrategicEnvironment::getEnemyTypes");
+    return IAIMain::m_instance->getSAI(bot->getSide())->getEnemyTypes(bot->getBotId());
 }
 
 int BFStrategicEnvironment::getTemperature(Bot *)

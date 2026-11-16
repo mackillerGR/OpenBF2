@@ -35,11 +35,18 @@ public:
     float getAngleSpeedConstant() const;             // PE 1019C810
     const Vec3& getCameraRelativeMinRotation() const;
     const Vec3& getCameraRelativeMaxRotation() const;
+    // Whether the camera may turn to the direction. PE 1019CBD0.
+    bool validateCameraDirection(const Vec3& direction) const;
     // The camera's base position. PE 1019CBB0.
     void getCameraBasePos(Vec3& out) const;
     // Whether the camera may turn toward the position. PE 1019CC30.
     bool validateCameraDirectionByPos(const Vec3& position) const;
 };
+
+inline bool IPIControlInfo::validateCameraDirection(const Vec3& direction) const
+{
+    return m_information->getAIObject()->getControlInfo()->validateCameraDirection(direction);
+}
 
 inline void IPIControlInfo::getCameraBasePos(Vec3& out) const
 {
