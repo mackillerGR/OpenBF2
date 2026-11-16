@@ -138,12 +138,17 @@ public:
 
     // bridges
     void createBridgeSegment(IAIObject*);
+    // The destroyed bridge segment closest to the position, with the segment's stored vector and
+    // the squared distance. Unless `anyClaim` is set, a segment whose recorded player is a human
+    // of the side, or that has no player while a human plays the side, is passed over.
+    // PE 1008FC90; [INFERRED] names.
+    IAIObject* getClosestDestroyedBridgeSegment(Vec3 position, bool anyClaim, int side, Vec3& vector,
+                                                float& distanceSq);
     void removeBridgeSegment(IAIObject*);
     void deleteBridges();
     void resetBridges();
     void bridgeSegmentDestroyed(IAIObject*, int);
     void bridgeSegmentRepaired(IAIObject*);
-    bool getClosestDestroyedBridgeSegment(Vec3, bool, int, Vec3&, float&);
 
     static AIStrategicObjectManager* m_instance;
 

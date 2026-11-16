@@ -67,6 +67,9 @@ public:
     const Vec3& getSecondaryGotoPos() const { return m_v200; }
     // Whether the next path should be announced over the radio. [INFERRED] names.
     bool shouldAnnounceOrder() const { return m_b220; }               // PE 101A10C0
+    // The pending repair request. [INFERRED] names.
+    bool isRepairRequested() const { return m_b172; }                 // PE 101A1130
+    const Vec3& getRepairRequestPos() const { return m_v176; }        // PE 101A1140
     void setAnnounceOrder(bool announce) { m_b220 = announce; }       // PE 101A10B0
     // A member is close to the goal of an area the side holds. [INFERRED] name. PE 101A2FA0.
     bool isAnyMemberNearGoal();

@@ -50,6 +50,8 @@ public:
     // The member's squad demand for support of the type at the target: 1 when the member already
     // requests it, 0 without a squad. PE 1012B370; [INFERRED] name.
     float getSupportDemand(SquadMember* member, unsigned int target, int type, int side);
+    // Whether a human player is on the side. PE 1012C130; [INFERRED] name.
+    bool hasHumanPlayerOnSide(int side);
     // Any side member's qualifying vehicle within radius of the position. [INFERRED] name and
     // argument split: PE 1012BB20 takes the four floats by value. PE 1012BB20.
     bool isFriendlyNearPosition(const Vec3& position, float radius, int side);

@@ -126,6 +126,24 @@ void SquadManager::receiveOrder(int type, int playerId, bool commander)
         squad->setMission(type, position, 0, commander);
 }
 
+// PE 1012C130. Walks a copy of the player list.
+bool SquadManager::hasHumanPlayerOnSide(int side)
+{
+    std::vector<IAIPlayer*> players(
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getAllPlayers());
+    bool found = false;
+    for (std::vector<IAIPlayer*>::iterator it = players.begin(); it != players.end(); ++it)
+    {
+        IAIPlayer* const player = *it;
+        if (player && !player->getIsAIPlayer() && player->getSide() == side)
+        {
+            found = true;
+            break;
+        }
+    }
+    return found;
+}
+
 // PE 1012B370.
 float SquadManager::getSupportDemand(SquadMember* member, unsigned int target, int type, int side)
 {

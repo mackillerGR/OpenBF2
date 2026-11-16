@@ -548,6 +548,19 @@ BBPBridgeRepair::~BBPBridgeRepair()
     delete[] m_vec20;
 }
 
+// PE 101239A0.
+void BBPBridgeRepair::offerRepair(unsigned int bridge, int weapon, Vec3 vector, Bot* bot, bool requested,
+                                  Vec3 position, Vec3 start)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = static_cast<int>(bridge);
+    m_int10[bot->getBotId()] = weapon;
+    m_vec14[bot->getBotId()] = vector;
+    m_bool18[bot->getBotId()] = requested;
+    m_vec1C[bot->getBotId()] = position;
+    m_vec20[bot->getBotId()] = start;
+}
+
 BotScript* BBPBridgeRepair::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPBridgeRepair::generate");

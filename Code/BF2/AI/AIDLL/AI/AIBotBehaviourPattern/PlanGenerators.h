@@ -453,6 +453,9 @@ public:
     explicit BBPBridgeRepair(int behaviourId);                        // PE 10123790
     virtual ~BBPBridgeRepair();                                       // PE 10123930
     virtual BotScript* generate(Bot* bot);                            // PE 10123A70
+    // Offers the repair. PE 101239A0; [INFERRED] name.
+    void offerRepair(unsigned int bridge, int weapon, Vec3 vector, Bot* bot, bool requested,
+                     Vec3 position, Vec3 start);
 private:
     /* +0x0C */ int*  m_int0C;                // -1
     /* +0x10 */ int*  m_int10;                // -1

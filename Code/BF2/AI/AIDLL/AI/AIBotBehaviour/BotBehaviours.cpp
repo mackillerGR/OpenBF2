@@ -652,10 +652,6 @@ BBBridgeRepair::~BBBridgeRepair()
     delete[] m_battle3C;
 }
 
-float BBBridgeRepair::calculateUrgency(Bot*, bool, float)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::BBBridgeRepair::calculateUrgency");
-}
 
 // PE 100FD160. A bot that is up and carries a type 1 or 2 weapon (the medic kit) can assist.
 bool BBMedicAssist::isApplicable(Information* equipment, Bot* bot)
@@ -4408,6 +4404,201 @@ float BBRevive::calculateUrgency(Bot* bot, bool flag, float elapsed)
                                                                   bot->getSide())
                         * m_urgency[id];
     return m_urgency[id];
+}
+
+// PE 10122D10. The bot id is fetched and unused, as shipped.
+bool BBBridgeRepair::findRepairPosition(unsigned int bridge, Vec3 vector, Bot* bot, Vec3 from,
+                                        Vec3& position, Vec3& start)
+{
+    bot->getBotId();
+    Vec3 back;
+    back.x = -vector.x;
+    back.y = -vector.y;
+    back.z = -vector.z;
+    const float radius = informationManager->getInformation(bridge)->getPhysical()->getRadius();
+    Vec3 ahead;
+    ahead.x = vector.x * radius + position.x;
+    ahead.y = vector.y * radius + position.y;
+    ahead.z = vector.z * radius + position.z;
+    const Vec3 aheadStart = ahead;
+    Vec3 behind;
+    behind.x = back.x * radius + position.x;
+    behind.y = back.y * radius + position.y;
+    behind.z = back.z * radius + position.z;
+    const Vec3 behindStart = behind;
+    SquadMember* const member = bot->getSquadMember();
+    SquadCoordinator* const squad = member->getSquad();
+    ahead.y = ahead.y + 1.5f;
+    behind.y = behind.y + 1.5f;
+
+    bool foundAhead = false;
+    for (int step = 0; !foundAhead && step < 10;)
+    {
+        if (squad->isPositionValidForMember(member, ahead))
+        {
+            foundAhead = true;
+        }
+        else
+        {
+            ahead.x = vector.x + ahead.x;
+            ahead.y = ahead.y + vector.y;
+            ahead.z = ahead.z + vector.z;
+            ++step;
+        }
+    }
+    bool foundBehind = false;
+    for (int step = 0; !foundBehind && step < 10;)
+    {
+        if (squad->isPositionValidForMember(member, behind))
+        {
+            foundBehind = true;
+        }
+        else
+        {
+            behind.x = behind.x + back.x;
+            behind.y = behind.y + back.y;
+            behind.z = behind.z + back.z;
+            ++step;
+        }
+    }
+
+    bool useAhead;
+    if (foundAhead)
+    {
+        if (foundBehind)
+        {
+            const float ax = ahead.x - from.x, ay = ahead.y - from.y, az = ahead.z - from.z;
+            const float bx = behind.x - from.x, by = behind.y - from.y, bz = behind.z - from.z;
+            const float aheadSq = ax * ax + az * az + ay * ay;
+            const float behindSq = bx * bx + bz * bz + by * by;
+            useAhead = !(behindSq <= aheadSq);
+        }
+        else
+        {
+            useAhead = true;
+        }
+    }
+    else if (foundBehind)
+    {
+        useAhead = false;
+    }
+    else
+    {
+        return false;
+    }
+    if (useAhead)
+    {
+        position = ahead;
+        start = aheadStart;
+    }
+    else
+    {
+        position = behind;
+        start = behindStart;
+    }
+    return true;
+}
+
+// PE 10123140. An engineer (soldier or type flag 6) heads for the closest destroyed bridge
+// segment within 50 (100 when the squad asked for a repair near the bridge), at urgency
+// 20 x elapsed, doubled for a requested repair.
+float BBBridgeRepair::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    if (!flag)
+    {
+        if (informationManager->getInformation(m_targets[bot->getBotId()]))
+        {
+            m_targetChanged[bot->getBotId()] = false;
+            if (!m_generator->hasPlan(bot))
+                m_urgency[bot->getBotId()] = 0.0f;
+        }
+        else
+        {
+            m_targetChanged[bot->getBotId()] = m_urgency[bot->getBotId()] != 0.0f;
+            m_urgency[bot->getBotId()] = 0.0f;
+            m_generator->reset(bot);
+        }
+        return m_urgency[bot->getBotId()];
+    }
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const unsigned int id = bot->getBotId();
+    const Vec3 position = equipment->getPosition();
+    int weaponIndex = -1;
+    static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();   // unused
+    const unsigned int flags = equipment->getObjectTypeFlags();
+    const bool soldier = (flags >> 21) & 1;
+    if (!isUsable(equipment, bot) || (!soldier && !((flags >> 6) & 1)))
+    {
+        m_urgency[id] = 0.0f;
+        m_targetChanged[id] = m_targets[id] != static_cast<unsigned int>(-1);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        m_generator->reset(bot);
+        return 0.0f;
+    }
+    if (soldier && equipment->getSoldierPose() == static_cast<SoldierPose>(4))
+    {
+        m_targetChanged[id] = true;
+        m_generator->reset(bot);
+        m_urgency[id] = 0.0f;
+        return 0.0f;
+    }
+
+    Information* const soldierInformation = informationManager->getInformation(
+        bot->getPlayer()->getSoldier()->getInformation(bot->getSide()));
+    std::vector<unsigned int> weapons(soldierInformation->getArmament()->getWeapons());
+    for (unsigned int index = 0; weapons.begin() != weapons.end() && index < weapons.size(); ++index)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[index]);
+        if (weapon && weapon->getWeaponType() == 1)
+        {
+            weaponIndex = static_cast<int>(index);
+            break;
+        }
+    }
+
+    SquadCoordinator* const squad = bot->getSquadMember()->getSquad();
+    const bool requested = squad->isRepairRequested();
+    Vec3 vector;
+    vector.x = vector.y = vector.z = 0.0f;
+    Vec3 repairPosition;
+    repairPosition.x = repairPosition.y = repairPosition.z = 0.0f;
+    Vec3 start;
+    start.x = start.y = start.z = 0.0f;
+    bool nearRequest = false;
+    float distanceSq;
+    IAIObject* const segment = AIStrategicObjectManager::getInstance()->getClosestDestroyedBridgeSegment(
+        equipment->getPosition(), requested, bot->getSide(), vector, distanceSq);
+    if (segment && vector.x * vector.x + vector.z * vector.z + vector.y * vector.y > 0.01f)
+    {
+        const unsigned int bridge = segment->getHandle(1);
+        const Vec3 bridgePosition = informationManager->getInformation(bridge)->getPosition();
+        if (requested
+            && vectorLengthSquared(vectorFrom(squad->getRepairRequestPos(), bridgePosition)) < 2500.0f)
+            nearRequest = true;
+        const float limit = nearRequest ? 10000.0f : 2500.0f;
+        repairPosition = bridgePosition;
+        if (distanceSq < limit && bridge != static_cast<unsigned int>(-1)
+            && findRepairPosition(bridge, vector, bot, position, repairPosition, start))
+        {
+            m_urgency[id] = elapsed * 20.0f;
+            m_targetChanged[id] = m_targets[id] != bridge;
+            m_targets[id] = bridge;
+            static_cast<BBPBridgeRepair*>(m_generator)
+                ->offerRepair(m_targets[id], weaponIndex, vector, bot, nearRequest, repairPosition, start);
+            m_urgency[id] = SquadManager::m_instance->getSupportDemand(bot->getSquadMember(), bridge, 2,
+                                                                      bot->getSide())
+                            * m_urgency[id];
+            if (nearRequest)
+                m_urgency[id] = m_urgency[id] + m_urgency[id];
+            return m_urgency[bot->getBotId()];
+        }
+    }
+    m_urgency[id] = 0.0f;
+    m_targetChanged[id] = m_targets[id] != static_cast<unsigned int>(-1);
+    m_targets[id] = static_cast<unsigned int>(-1);
+    m_generator->reset(bot);
+    return 0.0f;
 }
 
 } // namespace ai

@@ -17,6 +17,9 @@
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/Information.h"
+#include "../AIBot/SquadManager.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../../Core/ConsoleObjectMacro.h"      // the aiStrategicArea.* binding at the foot
 
 namespace dice {
@@ -233,6 +236,49 @@ void AIStrategicObjectManager::deleteBridges()
     }
 
     m_bridgeSegments.clear();
+}
+
+// PE 1008FC90. The segment's +4 is read as a player id here.
+IAIObject* AIStrategicObjectManager::getClosestDestroyedBridgeSegment(Vec3 position, bool anyClaim,
+                                                                    int side, Vec3& vector,
+                                                                    float& distanceSq)
+{
+    IAIObject* closest = 0;
+    float best = 3.4028235e38f;
+    IAIPlayerFactory* const players = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    for (std::list<BridgeSegment*>::iterator it = m_bridgeSegments.begin(); it != m_bridgeSegments.end(); ++it)
+    {
+        BridgeSegment* const segment = *it;
+        const Vec3 segmentPosition =
+            informationManager->getInformation(segment->m_object->getInformation(1))->getPosition();
+        if (!segment->m_destroyed)
+            continue;
+        IAIPlayer* const player = players->getPlayerFromId(segment->m_i4);
+        bool claimed = false;
+        if (!player)
+        {
+            if (SquadManager::m_instance->hasHumanPlayerOnSide(side))
+                claimed = true;
+        }
+        else if (player->getSide() == side)
+        {
+            claimed = !player->getIsAIPlayer();
+        }
+        if (!anyClaim && claimed)
+            continue;
+        const float dx = segmentPosition.x - position.x;
+        const float dy = segmentPosition.y - position.y;
+        const float dz = segmentPosition.z - position.z;
+        const float d = dz * dz + dy * dy + dx * dx;
+        if (d < best)
+        {
+            best = d;
+            distanceSq = d;
+            vector = segment->m_position;
+            closest = segment->m_object;
+        }
+    }
+    return closest;
 }
 
 // Tracks each announced AI-enabled bridge segment by object pointer. Lookup stops at

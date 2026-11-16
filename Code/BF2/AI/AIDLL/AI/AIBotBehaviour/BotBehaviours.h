@@ -383,6 +383,13 @@ public:
     virtual bool isUsable(Information* equipment, Bot* bot);            // PE 10122CC0
 
 protected:
+    // Walks up to ten steps out from the bridge on each side along the segment vector, from the
+    // bridge's radius and 1.5 up, for a position valid for the bot's squad member. Chooses the
+    // side nearer `from` when both qualify; writes the found position and its unstepped start.
+    // PE 10122D10; [INFERRED] name.
+    bool findRepairPosition(unsigned int bridge, Vec3 vector, Bot* bot, Vec3 from, Vec3& position,
+                            Vec3& start);
+
     /* +0x24 */ std::vector<int> m_vector24;   // [UNRESOLVED] element type
     /* +0x34 */ int* m_battle34;
     /* +0x38 */ int* m_battle38;
