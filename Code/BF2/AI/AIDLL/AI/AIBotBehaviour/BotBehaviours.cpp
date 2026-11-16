@@ -3584,9 +3584,11 @@ BBTriggerable::~BBTriggerable()
     delete[] m_targets;
 }
 
-float BBTriggerable::calculateUrgency(Bot*, bool, float)
+// PE 10127BD0. Never urgent.
+float BBTriggerable::calculateUrgency(Bot* bot, bool, float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBTriggerable::calculateUrgency");
+    m_urgency[bot->getBotId()] = 0.0f;
+    return m_urgency[bot->getBotId()];
 }
 
 // PE 101268F0. Always false; the checks are made and discarded, as shipped.
