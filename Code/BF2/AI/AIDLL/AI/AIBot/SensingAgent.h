@@ -40,6 +40,8 @@ public:
     void setOverride(bool);
     void deletePlan();
     void clearPlanTargetInformation();
+    // PE 101AE210: the shipped body is empty.
+    void insertBehaviourInformation(float, const Vec3&, unsigned char) {}
     // Sets the flag that makes setOverride refuse, and drops the override. [INFERRED] name.
     void setOverrideLock(bool locked);
     // Runs the agent's own plan through the bot's interpreter. [INFERRED] name.

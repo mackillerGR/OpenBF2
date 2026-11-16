@@ -88,7 +88,7 @@ public:
     virtual unsigned int getFiringTarget() const = 0;                                             // +0x080
     virtual double getFiringTargetTime() const = 0;                                               // +0x084
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
-    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C [FRONTIER]
+    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c) = 0;         // +0x08C
     // The senses' handle-to-object map; PE callers read its size. [INFERRED] name.
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const = 0;            // +0x090
     virtual void* getSensedObjectFromHandle(unsigned int handle) const = 0;                       // +0x094
@@ -248,7 +248,7 @@ public:
     virtual unsigned int getFiringTarget() const;                                                 // +0x080
     virtual double getFiringTargetTime() const;                                                   // +0x084
     virtual SensingAgent* getSensingAgent();                                                      // +0x088
-    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c);             // +0x08C [FRONTIER]
+    virtual void insertBehaviourInformation(float f, const Vec3& v, unsigned char c);            // +0x08C PE 1017EDF0
     virtual const std::map<unsigned int, SensedObject*>& getSensedObjects() const;                // +0x090
     virtual void* getSensedObjectFromHandle(unsigned int handle) const;                           // +0x094
     virtual void setUnresolvedCollisionObject(unsigned int handle);                               // +0x098

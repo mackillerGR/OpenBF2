@@ -1262,10 +1262,10 @@ SensingAgent* BotMain::getSensingAgent()
     return m_sensingAgent;
 }
 
-// +0x08C
+// +0x08C, PE 1017EDF0. Forwards to the sensing agent.
 void BotMain::insertBehaviourInformation(float f, const Vec3& v, unsigned char c)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::insertBehaviourInformation");
+    m_sensingAgent->insertBehaviourInformation(f, v, c);
 }
 
 // +0x090

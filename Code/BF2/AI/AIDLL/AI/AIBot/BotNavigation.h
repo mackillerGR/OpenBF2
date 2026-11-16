@@ -20,6 +20,11 @@ class Information;
 class BotNavigation
 {
 public:
+    // The obstacles gathered by updateObstacles. [INFERRED] accessor; read inline in PE.
+    const std::vector<unsigned int>& getObstacles() const { return m_obstacles; }
+    // The avoid position and the time left (2.8 s from when it was set); true while time is
+    // left. [INFERRED] name. PE 101729D0.
+    bool getAvoidPosition(Vec3& position, double& timeLeft) const;
     float getFloat292() const { return m_float292; }   // [INFERRED] accessors
     float getFloat296() const { return m_float296; }
     explicit BotNavigation(BotMain* owner);
@@ -154,6 +159,8 @@ private:
     /* 244 */ double m_double244;          // not a gap - `reset` zeroes it
     // resetAll clears this field.
     /* 252 */ int   m_obstacleCount;       // resetAll: 0; updateObstacles writes the size
+    // A position the bot should get away from and when it was set; read as a vector by
+    // getAvoidPosition. [INFERRED] meaning.
     /* 256 */ int   m_zero256[3];          // +256, +260, +264
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false

@@ -56,6 +56,11 @@ public:
     UrgeCurve* getUrgeCurve() const { return m_urgeCurve; }
 
 protected:
+    // The unflagged pass every calculateUrgency inlines: the target-changed flag clears and the
+    // stored urgency stands while the generator still offers a plan; otherwise the generator
+    // resets and the urgency drops to zero. [INFERRED] helper.
+    float holdUrgency(Bot* bot);
+
     /* +0x04 */ unsigned char  m_behaviourId;     // set by the derived constructor
     /* +0x05 */ unsigned char  m_priority;        // set by the derived constructor
     /* +0x08 */ unsigned int*  m_targets;         // = 0; per-bot information handle, -1 when none

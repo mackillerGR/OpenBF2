@@ -2,6 +2,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BotNavigation operations.
 
 #include "BotNavigation.h"
+#include <cstring>
 
 #include "BotMain.h"                       // getBotId / getCurrentEquipment - vtable +0xE8, +0xD8
 #include "../Main/CommonSingletonServer.h"
@@ -81,6 +82,15 @@ BotNavigation::BotNavigation(BotMain* owner)
 BotNavigation::~BotNavigation()
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::~BotNavigation");
+}
+
+// PE 101729D0.
+bool BotNavigation::getAvoidPosition(Vec3& position, double& timeLeft) const
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    std::memcpy(&position, m_zero256, sizeof(position));
+    timeLeft = 2.8 - (now - m_double268);
+    return timeLeft > 0.0;
 }
 
 // Resets navigation, movement flags and progress timing.

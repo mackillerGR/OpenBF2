@@ -99,7 +99,10 @@ private:
     /*  68 */ std::vector<float> m_receiveTimeToLive;
     /*  80 */ std::vector<float> m_maxSendPeriod;
     /*  92 */ int m_int92;                     // reset: -1, this subsystem's null-index convention
-    /*  96 */ double m_double96;               // reset: 0.0
+    /*  96 */ double m_double96;               // reset: 0.0; PE +0x78, read by BBAvoid
+public:
+    double getDouble96() const { return m_double96; }   // [INFERRED] accessor
+private:
     /* 104 */ double m_double104;              // reset: 0.0; releaseFire waits two seconds past it
 };
 

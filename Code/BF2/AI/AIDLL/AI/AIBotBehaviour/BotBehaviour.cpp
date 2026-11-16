@@ -129,6 +129,16 @@ bool BotBehaviour::isApplicable(Information*, Bot*)
     return true;
 }
 
+float BotBehaviour::holdUrgency(Bot* bot)
+{
+    m_targetChanged[bot->getBotId()] = false;
+    if (m_generator->hasPlan(bot))
+        return m_urgency[bot->getBotId()];
+    m_generator->reset(bot);
+    m_urgency[bot->getBotId()] = 0.0f;
+    return 0.0f;
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

@@ -11,6 +11,21 @@
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIBot/BotNavigation.h"
+#include "../AIBot/BotMemory.h"
+#include "../AIBot/CommunicationAgent.h"
+#include "../Main/IBotManager.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../Game/Objects/IPlayer.h"
+#include "../AIBot/SquadMember.h"
+#include "../AIBot/SquadCoordinator.h"
+#include "../AIBot/SquadFormation.h"
+#include "../AIBot/SquadManager.h"
+#include "../AIBot/WaypointList.h"
 #include <cmath>
 
 namespace dice {
@@ -109,9 +124,296 @@ BBAvoid::~BBAvoid()
     delete[] m_targets;
 }
 
-float BBAvoid::calculateUrgency(Bot*, bool, float)
+namespace {
+
+Information* lookupInformation(unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBAvoid::calculateUrgency");
+    return informationManager->getInformation(handle);
+}
+
+// PE 100EDB40: the vector turned by the matrix's rotation, rows as basis vectors.
+void rotateByMatrix(const Mat4& matrix, const Vec3& in, Vec3& out)
+{
+    const float* const m = matrix.m;
+    const float z = in.x * m[2] + in.z * m[10] + in.y * m[6];
+    const float y = in.x * m[1] + in.z * m[9] + in.y * m[5];
+    const float x = in.z * m[8] + in.y * m[4] + in.x * m[0];
+    out.x = x;
+    out.y = y;
+    out.z = z;
+}
+
+// The equipment's primary object, as the given handle when it is primary itself.
+unsigned int primaryHandle(Information* information, unsigned int handle, Bot* bot)
+{
+    return information->isPrimary() ? handle : information->getPrimaryObject(bot->getSide());
+}
+
+// PE 100EDD70. Time until the moving sphere pair overlaps, when that happens within the look-
+// ahead: the closest approach must fall inside 1.5 times the squared combined radius. Writes the
+// collision time and, on a hit, the point where it happens (relative), and returns 1; else 0.
+float collisionCourse(const Vec3& relative, const Vec3& velocity, float lookAhead, float radius,
+                      Vec3& point, float& collisionTime)
+{
+    const float radiusSq = radius * radius * 1.5f;
+    const double speedSq = static_cast<double>(velocity.x) * velocity.x +
+                           static_cast<double>(velocity.y) * velocity.y +
+                           static_cast<double>(velocity.z) * velocity.z;
+    if (speedSq < 1e-06)
+        return 0.0f;
+    const double speed = std::sqrt(speedSq);
+    const double unit = 1.0 / speed;
+    const float dx = static_cast<float>(unit * velocity.x);
+    const float dy = static_cast<float>(unit * velocity.y);
+    const double dz = unit * velocity.z;
+    const float inverse = static_cast<float>(1.0 / speed);
+    const float approach = static_cast<float>(
+        ((-relative.z * dz + static_cast<double>(-relative.y) * dy) + static_cast<double>(-relative.x) * dx) *
+        inverse);
+    if (approach < 0.0f)
+        return 0.0f;
+    const float cx = approach * velocity.x + relative.x;
+    const double cy = static_cast<double>(approach) * velocity.y + relative.y;
+    const double cz = static_cast<double>(approach) * velocity.z + relative.z;
+    const double closestSq = (cz * cz + cy * cy) + static_cast<double>(cx) * cx;
+    if (!(closestSq < radiusSq))
+        return 0.0f;
+    const float time = static_cast<float>(approach - std::sqrt(std::fabs(closestSq - radiusSq)) * inverse);
+    collisionTime = time;
+    if (time > lookAhead)
+        return 0.0f;
+    if (time < 0.0f)
+        return 0.0f;
+    point.x = velocity.x * time + relative.x;
+    point.y = velocity.y * time + relative.y;
+    point.z = velocity.z * time + relative.z;
+    return 1.0f;
+}
+
+} // anonymous namespace
+
+// PE 100EDF10. Soldiers only. Every gathered obstacle that is not the bot's own vehicle, its
+// change or repair target or another soldier is weighed: a hostile one - weak, flagged
+// dangerous, or carrying no weapon of type 4 - inside its reach (its smallest radius plus 4,
+// at most 10) adds a flat 100 and steers away from it; anything else adds its collision
+// weight when it closes faster than 3 and will hit within the look-ahead. With nothing to
+// avoid, a recent avoid position or a blinding gas sends the bot off at urgency 1000.
+float BBAvoid::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    if (!flag)
+        return holdUrgency(bot);
+
+    Vec3 centre;
+    centre.x = centre.y = centre.z = 0.0f;
+    Vec3 relative;
+    relative.x = relative.y = relative.z = 0.0f;
+    Vec3 relativeVelocity;
+    relativeVelocity.x = relativeVelocity.y = relativeVelocity.z = 0.0f;
+    Vec3 hitPoint;
+    hitPoint.x = hitPoint.y = hitPoint.z = 0.0f;
+    const unsigned int previousTarget = m_targets[bot->getBotId()];
+    Information* const equipment = lookupInformation(bot->getCurrentEquipment());
+    const unsigned int ownPrimary = equipment->isPrimary() ? bot->getCurrentEquipment()
+                                                          : equipment->getPrimaryObject(bot->getSide());
+    equipment->getName();   // called and discarded, as shipped
+    float urgency = 0.0f;
+    float strongest = 0.0f;
+    IPIMobile* const mobile = equipment->getMobile();
+    if (!mobile || !((equipment->getObjectTypeFlags() >> 21) & 1))
+    {
+        m_urgency[bot->getBotId()] = 0.0f;
+        return 0.0f;
+    }
+
+    IPIPhysical* const physical = equipment->getPhysical();
+    Vec3 offset;
+    offset.x = offset.y = offset.z = 0.0f;
+    rotateByMatrix(equipment->getTransformation(), physical->getSphereLocalOffset(), offset);
+    const Vec3& position = equipment->getPosition();
+    centre.x = offset.x + position.x;
+    centre.y = offset.y + position.y;
+    centre.z = offset.z + position.z;
+    const float ownRadius = physical->getSmallestRadius();
+    const Vec3 ownSpeed = mobile->getSpeed();
+    float lookAhead = mobile->getAvoidCollisionLookAhead();
+    if (equipment->getAIObject())
+    {
+        if (equipment->getSoldierPose() == 3)
+            lookAhead = lookAhead + lookAhead;
+        else if (equipment->getSoldierPose() == 2)
+            lookAhead = lookAhead * 1.5f;
+    }
+
+    unsigned int changeTarget = bot->getChangeTarget();
+    if (Information* const change = lookupInformation(changeTarget))
+    {
+        if (!change->isPrimary())
+            changeTarget = change->getPrimaryObject(bot->getSide());
+    }
+    unsigned int repairTarget = bot->getRepairTarget();
+    if (Information* const repair = lookupInformation(repairTarget))
+    {
+        if (!repair->isPrimary())
+            repairTarget = repair->getPrimaryObject(bot->getSide());
+    }
+
+    const std::vector<unsigned int>& obstacles = bot->getBotNavigation()->getObstacles();
+    const unsigned int count = static_cast<unsigned int>(obstacles.size());
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        const unsigned int handle = obstacles[i];
+        Information* const other = lookupInformation(handle);
+        if (!other)
+            continue;
+        IPIMobile* const otherMobile = other->getMobile();
+        if (other->getObjectSpawnerHolding() && other->getObjectSpawner(bot->getSide()) == bot->getCurrentEquipment())
+            continue;
+        const unsigned int otherPrimary = primaryHandle(other, handle, bot);
+        IPIPhysical* const otherPhysical = other->getPhysical();
+        if (!otherPhysical || ownPrimary == otherPrimary || handle == repairTarget || handle == changeTarget ||
+            handle == bot->getWantedRepairTarget() || ((other->getObjectTypeFlags() >> 21) & 1))
+            continue;
+
+        Vec3 otherOffset;
+        otherOffset.x = otherOffset.y = otherOffset.z = 0.0f;
+        rotateByMatrix(other->getTransformation(), otherPhysical->getSphereLocalOffset(), otherOffset);
+        const Vec3& otherPosition = other->getPosition();
+        Vec3 otherCentre;
+        otherCentre.x = otherOffset.x + otherPosition.x;
+        otherCentre.y = otherOffset.y + otherPosition.y;
+        otherCentre.z = otherOffset.z + otherPosition.z;
+        relative.x = otherCentre.x - centre.x;
+        relative.y = otherCentre.y - centre.y;
+        relative.z = otherCentre.z - centre.z;
+        Vec3 otherSpeed;
+        otherSpeed.x = otherSpeed.y = otherSpeed.z = 0.0f;
+        if (otherMobile)
+            otherSpeed = otherMobile->getSpeed();
+        relativeVelocity.x = otherSpeed.x - ownSpeed.x;
+        relativeVelocity.y = otherSpeed.y - ownSpeed.y;
+        relativeVelocity.z = otherSpeed.z - ownSpeed.z;
+        const float closingSq = relativeVelocity.x * relativeVelocity.x + relativeVelocity.y * relativeVelocity.y +
+                                relativeVelocity.z * relativeVelocity.z;
+        const float combinedRadius = (otherPhysical->getSmallestRadius() + ownRadius) * 0.60000002f;
+        const float otherHealth = otherPhysical->getHealth();
+        const float bailValue = IBotManager::instance->getVehicleBailValue();
+        WeaponInfo* weapon = 0;
+        IPIArmament* const armament = equipment->getArmament();
+        if (armament && armament->getActiveWeapon() != -1)
+            weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+
+        bool hostile;
+        bool weak = otherHealth < bailValue;
+        if (!weak && !((other->getObjectTypeFlags() >> 25) & 1))
+        {
+            hostile = false;
+        }
+        else if (weapon && weapon->getWeaponType() == 4)
+        {
+            hostile = false;
+        }
+        else
+        {
+            hostile = true;
+        }
+        if (!hostile)
+        {
+            const float speedSq = otherSpeed.x * otherSpeed.x + otherSpeed.y * otherSpeed.y + otherSpeed.z * otherSpeed.z;
+            if (speedSq < 4.0f)
+                continue;
+        }
+
+        const float distance = std::sqrt(relative.x * relative.x + relative.y * relative.y + relative.z * relative.z);
+        const float smallest = otherPhysical->getSmallestRadius();
+        const float capped = 10.0f < smallest + 4.0f ? 10.0f : smallest + 4.0f;
+        const float otherSmallest = otherPhysical->getSmallestRadius();
+        const float reach = otherSmallest < capped ? capped : otherSmallest;
+        if (hostile)
+        {
+            if (!(distance < reach))
+                continue;
+            urgency = urgency + 100.0f;
+            strongest = 100.0f;
+            m_targets[bot->getBotId()] = handle;
+            Vec3 direction;
+            direction.x = direction.y = direction.z = 0.0f;
+            Vec3 where;
+            where.x = where.y = where.z = 0.0f;
+            const float push = (reach - distance) * 0.2f + 0.5f;
+            const float weight = 1.0f < push ? push : 1.0f;
+            static_cast<AvoidCollisionPlanGenerator*>(m_generator)->setObstacle(bot, direction, handle, where, weight);
+            continue;
+        }
+
+        float collisionTime;
+        const float hit = collisionCourse(relative, relativeVelocity, lookAhead, combinedRadius, hitPoint, collisionTime);
+        if (!(hit > 0.0f))
+            continue;
+        if (closingSq < 9.0f)
+            continue;
+        float scale;
+        if (collisionTime < 1.1920929e-07f)
+            scale = 1.0f;
+        else
+            scale = std::sqrt(relative.x * relative.x + relative.y * relative.y + relative.z * relative.z);
+        const float mass = otherPhysical->getMass();
+        const float closing = std::sqrt(relativeVelocity.x * relativeVelocity.x +
+                                        relativeVelocity.y * relativeVelocity.y +
+                                        relativeVelocity.z * relativeVelocity.z);
+        const float weight = closing * mass * (hit / scale);
+        urgency = urgency + weight;
+        if (weight > strongest)
+        {
+            strongest = weight;
+            m_targets[bot->getBotId()] = handle;
+            static_cast<AvoidCollisionPlanGenerator*>(m_generator)
+                ->setObstacle(bot, hitPoint, handle, relativeVelocity, collisionTime);
+        }
+    }
+
+    Vec3 avoidPosition;
+    avoidPosition.x = avoidPosition.y = avoidPosition.z = 0.0f;
+    bool flee = false;
+    if (urgency == 0.0f)
+    {
+        double timeLeft;
+        flee = bot->getBotNavigation()->getAvoidPosition(avoidPosition, timeLeft);
+    }
+    if (!flee)
+    {
+        world::IPlayer* const player = bot->getPlayer()->getPlayer();
+        flee = player->getBlurValue() > 0.0f && player->getIsGassed();
+    }
+    if (flee)
+    {
+        Vec3 none;
+        none.x = none.y = none.z = 0.0f;
+        static_cast<AvoidCollisionPlanGenerator*>(m_generator)
+            ->setObstacle(bot, none, static_cast<unsigned int>(-1), none, 0.0f);
+        m_urgency[bot->getBotId()] = 1000.0f;
+        return 1000.0f;
+    }
+
+    if (urgency == 0.0f)
+    {
+        const bool offered = m_generator->hasPlan(bot);
+        m_targetChanged[bot->getBotId()] = offered;
+        m_generator->reset(bot);
+        m_urgency[bot->getBotId()] = 0.0f;
+        return 0.0f;
+    }
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders())
+        urgency = urgency * bot->getMemory()->m_float8;
+    if ((equipment->getObjectTypeFlags() >> 21) & 1)
+    {
+        const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        if (now - bot->getCommunicationAgent()->getDouble96() < 5.0)
+            urgency = urgency + urgency;
+    }
+    m_urgency[bot->getBotId()] = urgency * elapsed;
+    m_targetChanged[bot->getBotId()] = previousTarget != m_targets[bot->getBotId()];
+    bot->insertBehaviourInformation(0.5f, lookupInformation(m_targets[bot->getBotId()])->getPosition(), m_behaviourId);
+    return m_urgency[bot->getBotId()];
 }
 
 BBMoveTo::BBMoveTo(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -133,9 +435,68 @@ BBMoveTo::~BBMoveTo()
 {
 }
 
-float BBMoveTo::calculateUrgency(Bot*, bool, float)
+// PE 100F10D0. A squad member settled at its formation position stays put until the squad moves
+// out. Otherwise the urgency is the waypoint list's, scaled by obedience under orders, and 1000
+// while the member flees artillery the bot stands in. The unflagged pass keeps the stored
+// urgency (zero once the generator has no plan) and feeds it to the move inclination.
+float BBMoveTo::calculateUrgency(Bot* bot, bool flag, float elapsed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBMoveTo::calculateUrgency");
+    SquadMember* const member = bot->getSquadMember();
+    if (member->isAtFormationPosition() && !member->getSquad()->getSquadFormation()->shouldSquadMoveOut())
+    {
+        m_urgency[bot->getBotId()] = 0.0f;
+        return 0.0f;
+    }
+    if (!flag)
+    {
+        m_targetChanged[bot->getBotId()] = false;
+        if (!m_generator->hasPlan(bot))
+            m_urgency[bot->getBotId()] = 0.0f;
+        bot->addToMoveInclination(m_urgency[bot->getBotId()]);
+        return m_urgency[bot->getBotId()];
+    }
+
+    Information* const equipment = lookupInformation(bot->getCurrentEquipment());
+    float urgency;
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders())
+    {
+        WaypointList* const waypoints = bot->getWaypoints();
+        const float obedience = bot->getMemory()->m_float8;
+        urgency = waypoints->update(equipment->getPosition(), bot) * obedience;
+    }
+    else
+    {
+        WaypointList* const waypoints = bot->getWaypoints();
+        urgency = waypoints->update(equipment->getPosition(), bot);
+    }
+    m_urgency[bot->getBotId()] = urgency;
+
+    double elapsedInZone;
+    int zoneSide;
+    const int side = bot->getSide();
+    if (SquadManager::m_instance->isInArtilleryDangerZone(equipment->getPosition(), side, elapsedInZone, zoneSide))
+    {
+        SquadMember* const fleeing = bot->getSquadMember();
+        if (fleeing && fleeing->isFleeingArtillery())
+            m_urgency[bot->getBotId()] = 1000.0f;
+    }
+    m_urgency[bot->getBotId()] = elapsed * m_urgency[bot->getBotId()];
+    if (!(m_urgency[bot->getBotId()] > 0.0f) && !(m_urgency[bot->getBotId()] != m_urgency[bot->getBotId()]))
+    {
+        const bool offered = m_generator->hasPlan(bot);
+        m_targetChanged[bot->getBotId()] = offered;
+        m_generator->reset(bot);
+        m_urgency[bot->getBotId()] = 0.0f;
+        return 0.0f;
+    }
+    m_targetChanged[bot->getBotId()] = bot->getWaypoints()->isActive();
+    static_cast<GotoWaypointPlanGenerator*>(m_generator)->setWaypoint(bot);
+    bot->addToMoveInclination(m_urgency[bot->getBotId()]);
+    Vec3 waypoint;
+    waypoint.x = waypoint.y = waypoint.z = 0.0f;
+    if (bot->getWaypoints()->getCurrentWaypoint(waypoint))
+        bot->insertBehaviourInformation(0.5f, waypoint, m_behaviourId);
+    return m_urgency[bot->getBotId()];
 }
 
 // Built without weights, urge curve or generator.

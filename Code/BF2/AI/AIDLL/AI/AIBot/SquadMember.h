@@ -57,6 +57,8 @@ public:
     float getEstimatedArrival() const { return m_estimatedArrival; }   // PE 1017BC00
     Bot* getBot();                           // borrowed
     bool hasBot() const { return m_bot != 0; } // PE 1017BC40; [INFERRED] name
+    bool isAtFormationPosition() const { return m_flag30; }   // PE 1017BBF0; [INFERRED] name
+    bool isFleeingArtillery() const { return m_flag4B; }      // PE 1017BAF0; [INFERRED] name
     int getMemberIndex();
     void setMemberIndex(int index);          // PE 1017BCA0
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
