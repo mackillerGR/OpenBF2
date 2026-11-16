@@ -51,6 +51,7 @@
 #include "../AIKnowledge/BFInformationEnvironment.h"
 #include "../../../AIInterface/BFKnowledge/BFTerrain.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
 #include <cmath>
 
 namespace dice {
@@ -3474,6 +3475,7 @@ BBRandom::BBRandom(int behaviourId, int priority, PlanGenerator* generator, Urge
            float* weights)
     : BotBehaviour(weights, urgeCurve, configuredBotCount())
 {
+    m_position.x = m_position.y = m_position.z = 0.0f;
     m_behaviourId = static_cast<unsigned char>(behaviourId);
     m_priority = static_cast<unsigned char>(priority);
     m_generator = generator;
@@ -3483,9 +3485,9 @@ BBRandom::BBRandom(int behaviourId, int priority, PlanGenerator* generator, Urge
     {
         m_urgency[i] = 0.0f;
     }
-    m_double28 = 0.0;
-    m_bool24 = false;
-    m_double30 = 0.0;
+    m_startTime = 0.0;
+    m_active = false;
+    m_duration = 0.0;
 }
 
 BBRandom::~BBRandom()
@@ -3493,9 +3495,64 @@ BBRandom::~BBRandom()
     delete[] m_targets;
 }
 
-float BBRandom::calculateUrgency(Bot*, bool, float)
+// PE 101260E0. When the navigation reports a position to avoid, one episode starts for its time
+// left; once that time has run out the behaviour takes over for five more seconds at urgency
+// 1000. The line test against the position is made and its result discarded, as shipped.
+float BBRandom::calculateUrgency(Bot* bot, bool flag, float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRandom::calculateUrgency");
+    if (!flag)
+    {
+        if (!m_generator->hasPlan(bot))
+        {
+            m_generator->reset(bot);
+            m_urgency[bot->getBotId()] = 0.0f;
+            return 0.0f;
+        }
+        return m_urgency[bot->getBotId()];
+    }
+
+    Vec3 position;
+    position.x = position.y = position.z = 0.0f;
+    if (!m_active)
+    {
+        double timeLeft;
+        if (bot->getBotNavigation()->getAvoidPosition(position, timeLeft)
+            && bot->getBotNavigation()->getFlag276())
+        {
+            m_active = true;
+            m_startTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+            m_duration = timeLeft;
+            m_position = position;
+        }
+    }
+    else
+    {
+        const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        const double end = m_duration + m_startTime;
+        if (now > end)
+        {
+            if (now > end + 5.0)
+                m_active = false;
+            Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+            std::vector<IAIObject*> ignore;
+            ignore.push_back(equipment->getAIObject());
+            IAIObjectEnvironment* const environment =
+                static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment);
+            const Vec3& origin = equipment->getPosition();
+            Vec3 from;
+            from.x = origin.x;
+            from.y = origin.y + 1.0f;
+            from.z = origin.z;
+            bool hit;
+            environment->collideLineWithWorld(from, m_position, ignore, false, 0.7f, false, hit);
+            static_cast<BBPRandom*>(m_generator)->offerPlan(bot);
+            m_urgency[bot->getBotId()] = 1000.0f;
+            return 1000.0f;
+        }
+    }
+    m_generator->reset(bot);
+    m_urgency[bot->getBotId()] = 0.0f;
+    return m_urgency[bot->getBotId()];
 }
 
 // PE 10125F90. Always false; the checks are made and discarded, as shipped.

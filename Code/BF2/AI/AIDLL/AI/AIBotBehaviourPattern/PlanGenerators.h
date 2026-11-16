@@ -481,8 +481,12 @@ public:
     explicit BBPRandom(int behaviourId);                              // PE 10126370
     virtual ~BBPRandom();                                             // PE 101263B0
     virtual BotScript* generate(Bot* bot);                            // PE 101263F0
+    // Offers the plan and stamps the time. PE 10126340; [INFERRED] name.
+    void offerPlan(Bot* bot);
 private:
     /* +0x0C */ int* m_int0C;
+    // When the plan was last offered; the constructor leaves it unset. [INFERRED] meaning.
+    /* +0x18 */ double m_offerTime;
 };
 
 class BBPTriggerable : public PlanGenerator

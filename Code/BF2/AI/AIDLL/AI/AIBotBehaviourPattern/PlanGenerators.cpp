@@ -17,6 +17,8 @@
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIUtils/checkPointer.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../Main/CommonSingletonServer.h"
 
 namespace dice {
 namespace hfe {
@@ -488,6 +490,13 @@ BBPRandom::BBPRandom(int behaviourId)
 BBPRandom::~BBPRandom()
 {
     delete[] m_int0C;
+}
+
+// PE 10126340.
+void BBPRandom::offerPlan(Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_offerTime = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
 }
 
 BotScript* BBPRandom::generate(Bot*)

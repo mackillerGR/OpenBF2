@@ -415,10 +415,12 @@ public:
     virtual bool isUsable(Information* equipment, Bot* bot);            // PE 10125F90
 
 protected:
-    /* +0x24 */ bool m_bool24;   // false
-    /* +0x28 */ double m_double28;   // 0
-    /* +0x30 */ double m_double30;   // 0
-    /* +0x34 */ std::vector<int> m_vector34;   // [UNRESOLVED] element type
+    // One avoid episode shared by every bot: whether it runs, when it started, how long the
+    // navigation asked for, and the position to get away from. [INFERRED] meanings.
+    /* +0x24 */ bool m_active;
+    /* +0x28 */ double m_startTime;
+    /* +0x30 */ double m_duration;
+    /* +0x38 */ Vec3 m_position;
 };
 
 class BBTriggerable : public BotBehaviour

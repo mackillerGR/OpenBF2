@@ -29,6 +29,7 @@ public:
     // left. [INFERRED] name. PE 101729D0.
     bool getAvoidPosition(Vec3& position, double& timeLeft) const;
     float getFloat292() const { return m_float292; }   // [INFERRED] accessors
+    bool getFlag276() const { return m_flag276; }
     float getFloat296() const { return m_float296; }
     explicit BotNavigation(BotMain* owner);
     ~BotNavigation();                           // [FRONTIER]
