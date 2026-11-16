@@ -3,6 +3,8 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BotMemory operations.
 
 #include "BotMemory.h"
+#include "../AIBotBehaviour/BotBehaviour.h"
+#include "../AIBotBehaviour/UrgeCurve.h"
 
 #include "../Main/AIDllFrontier.h"
 
@@ -34,9 +36,11 @@ void BotMemory::reset()
     m_int0 = -1;
 }
 
-void BotMemory::modifyBehaviourUrgency(BotBehaviour*, double)
+float BotMemory::modifyBehaviourUrgency(BotBehaviour* behaviour, double time)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMemory::modifyBehaviourUrgency");
+    if (behaviour->getBehaviourId() != m_int0)
+        return 1.0f;
+    return behaviour->getUrgeCurve()->calculate(static_cast<float>(time - m_double16));
 }
 
 } // namespace ai

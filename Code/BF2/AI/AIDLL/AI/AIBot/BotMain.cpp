@@ -754,9 +754,238 @@ bool BotMain::planExecution(const double&)
 }
 
 // +0x014. Returns the count BotManager::actionDecisionMaking banks in BotInfo +32 (see BotMain.h).
+// PE 101822A0. A deactivated bot drops its plan. A changed or lost vehicle is re-read first
+// (a bot left in a vehicle with no information is a reported error). The behaviours are then
+// re-scored layer by layer in priority order, each scored one moving to a requeue list, until
+// the slice of update time runs out; the rest are scored without counting and each remaining
+// layer is merged into the one above. The merger then picks the behaviour, whose plan replaces
+// the active one. Scored behaviours return to their priority layers. Returns how many
+// behaviours were scored within the slice.
 int BotMain::decisionMaking(const double& slice)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::decisionMaking");
+    std::list<int> scored;
+    int count = 0;
+    bool drained = false;
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+
+    if (m_deactivated)
+    {
+        if (m_activePlan)
+        {
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_planInvalid = true;
+            m_sensingAgent->setOverride(false);
+        }
+        return 0;
+    }
+
+    const int previousBehaviour = m_memory->m_int0;
+    // The two inclination decays (PE 1017F340, 1017F3D0).
+    m_moveInclination = m_moveInclination > 0.0099999998f ? m_moveInclination * 0.80000001f : 0.0f;
+    m_moveInclination = m_moveInclinationDelta * 0.2f + m_moveInclination;
+    m_moveInclinationDelta = 0.0f;
+    m_fireInclination = m_fireInclination > 0.0099999998f ? m_fireInclination * 0.80000001f : 0.0f;
+    m_fireInclination = m_fireInclinationDelta * 0.2f + m_fireInclination;
+    m_fireInclinationDelta = 0.0f;
+
+    // +88: the vehicle needs re-reading; +89: the last re-read lost it.
+    bool reread = m_gap88[0] != 0;
+    if (!reread)
+    {
+        IAIObject* const vehicle = m_player->getCurrentVehicle();
+        if (vehicle)
+        {
+            m_gap88[0] = vehicle->getInformation(m_side) != m_currentEquipment;
+        }
+        else
+        {
+            m_currentEquipment = static_cast<unsigned int>(-1);
+            m_gap88[0] = 1;
+        }
+        reread = m_gap88[0] != 0;
+    }
+    if (reread)
+    {
+        bool changed;
+        if (updateBotVehicle(&changed))
+        {
+            if (m_activePlan)
+            {
+                delete m_activePlan;
+                m_activePlan = 0;
+                m_planInvalid = true;
+                m_sensingAgent->setOverride(false);
+            }
+            if (!changed || !informationManager->getInformation(m_currentEquipment))
+            {
+                Debug(DebugTypeError, __FILE__, __LINE__, "") << "Bot in bad vehicle!";
+                m_gap88[1] = 1;
+                m_currentEquipment = static_cast<unsigned int>(-1);
+                return 0;
+            }
+            updateBot();
+            IAIMain::m_instance->getSAI(m_side)->setBotHasChangedEquipment(m_botId);
+        }
+        else if (m_gap88[1])
+        {
+            updateBot();
+            m_navigation->reset();
+            m_gap88[1] = 0;
+            IAIMain::m_instance->getSAI(m_side)->setBotHasChangedEquipment(m_botId);
+        }
+        m_gap88[0] = 0;
+    }
+
+    const double now = timer->getUpdateTime();
+    if (m_gap88[2])
+    {
+        m_planInvalid = true;
+        m_gap88[2] = 0;
+    }
+    if (m_planInvalid)
+    {
+        m_memory->m_double16 = timer->getGameTime();
+        m_memory->m_int0 = -1;
+    }
+
+    unsigned int index = 0;
+    for (; index < m_behavioursByPriority.size(); ++index)
+    {
+        if (m_behavioursByPriority[index].size() == 0)
+            continue;
+        bool timedOut = false;
+        for (;;)
+        {
+            std::list<unsigned short>& layer = m_behavioursByPriority[index];
+            const unsigned short id = layer.front();
+            if (!m_behaviours[id])
+            {
+                layer.pop_front();
+            }
+            else
+            {
+                float urgency = m_behaviourUrgencies[id];
+                if (!m_planInvalid && previousBehaviour != -1)
+                {
+                    const float* const weights = m_behaviours[previousBehaviour]->getWeights();
+                    const double time = timer->getGameTime();
+                    urgency = m_memory->modifyBehaviourUrgency(m_behaviours[id], time) * weights[id] * urgency;
+                }
+                if (urgency > 0.0f)
+                {
+                    ++count;
+                    m_behaviours[id]->calculateUrgency(this, true, urgency);
+                }
+                m_behavioursByPriority[index].pop_front();
+                scored.push_back(id);
+            }
+            const double deadline = now + slice;
+            if (!(timer->getUpdateTime() < deadline))
+            {
+                if (index == 0)
+                    index = 1;
+                timedOut = true;
+                break;
+            }
+            if (m_behavioursByPriority[index].size() == 0)
+                break;
+        }
+        if (!timedOut)
+            continue;
+
+        // Out of time: score the rest without counting and merge each layer upwards.
+        for (unsigned int layerIndex = index; layerIndex < m_behavioursByPriority.size(); ++layerIndex)
+        {
+            std::list<unsigned short>& layer = m_behavioursByPriority[layerIndex];
+            std::list<unsigned short>::iterator it = layer.begin();
+            while (it != layer.end())
+            {
+                const unsigned short id = *it;
+                if (!m_behaviours[id])
+                {
+                    it = layer.erase(it);
+                    continue;
+                }
+                float urgency;
+                if (!m_planInvalid && previousBehaviour != -1)
+                {
+                    const float* const weights = m_behaviours[previousBehaviour]->getWeights();
+                    const double time = timer->getGameTime();
+                    urgency = m_memory->modifyBehaviourUrgency(m_behaviours[id], time) *
+                              m_behaviourUrgencies[id] * weights[id];
+                }
+                else
+                {
+                    urgency = m_behaviourUrgencies[id];
+                }
+                if (urgency > 0.0f)
+                    m_behaviours[id]->calculateUrgency(this, false, urgency);
+                ++it;
+            }
+            std::list<unsigned short>& above = m_behavioursByPriority[layerIndex - 1];
+            above.insert(above.end(), layer.begin(), layer.end());
+            layer.erase(layer.begin(), layer.end());
+        }
+        drained = true;
+        break;
+    }
+    (void)drained;
+
+    if (m_planInvalid || m_urgencyMerger->hasChanged(this, 0.87f, 1.15f))
+        m_urgencyMerger->updateActiveUrgency(this);
+    BotBehaviour* const chosen = static_cast<BotBehaviour*>(m_urgencyMerger->getChosenGenerator());
+    const unsigned char chosenId = chosen->getBehaviourId();
+    const double chosenAt = timer->getGameTime();
+    m_memory->m_int0 = chosenId;
+    m_memory->m_double16 = chosenAt;
+
+    if (m_activePlan)
+    {
+        if (m_planInvalid)
+        {
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_sensingAgent->setOverride(false);
+        }
+        else
+        {
+            m_activePlan->m_owner = chosen;
+        }
+    }
+    if (previousBehaviour != static_cast<int>(chosenId))
+        m_sensingAgent->clearPlanTargetInformation();
+
+    BotScript* const plan = chosen->getPlan(this);
+    if (m_activePlan != plan)
+    {
+        if (m_activePlan)
+        {
+            m_activePlan->m_owner = this;
+            delete m_activePlan;
+            m_activePlan = 0;
+            m_sensingAgent->setOverride(false);
+        }
+        resetAllControls(true, true, true);
+    }
+    m_activePlan = plan;
+    if (!plan)
+    {
+        m_planInvalid = true;
+    }
+    else
+    {
+        m_planInvalid = false;
+        m_hasDefaultPlan = false;
+        plan->m_owner = this;
+    }
+
+    for (std::list<int>::iterator it = scored.begin(); it != scored.end(); ++it)
+    {
+        const int id = *it;
+        m_behavioursByPriority[m_behaviours[id]->getPriority()].push_back(static_cast<unsigned short>(id));
+    }
+    return count;
 }
 
 // +0x018

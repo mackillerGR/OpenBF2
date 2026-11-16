@@ -52,6 +52,8 @@ public:
     unsigned char getBehaviourId() const { return m_behaviourId; }
     unsigned char getPriority() const { return m_priority; }
     PlanGenerator* getPlanGenerator() const { return m_generator; }
+    float* getWeights() const { return m_weights; }
+    UrgeCurve* getUrgeCurve() const { return m_urgeCurve; }
 
 protected:
     /* +0x04 */ unsigned char  m_behaviourId;     // set by the derived constructor

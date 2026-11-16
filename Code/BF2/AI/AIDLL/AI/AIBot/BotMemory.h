@@ -18,8 +18,9 @@ public:
 
     // Restores the per-life values. PE 101DAAF0.
     void reset();
-    // Adjusts the urgency assigned to behaviour by amount.
-    void modifyBehaviourUrgency(BotBehaviour* behaviour, double amount);   // [FRONTIER]
+    // The urge-curve factor for the behaviour the bot last chose, evaluated at the time since
+    // that choice; 1 for any other behaviour. PE 101DAB10.
+    float modifyBehaviourUrgency(BotBehaviour* behaviour, double time);
 
     // Retail x86 field offsets.
     /*  0 */ int    m_int0;         // = -1 and BotMain writes it again from outside

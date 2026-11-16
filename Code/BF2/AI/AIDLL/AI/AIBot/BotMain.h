@@ -218,7 +218,7 @@ public:
     virtual BotLodLevel getLodLevel() const;                                                      // +0x00C
     virtual bool planExecution(const double& slice);                                              // +0x010
     // [INFERRED] Returns an integer work count accumulated by BotManager.
-    virtual int decisionMaking(const double& slice);                                              // +0x014 [FRONTIER]
+    virtual int decisionMaking(const double& slice);                                              // +0x014 PE 101822A0
     virtual void cheatExecution();                                                                // +0x018
     virtual void see(const double& dt);                                                           // +0x01C
     virtual void updateSensing(const double& dt);                                                 // +0x020
