@@ -106,6 +106,9 @@ public:
     // Announces and confirms it through the squad courier, or declines it. [INFERRED] name.
     // PE 101A3120.
     bool acceptMission(SquadMember* member);
+    // How much the squad wants the member to give support of the type to the target.
+    // PE 101A3890; [INFERRED] name. [FRONTIER]
+    float getSupportDemand(SquadMember* member, unsigned int target, int type);
     // Records an order as the pending mission. A commander order is refused while a bot
     // commander's squad is busy (near its goal or on a mission); a squad order from a human
     // leader becomes the secondary goal. [INFERRED] name. PE 101A3000.

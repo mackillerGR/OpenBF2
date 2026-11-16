@@ -1085,6 +1085,11 @@ bool SquadCoordinator::findValidPositionNear(SquadMember* member, Vec3& position
     return false;
 }
 
+float SquadCoordinator::getSupportDemand(SquadMember*, unsigned int, int)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::getSupportDemand");
+}
+
 // PE 101A3120. The closest object to the pending position is looked up after the assignment is
 // cleared, so the "already assigned" test only passes when no object is found. A position
 // accepted without an object skips the accepted-flag test. The leader index is not range-checked.

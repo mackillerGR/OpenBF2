@@ -233,6 +233,15 @@ BBPMedicAssist::~BBPMedicAssist()
     delete[] m_int14;
 }
 
+// PE 100FEBF0.
+void BBPMedicAssist::offerSupport(unsigned int target, int weapon, int playerId, Bot* bot)
+{
+    m_hasPlan[bot->getBotId()] = true;
+    m_int0C[bot->getBotId()] = static_cast<int>(target);
+    m_int10[bot->getBotId()] = weapon;
+    m_int14[bot->getBotId()] = playerId;
+}
+
 BotScript* BBPMedicAssist::generate(Bot*)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BBPMedicAssist::generate");

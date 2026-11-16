@@ -47,6 +47,9 @@ public:
     void unAssignSquads(int side);          // [INFERRED] name; PE 1012AC70, one-based side
     int releaseSquadsFromArea(int areaIndex, int side); // [INFERRED] name; PE 1012AC00
     float getArtilleryRadius() const;       // [INFERRED] name; PE 101284C0 returns m_float152
+    // The member's squad demand for support of the type at the target: 1 when the member already
+    // requests it, 0 without a squad. PE 1012B370; [INFERRED] name.
+    float getSupportDemand(SquadMember* member, unsigned int target, int type, int side);
     // Any side member's qualifying vehicle within radius of the position. [INFERRED] name and
     // argument split: PE 1012BB20 takes the four floats by value. PE 1012BB20.
     bool isFriendlyNearPosition(const Vec3& position, float radius, int side);

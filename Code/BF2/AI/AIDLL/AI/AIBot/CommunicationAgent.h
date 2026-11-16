@@ -26,6 +26,11 @@ enum AIRadioMessageType : int;
 // Radio-message record. [UNRESOLVED] Some fields are not yet identified.
 struct AIRadioMessageInfo
 {
+    // PE 101461C0: weight 1, no sender, time 0, unhandled, type 18.
+    AIRadioMessageInfo()
+        : m_weight(1.0f), m_senderPlayerId(-1), m_time(0.0), m_handled(false), m_flag17(false),
+          m_type(static_cast<AIRadioMessageType>(0x12)) {}
+
     /*  0 */ float m_weight;               // [UNRESOLVED] meaning; BBIdle scales its urgency by it
     /*  4 */ int m_senderPlayerId;
     /*  8 */ double m_time;                // when it was received; inboxes are newest first
@@ -80,6 +85,12 @@ public:
     // Marks the inbox copy of the message (same type, sender and time) as handled unless it
     // already is or is flagged; false when that fails. PE 10148200; [INFERRED] name.
     bool handleMessage(const AIRadioMessageInfo& message);
+    // Copies the inbox message of the type from the sender; false when there is none.
+    // PE 10148150; [INFERRED] name.
+    bool findMessage(AIRadioMessageInfo& out, AIRadioMessageType type, int sender);
+    // Whether the inbox holds a message of the type from the sender, or any when the sender is
+    // -1. PE 101482B0; [INFERRED] name.
+    bool hasMessage(AIRadioMessageType type, int sender);
     // [UNRESOLVED] meaning; reset stores -1. BBIdle compares a requester's equipment player id
     // against it. [INFERRED] accessor; read inline.
     int getInt92() const { return m_int92; }

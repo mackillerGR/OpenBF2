@@ -112,9 +112,35 @@ void BFInformationEnvironment::getFriendlyUnits(std::vector<unsigned int>&, cons
     BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getFriendlyUnits");
 }
 
-void BFInformationEnvironment::getFriendlyAndNeutralUnits(std::vector<unsigned int>&, const Vec3&, Bot*, float) const
+namespace {
+
+// PE 10191B90: a unit of the given side or of none. [INFERRED] name.
+class FriendlyOrNeutralPredicate : public IAIInformationGridPredicate
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::getFriendlyAndNeutralUnits");
+public:
+    explicit FriendlyOrNeutralPredicate(int side) : m_side(side) {}
+    bool includeInformation(Information* information) const override
+    {
+        return information->getUnit()
+               && (information->getSide() == m_side || information->getSide() == 0);
+    }
+private:
+    int m_side;
+};
+
+} // anonymous namespace
+
+// PE 10192E80. Releases the output's storage first; nothing more without equipment.
+void BFInformationEnvironment::getFriendlyAndNeutralUnits(std::vector<unsigned int>& out,
+                                                          const Vec3& position, Bot* bot,
+                                                          float radius) const
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    std::vector<unsigned int>().swap(out);
+    if (!equipment)
+        return;
+    FriendlyOrNeutralPredicate friendly(bot->getSide());
+    getObjectsWithinRadius(out, position, radius, bot->getSide(), true, &friendly);
 }
 
 void BFInformationEnvironment::getCover(const Bot&, std::vector<unsigned int>&) const

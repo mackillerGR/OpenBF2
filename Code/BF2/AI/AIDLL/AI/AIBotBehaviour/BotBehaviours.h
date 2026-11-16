@@ -92,9 +92,20 @@ public:
     virtual bool isApplicable(Information* equipment, Bot* bot);          // PE 100FD160
 
 protected:
-    /* +0x24 */ std::vector<int> m_vector24;   // [UNRESOLVED] element type
+    // The medic's own pass, for kit 3. PE 100FD5C0; [INFERRED] name. [FRONTIER]
+    float calculateMedicUrgency(Bot* bot, float elapsed);
+    // Whether a human occupies the object's primary or one of its seats. PE 100FCE70;
+    // [INFERRED] name.
+    bool hasHumanOccupant(Information* information, int side);
+    // Whether the object or one of its seats sent a support request (type 4). PE 100FCFD0;
+    // [INFERRED] name.
+    bool hasSupportRequest(Information* information, int side, CommunicationAgent* agent);
+
+    // Friendly and neutral units around the bot.
+    /* +0x24 */ std::vector<unsigned int> m_vector24;
+    // Per battle-strength kind: the best support weapon's index, its range and its strength.
     /* +0x34 */ int* m_battle34;
-    /* +0x38 */ int* m_battle38;
+    /* +0x38 */ float* m_battle38;
     /* +0x3C */ int* m_battle3C;
 };
 

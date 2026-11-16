@@ -575,7 +575,7 @@ BBMedicAssist::BBMedicAssist(int behaviourId, int priority, PlanGenerator* gener
     : BotBehaviour(weights, urgeCurve, configuredBotCount())
 {
     m_battle34 = checkPointer(new int[configuredBattleStrengthCount()]);
-    m_battle38 = checkPointer(new int[configuredBattleStrengthCount()]);
+    m_battle38 = checkPointer(new float[configuredBattleStrengthCount()]);
     m_battle3C = checkPointer(new int[configuredBattleStrengthCount()]);
     m_behaviourId = static_cast<unsigned char>(behaviourId);
     m_priority = static_cast<unsigned char>(priority);
@@ -594,11 +594,6 @@ BBMedicAssist::~BBMedicAssist()
     delete[] m_battle34;
     delete[] m_battle38;
     delete[] m_battle3C;
-}
-
-float BBMedicAssist::calculateUrgency(Bot*, bool, float)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::BBMedicAssist::calculateUrgency");
 }
 
 BBRevive::BBRevive(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
@@ -3547,6 +3542,317 @@ bool BBTriggerable::isUsable(Information*, Bot* bot)
     if (bot->getPlayer()->getIsAlive())
         bot->getManDown();
     return false;
+}
+
+float BBMedicAssist::calculateMedicUrgency(Bot*, float)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BBMedicAssist::calculateMedicUrgency");
+}
+
+// PE 100FCE70.
+bool BBMedicAssist::hasHumanOccupant(Information* information, int side)
+{
+    if (!information)
+        return false;
+    Information* const primary = informationManager->getInformation(information->getPrimaryObject(side));
+    if (!primary)
+        return false;
+    IAIPlayerFactory* const players = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    IPIUnit* unit = primary->getUnit();
+    if (unit && unit->isOccupied())
+    {
+        IAIPlayer* const player = players->getPlayerFromId(unit->getOccupyingPlayerId(side));
+        if (player && !player->getIsAIPlayer())
+            return true;
+    }
+    int iterator;
+    for (Information* seat = informationManager->getInformation(primary->getFirstSecondaryObject(iterator, side));
+         seat; seat = informationManager->getInformation(primary->getSecondaryObject(iterator, side)))
+    {
+        unit = seat->getUnit();
+        if (unit && unit->isOccupied())
+        {
+            IAIPlayer* const player = players->getPlayerFromId(unit->getOccupyingPlayerId(side));
+            if (player && !player->getIsAIPlayer())
+                return true;
+        }
+    }
+    return false;
+}
+
+// PE 100FCFD0. The seat walk runs on the object even when it is null, as shipped.
+bool BBMedicAssist::hasSupportRequest(Information* information, int side, CommunicationAgent* agent)
+{
+    if (information && agent->hasMessage(static_cast<AIRadioMessageType>(4), information->getPlayerId()))
+        return true;
+    int iterator;
+    for (Information* seat = informationManager->getInformation(information->getFirstSecondaryObject(iterator, side));
+         seat; seat = informationManager->getInformation(information->getSecondaryObject(iterator, side)))
+    {
+        if (agent->hasMessage(static_cast<AIRadioMessageType>(4), seat->getPlayerId()))
+            return true;
+    }
+    return false;
+}
+
+// PE 100FE080. Kit 3 takes its own pass; the other kits look for friendly units in need of
+// support (health below the threshold, or a support request over the radio) that one of the
+// equipment's support weapons can reach.
+float BBMedicAssist::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    if (!flag)
+    {
+        Information* const target = informationManager->getInformation(m_targets[bot->getBotId()]);
+        if (target && target->getSide() == bot->getSide())
+        {
+            m_targetChanged[bot->getBotId()] = false;
+            if (!m_generator->hasPlan(bot))
+                m_urgency[bot->getBotId()] = 0.0f;
+        }
+        else
+        {
+            m_targetChanged[bot->getBotId()] = m_urgency[bot->getBotId()] != 0.0f;
+            m_urgency[bot->getBotId()] = 0.0f;
+            m_generator->reset(bot);
+        }
+        return m_urgency[bot->getBotId()];
+    }
+
+    if (bot->getPlayer()->getSpawnKit() == 3)
+        return calculateMedicUrgency(bot, elapsed);
+
+    const int strengthCount = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getNBattleStrengths();
+    int bestWeapon = -1;
+    int bestPlayerId = -1;
+    Vec3 normal;
+    normal.x = normal.y = normal.z = 0.0f;
+    const int kit = bot->getPlayer()->getSpawnKit();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    for (int i = 0; i < strengthCount; ++i)
+    {
+        m_battle34[i] = -1;
+        m_battle3C[i] = 0;
+    }
+    IPIArmament* const armament = equipment->getArmament();
+    IPIMobile* const mobile = equipment->getMobile();
+    int vehicleNumber;
+    if (mobile)
+    {
+        vehicleNumber = mobile->getVehicleNumber();
+        equipment->getUnit()->getEquipmentType();   // result unused, as shipped
+    }
+    else
+    {
+        vehicleNumber = -2;
+    }
+
+    // The strongest support weapon (type 1) per strength kind, with its range.
+    std::vector<unsigned int> weapons(armament->getWeapons());
+    for (unsigned int index = 0; weapons.begin() != weapons.end() && index < weapons.size(); ++index)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[index]);
+        if (!weapon || weapon->getWeaponType() != 1)
+            continue;
+        for (int kind = 0; kind < strengthCount; ++kind)
+        {
+            if (weapon->getStrength(kind) > m_battle3C[kind])
+            {
+                m_battle34[kind] = static_cast<int>(index);
+                m_battle3C[kind] = weapon->getStrength(kind);
+                m_battle38[kind] = weapon->getMaxRange();
+            }
+        }
+    }
+
+    unsigned int ordersMatched = 0;
+    float bestValue = 0.0f;
+    m_vector24.resize(0, 0);
+    static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
+        ->getFriendlyAndNeutralUnits(m_vector24, position, bot, 75.0f);
+    unsigned int best = static_cast<unsigned int>(-1);
+    CommunicationAgent* const agent = bot->getCommunicationAgent();
+    const std::list<AIRadioMessageInfo>& reports = agent->getReceivedMessages(static_cast<AIRadioMessageType>(3));
+    const std::list<AIRadioMessageInfo>& requests = agent->getReceivedMessages(static_cast<AIRadioMessageType>(4));
+    bool haveReports = reports.size() != 0;
+    bool haveRequests = requests.size() != 0;
+    if (bot->isAirBorn())
+    {
+        haveReports = false;
+        haveRequests = false;
+    }
+    // The shipped body also reads three squad accessors here and discards them.
+
+    bool bestNeedsHuman = false;
+    bool humanAsked = false;
+    float bestDistance = 100.0f;
+    for (std::vector<unsigned int>::iterator it = m_vector24.begin(); it != m_vector24.end(); ++it)
+    {
+        float threshold = 0.75f;
+        bool needsHuman = false;
+        Information* const target = informationManager->getInformation(*it);
+        if (!target || !target->getPhysical())
+            continue;
+        if (target == equipment && bot->getPlayer()->getSpawnKit() == 5 && bot->isFiring())
+            continue;
+        if (((target->getObjectTypeFlags() >> 7) & 1) && !hasHumanOccupant(target, bot->getSide()))
+            continue;
+        if (target == equipment && bot->getPlayer()->getSpawnKit() == 5 && armament->getActiveWeapon() != -1)
+        {
+            WeaponInfo* const active =
+                WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+            if (active && active->getWeaponType() == 1)
+                continue;
+        }
+        IPIPhysical* const physical = target->getPhysical();
+        const int strengthType = physical->getStrengthType();
+        if (physical->getManDown())
+            continue;
+        if (hasHumanOccupant(target, bot->getSide()))
+        {
+            needsHuman = true;
+            threshold = 0.99f;
+        }
+        if (m_battle34[strengthType] == -1)
+            continue;
+        const float health = physical->getHealth();
+        int occupantId = -1;
+        IPIUnit* unit = target->getUnit();
+        if (unit)
+            occupantId = unit->getOccupyingPlayerId(target->getSide());
+        AIRadioMessageInfo report;
+        bool reported = false;
+        if (haveReports)
+            reported = agent->findMessage(report, static_cast<AIRadioMessageType>(3), occupantId);
+        AIRadioMessageInfo request;
+        bool requested = false;
+        if (haveRequests)
+            requested = hasSupportRequest(target, target->getSide(), agent);
+        if (!requested && bot->getPlayer()->getSpawnKit() == 4 && bot->getSquadMember()->isNearSquadGoal())
+            continue;
+        if (!((health < threshold && health > 0.0f) || reported || requested))
+            continue;
+        if (health > threshold)
+            continue;
+        const Vec3& targetPosition = target->getPosition();
+        static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+            ->getNormal(targetPosition.x, targetPosition.z, normal);
+        const float* const m = target->getTransformation().m;
+        if (normal.z * m[6] + normal.y * m[5] + normal.x * m[4] < 0.7071f)
+            continue;
+        unit = target->getUnit();
+        if (unit->getAlwaysTargetSoldier())
+            continue;
+        if (vectorLength(vectorFrom(targetPosition, position)) > m_battle38[strengthType])
+        {
+            if (!mobile)
+                continue;
+            if (!unit->useNoPathfindingToGetToObject() && target->getMobile())
+            {
+                const IPIMobile::ValidPos& valid = mobile->getLastValidPosition(vehicleNumber);
+                const float range = m_battle38[strengthType];
+                // Shipped comparison: an object closer to the last valid position than the
+                // range is skipped.
+                if (range * range > vectorLengthSquared(vectorFrom(targetPosition, valid.position)))
+                    continue;
+            }
+        }
+        float distance;
+        if (target == equipment)
+            distance = 1.0f;
+        else
+            distance = vectorLength(vectorFrom(targetPosition, position));
+
+        float value;
+        bool ordered = false;
+        if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+            && ordersMatched < bot->getOrderList(m_behaviourId)->size())
+        {
+            std::list<unsigned int>* const orders = bot->getOrderList(m_behaviourId);
+            if (std::find(orders->begin(), orders->end(), *it) != orders->end())
+            {
+                ++ordersMatched;
+                ordered = true;
+            }
+        }
+        if (ordered)
+            value = target->getStrength() * bot->getMemory()->m_float8
+                    / (DecleiningSlopeCurve::calculate(1.0f - health) * distance);
+        else
+            value = target->getStrength() / (DecleiningSlopeCurve::calculate(1.0f - health) * distance);
+
+        // A request is never copied out, so its sender only matches a target without occupant.
+        int sender = -1;
+        if (reported && report.m_senderPlayerId == occupantId && kit == 5)
+            sender = report.m_senderPlayerId;
+        else if (requested && request.m_senderPlayerId == occupantId && kit == 4)
+            sender = request.m_senderPlayerId;
+        if ((reported && report.m_senderPlayerId == occupantId && kit == 5)
+            || (requested && request.m_senderPlayerId == occupantId && kit == 4))
+        {
+            if (!IBotManager::instance->getBotFromPlayerId(sender))
+            {
+                value = value * 3.0f;
+                humanAsked = true;
+            }
+            else
+            {
+                value = value * 1.5f;
+            }
+        }
+        if (value > bestValue)
+        {
+            bestValue = value;
+            bestDistance = distance;
+            bestNeedsHuman = needsHuman;
+            bestWeapon = m_battle34[strengthType];
+            best = *it;
+            bestPlayerId = occupantId;
+        }
+    }
+
+    const unsigned int id = bot->getBotId();
+    if (best == static_cast<unsigned int>(-1))
+    {
+        m_urgency[id] = 0.0f;
+        m_targetChanged[id] = m_targets[id] != static_cast<unsigned int>(-1);
+        m_targets[id] = static_cast<unsigned int>(-1);
+        m_generator->reset(bot);
+        return 0.0f;
+    }
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+        && bot->getOrderList(m_behaviourId)->size() == 0)
+        bestValue = bestValue * bot->getMemory()->m_float8;
+    if (bestNeedsHuman)
+    {
+        if (humanAsked && bestDistance < 50.0f)
+            m_urgency[id] = 100.0f;
+        else
+            m_urgency[id] = DecleiningSlopeCurve::calculate(bestValue) * elapsed * 10.0f;
+    }
+    else
+    {
+        const float urgency = DecleiningSlopeCurve::calculate(bestValue) * elapsed;
+        m_urgency[id] = urgency + urgency;
+    }
+    m_targetChanged[id] = m_targets[id] != best;
+    m_targets[id] = best;
+    static_cast<BBPMedicAssist*>(m_generator)->offerSupport(m_targets[id], bestWeapon, bestPlayerId, bot);
+    if (kit == 5)
+    {
+        SquadManager* const squads = SquadManager::m_instance;
+        m_urgency[id] = squads->getSupportDemand(bot->getSquadMember(), best, 1, bot->getSide()) * m_urgency[id];
+    }
+    else if (kit == 4)
+    {
+        SquadManager* const squads = SquadManager::m_instance;
+        m_urgency[id] = squads->getSupportDemand(bot->getSquadMember(), best, 2, bot->getSide()) * m_urgency[id];
+        if (m_urgency[id] == 0.0f)
+            bot->setWantedRepairTarget(static_cast<unsigned int>(-1));
+        else
+            bot->setWantedRepairTarget(best);
+    }
+    return m_urgency[bot->getBotId()];
 }
 
 } // namespace ai

@@ -126,6 +126,17 @@ void SquadManager::receiveOrder(int type, int playerId, bool commander)
         squad->setMission(type, position, 0, commander);
 }
 
+// PE 1012B370.
+float SquadManager::getSupportDemand(SquadMember* member, unsigned int target, int type, int side)
+{
+    SquadCoordinator* const squad = getSquadFromPlayer(member->getPlayerId(), side);
+    if (!squad)
+        return 0.0f;
+    if (member->hasRequest(target, type))
+        return 1.0f;
+    return squad->getSupportDemand(member, target, type);
+}
+
 // PE 1012BA30.
 void SquadManager::requestNewOrders(int side, int squadId)
 {

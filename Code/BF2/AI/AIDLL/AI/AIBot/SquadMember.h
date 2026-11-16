@@ -65,6 +65,11 @@ public:
     // PE 1017BB00. Plan roots raise this while they live. [INFERRED] name.
     void setFlag49(bool value) { m_flag49 = value; }
     bool getFlag49() const { return m_flag49; }   // PE 1017BB10
+    int getPlayerId() const { return m_playerId; }   // PE 1017BC30
+    // Whether the member's current request is the action on the target. PE 1017BB90;
+    // [INFERRED] name.
+    bool hasRequest(unsigned int target, int action) const
+    { return m_request->m_handle == target && m_request->m_action == action; }
     // Whether the member stands within the assigned area's control point (radius squared plus 5)
     // while alive and standing, and the area has a status for the member's side. PE 1017C700;
     // [INFERRED] name.

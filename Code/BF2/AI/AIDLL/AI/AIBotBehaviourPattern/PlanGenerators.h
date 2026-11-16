@@ -125,6 +125,9 @@ public:
     explicit BBPMedicAssist(int behaviourId);                         // PE 100FF250
     virtual ~BBPMedicAssist();                                        // PE 100FF320
     virtual BotScript* generate(Bot* bot);                            // PE 100FF770
+    // Offers support for the target with the weapon, for the player occupying it. PE 100FEBF0;
+    // [INFERRED] name.
+    void offerSupport(unsigned int target, int weapon, int playerId, Bot* bot);
 private:
     /* +0x0C */ int* m_int0C;                 // -1
     /* +0x10 */ int* m_int10;                 // -1

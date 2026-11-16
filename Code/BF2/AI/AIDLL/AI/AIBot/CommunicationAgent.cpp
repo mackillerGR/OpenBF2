@@ -143,6 +143,33 @@ void CommunicationAgent::popQueuedMessage()
     m_queue.pop();
 }
 
+// PE 10148150.
+bool CommunicationAgent::findMessage(AIRadioMessageInfo& out, AIRadioMessageType type, int sender)
+{
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[type];
+    for (std::list<AIRadioMessageInfo>::iterator it = inbox.begin(); it != inbox.end(); ++it)
+    {
+        if (it->m_senderPlayerId == sender)
+        {
+            out = *it;
+            return true;
+        }
+    }
+    return false;
+}
+
+// PE 101482B0.
+bool CommunicationAgent::hasMessage(AIRadioMessageType type, int sender)
+{
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[type];
+    for (std::list<AIRadioMessageInfo>::iterator it = inbox.begin(); it != inbox.end(); ++it)
+    {
+        if (sender == -1 || it->m_senderPlayerId == sender)
+            return true;
+    }
+    return false;
+}
+
 // PE 101481B0.
 bool CommunicationAgent::handleMessages(AIRadioMessageType type)
 {
