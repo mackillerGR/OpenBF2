@@ -929,9 +929,31 @@ bool SAI::hostileTakeoveInProgress(AIStrategicObject*& object, Vec2& position)
     return found;
 }
 
-bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*&, Vec3, float)
+// PE 1013BB00. Only the closest strategic object is considered: an owned control point whose
+// engine radius, raised to `radius` when that is positive and larger, contains the position.
+// The object is not null-checked, as shipped.
+bool SAI::isPosInsideOwnedControlPoint(AIStrategicObject*& object, Vec3 position, float radius)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::isPosInsideOwnedControlPoint");
+    AIStrategicObject* const closest = AIStrategicObjectManager::getInstance()->getClosestObject(position, m_side);
+    if (!closest->hasObjectTypeFlag(AIStrategicObject::ControlPoint)
+        || closest->getStatus(m_side) != StatusMap::Owned)
+        return false;
+    Vec3 centre;
+    centre.x = centre.y = centre.z = 0.0f;
+    float pointRadius = 0.0f;
+    bool active;
+    static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+        ->getControlPointInfo(static_cast<AIStrategicArea*>(closest)->m_controlPointId, centre,
+                              pointRadius, active);
+    if (radius > 0.0f && pointRadius < radius)
+        pointRadius = radius;
+    const float dx = position.x - centre.x;
+    const float dy = position.y - centre.y;
+    const float dz = position.z - centre.z;
+    if (!active || !(dz * dz + dy * dy + dx * dx < pointRadius * pointRadius))
+        return false;
+    object = closest;
+    return true;
 }
 
 // PE 1013CA20. Null entries are skipped.
