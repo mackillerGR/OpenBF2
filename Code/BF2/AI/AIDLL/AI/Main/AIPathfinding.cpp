@@ -590,16 +590,39 @@ bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, Material
     return material != 5;
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
-                                                  bool) const
+// PE 1009FA60. Only the given island's tree is searched; the island is not range-checked.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  unsigned int island, bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    QuadTree* const tree = m_quadTreeManager->getIsland(island);
+    unsigned int polygon;
+    if (!tree->findPolygon(position, polygon, materials, m_properties->m_allowedHeightDiff)
+        || polygon == 0xFFFFFFFFu)
+        return false;
+    if (ignoreMaterial)
+        return true;
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
-bool AIPathfinding::MapContainer::isValidPosition(const Vec3&, MaterialManager*, unsigned int,
-                                                  unsigned int, bool) const
+// PE 1009FAE0. A known island and polygon are tried first, then every island.
+bool AIPathfinding::MapContainer::isValidPosition(const Vec3& position, MaterialManager* materials,
+                                                  unsigned int knownIsland, unsigned int knownPolygon,
+                                                  bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::isValidPosition");
+    unsigned int polygon;
+    const unsigned int island = m_quadTreeManager->findPolygon(
+        position, polygon, knownPolygon, knownIsland, materials, m_properties->m_allowedHeightDiff);
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+        return false;
+    if (ignoreMaterial)
+        return true;
+    unsigned char material;
+    if (!getMaterial(island, polygon, material))
+        return false;
+    return material != 5;
 }
 
 // Resolves polygon then island outputs. Always writes the full-width island result;
@@ -818,14 +841,26 @@ bool AIPathfinding::isValidPosition(int map, int equipmentType, const Vec3& posi
     return m_maps[map]->isValidPosition(position, materials, ignoreMaterial);
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, bool) const
+// PE 100A4610. The island-restricted form of the overload above.
+bool AIPathfinding::isValidPosition(int map, int equipmentType, const Vec3& position,
+                                    unsigned int island, bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->isValidPosition(position, materials, island, ignoreMaterial);
 }
 
-bool AIPathfinding::isValidPosition(int, int, const Vec3&, unsigned int, unsigned int, bool) const
+// PE 100A4660. The known island and polygon are passed through in order.
+bool AIPathfinding::isValidPosition(int map, int equipmentType, const Vec3& position,
+                                    unsigned int island, unsigned int polygon, bool ignoreMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::isValidPosition");
+    if (map < 0)
+        return true;
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->isValidPosition(position, materials, island, polygon, ignoreMaterial);
 }
 
 int AIPathfinding::getPolygon(std::vector<const Vec3*>&, int, const Vec3&, int) const

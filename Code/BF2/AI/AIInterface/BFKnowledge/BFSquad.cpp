@@ -1,8 +1,4 @@
 // [INFERRED] Source placement.
-// [FRONTIER] Remaining methods stop by name until implemented.
-// [TEMP] Temporary implementation boundaries remain.
-// [CHOSEN, not recovered] Temporary implementation boundaries remain.
-// [RETIRE-WHEN: aidll-01-adapters] Complete and validate the remaining BFSquad operations.
 
 #include "BFSquad.h"
 #include "AIPlayer.h"
@@ -13,6 +9,13 @@
 #include "../../../Core/ClassManager.h"
 #include "../../../Game/GameLogic/SquadManager/ISquadManager.h"
 #include "../SingletonServer.h"   // BFSingletonServer::updateStaticMethods
+#include "IAIObject.h"
+#include "../../../IO/Network/INetworkable.h"
+#include "../../../IO/Network/NetworkManager.h"
+#include "../../../Game/Objects/IObject.h"
+#include "../../../Game/GameEvents/RequestEvent.h"
+#include "../../../Game/GameLogic/SquadManager/ISquadInfo.h"
+#include "../../../Game/GameLogic/SquadManager/SquadOrder.h"
 
 namespace dice {
 namespace hfe {
@@ -107,76 +110,141 @@ void BFSquad::retireAsSquadLeader(int squad, IAIPlayer* player)
         static_cast<ISquadManager*>(squadManager)->setSquadLeader(player->getSide(), squad, -1, false);
 }
 
+namespace {
+
+// Client PE 0x817050. A squad order of the given type at the position, aimed at the target's
+// networkable when it has one, handed to the squad manager (team b, squad a). The order's last
+// flag is left unset, as shipped. The shipped body returns whatever the void manager call
+// leaves in eax; [CHOSEN, not recovered] 0 is returned here and every AI caller discards it.
+int issueSquadOrderOfType(const Vec3& position, int a, int b, IAIObject* target, int type)
+{
+    SquadOrder order;
+    order.orderId = type;
+    order.points[0] = position;
+    order.points[1].x = order.points[1].y = order.points[1].z = 0.0f;
+    order.points[2].x = order.points[2].y = order.points[2].z = 0.0f;
+    order.targetNetId = 0;
+    if (target)
+    {
+        if (io::INetworkable* const networkable = target->getObject()->getNetworkable())
+            order.targetNetId = networkable->m_networkableId;
+    }
+    static_cast<ISquadManager*>(squadManager)->issueSquadOrder(b, a, order, false);
+    return 0;
+}
+
+// The request event a bot's answer raises, executed at once as if sent by the bot.
+void raiseBotRequest(int squad, IAIPlayer* player, int requestType)
+{
+    RequestEvent* const event = new RequestEvent(player->getSide(), squad,
+                                                 static_cast<RequestEvent::RequestTypes>(requestType));
+    event->executeServer(player->getId());
+    event->release();
+}
+
+// Client PE 0x816D40 (accepted) / 0x816DD0 (declined). The commander order of the given type is
+// marked answered for the player's team; a bot's answer also raises request 2 or 3. The shipped
+// bodies return the last call's eax; [CHOSEN, not recovered] 0 here, discarded by every caller.
+int answerCommanderOrder(int squad, IAIPlayer* player, int type, bool accepted)
+{
+    static_cast<ISquadManager*>(squadManager)->setIsAccepted(
+        player->getSide(), squad, accepted, static_cast<OrderType>(1), static_cast<SquadOrderType>(type), false);
+    if (player->getIsAIPlayer())
+        raiseBotRequest(squad, player, accepted ? 2 : 3);
+    return 0;
+}
+
+} // namespace
+
+// Client PE 0x8170F0: type 5.
 int BFSquad::issueSquadAttackOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::issueSquadAttackOrder");
+    return issueSquadOrderOfType(position, a, b, target, 5);
 }
 
+// Client PE 0x817110: type 4.
 int BFSquad::issueSquadMoveOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::issueSquadMoveOrder");
+    return issueSquadOrderOfType(position, a, b, target, 4);
 }
 
+// Client PE 0x817130: type 6.
 int BFSquad::issueSquadDefendOrder(const Vec3& position, int a, int b, IAIObject* target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::issueSquadDefendOrder");
+    return issueSquadOrderOfType(position, a, b, target, 6);
 }
 
-// 5 bytes - a bare ret. Empty, like its decline twin.
-void BFSquad::acceptSquadOrder(int squad, IAIPlayer* player)
+// Client PE 0x5A59F0, shared bare `ret 8`. Empty, like its decline twin.
+void BFSquad::acceptSquadOrder(int, IAIPlayer*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::acceptSquadOrder");
 }
 
-// ELF, - empty.
-void BFSquad::declineSquadOrder(int squad, IAIPlayer* player)
+// Client PE 0x5A59F0 - empty.
+void BFSquad::declineSquadOrder(int, IAIPlayer*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::declineSquadOrder");
 }
 
+// Client PE 0x816EF0.
 int BFSquad::acceptCommanderAttackOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::acceptCommanderAttackOrder");
+    return answerCommanderOrder(squad, player, 5, true);
 }
 
+// Client PE 0x816F10.
 int BFSquad::acceptCommanderDefendOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::acceptCommanderDefendOrder");
+    return answerCommanderOrder(squad, player, 6, true);
 }
 
+// Client PE 0x816F30.
 int BFSquad::acceptCommanderMoveOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::acceptCommanderMoveOrder");
+    return answerCommanderOrder(squad, player, 4, true);
 }
 
+// Client PE 0x816F50.
 int BFSquad::declineCommanderAttackOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::declineCommanderAttackOrder");
+    return answerCommanderOrder(squad, player, 5, false);
 }
 
+// Client PE 0x816F70.
 int BFSquad::declineCommanderDefendOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::declineCommanderDefendOrder");
+    return answerCommanderOrder(squad, player, 6, false);
 }
 
+// Client PE 0x816F90.
 int BFSquad::declineCommanderMoveOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::declineCommanderMoveOrder");
+    return answerCommanderOrder(squad, player, 4, false);
 }
 
+// Client PE 0x816E60. Only a bot raises request 1. [CHOSEN, not recovered] 0 stands in for the
+// shipped eax, which no caller reads.
 int BFSquad::requestNewCommanderOrder(int squad, IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::requestNewCommanderOrder");
+    if (player->getIsAIPlayer())
+        raiseBotRequest(squad, player, 1);
+    return 0;
 }
 
-world::IObject* BFSquad::getCommanderOrder(int a, int b, Vec3& position, IAIObject* target)
+// Client PE 0x816FB0. The squad (team a, squad b) is not null-checked; its commander order's
+// first point is copied out and the order's target is looked up by network id. The target
+// argument is unused.
+world::IObject* BFSquad::getCommanderOrder(int a, int b, Vec3& position, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::getCommanderOrder");
+    SquadOrder* const order = static_cast<ISquadManager*>(squadManager)->getSquadInfo(a, b)->getCommanderOrders();
+    position = order->points[0];
+    return io::networkManager->getObject(order->targetNetId);
 }
 
-world::IObject* BFSquad::getSquadOrder(int a, int b, Vec3& position, IAIObject* target)
+// Client PE 0x817000. The squad-order twin of getCommanderOrder.
+world::IObject* BFSquad::getSquadOrder(int a, int b, Vec3& position, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFSquad::getSquadOrder");
+    SquadOrder* const order = static_cast<ISquadManager*>(squadManager)->getSquadInfo(a, b)->getSquadOrders();
+    position = order->points[0];
+    return io::networkManager->getObject(order->targetNetId);
 }
 
 } // namespace ai

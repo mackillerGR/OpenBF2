@@ -549,8 +549,8 @@ void SquadManager::issueSquadOrder(int teamId, int squadId, SquadOrder& order,
     }
 }
 
-// Broadcasts the order before commander and member HUD notifications. Preserve
-// repeated ID lookups. [UNRESOLVED] The optional AI courier branch remains omitted.
+// Broadcasts the order before commander and member notifications (BF2.exe 0x4E5F10). Preserve
+// repeated ID lookups.
 void SquadManager::issueCommanderOrder(int teamId, int squadId, SquadOrder& order,
                                        bool suppressEvent)
 {
@@ -578,6 +578,11 @@ void SquadManager::issueCommanderOrder(int teamId, int squadId, SquadOrder& orde
             new PostRemoteEvent(ECHud, 27, false, &squadId, 4, 0.0f));
     }
 
+    // BF2.exe 0x4E6005: the AI instance is read once before the walk. While it is initialized,
+    // every member - human or bot - gets ecai 8 `(playerId, orderId)` ahead of its HUD 26. The
+    // PE global ds:0xA33C08 is taken as the AI instance [INFERRED]: it is tested the same way
+    // (non-null, then vtable +0x18) at the other AI-gated sites.
+    ai::IAIInstance* const instance = ai::aiInstance();
     for (std::set<int>::iterator it = squad->m_members.begin();
          it != squad->m_members.end(); ++it)
     {
@@ -585,7 +590,12 @@ void SquadManager::issueCommanderOrder(int teamId, int squadId, SquadOrder& orde
         if (!player)
             continue;
 
-        // [UNRESOLVED] ecai 8 notification behind ds:0x8AC37F8 / PE dword_8B25B0.
+        if (instance && instance->isInitialized())
+        {
+            int aiPayload[2] = { *it, order.orderId };
+            eventManager->postEvent(ECAI, 8, aiPayload, 0.0f);
+        }
+
         if (player->getId() == 255)
         {
             eventManager->postEvent(ECHud, 26, &squadId, 0.0f);
