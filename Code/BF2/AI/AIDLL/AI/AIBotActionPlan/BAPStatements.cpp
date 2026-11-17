@@ -3,6 +3,9 @@
 #include "BAPConditions.h"
 #include "../AIBot/BotMain.h"
 #include "../AIBot/SquadMember.h"
+#include "../AIBot/CommunicationAgent.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../../../../IO/Input/PlayerInput.h"
 #include "../AIPlanInterpreter/PlanInterpreter.h"
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
@@ -247,6 +250,101 @@ bool BAPICChangeVehicle::execute(Bot* bot, bool& finished, bool& failed)
 BAPStatementType BAPICChangeVehicle::getType() { return BAPSTICChangeVehicle; }
 bool BAPICChangeVehicle::isComposite() { return true; }
 
+// ---- BAPICTurnLock -------------------------------------------------------------------------
+
+BAPICTurnLock::BAPICTurnLock(bool lock) : m_lock(lock) {}
+BAPICTurnLock::~BAPICTurnLock() {}
+
+bool BAPICTurnLock::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->setPlanLock(m_lock);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPICTurnLock::getType() { return BAPSTICTurnLock; }
+bool BAPICTurnLock::isComposite() { return true; }
+
+// ---- BAPUpdateVehicle ----------------------------------------------------------------------
+
+BAPUpdateVehicle::BAPUpdateVehicle(int id) { m_id = id; }
+BAPUpdateVehicle::~BAPUpdateVehicle() {}
+
+bool BAPUpdateVehicle::execute(Bot* bot, bool& finished, bool& failed)
+{
+    static_cast<BotMain*>(bot)->requestEquipmentUpdate();
+    finished = true;
+    failed = true;
+    return true;
+}
+
+unsigned long long BAPUpdateVehicle::getInputMask() { return 0; }
+BAPStatementType BAPUpdateVehicle::getType() { return BAPSTUpdateVehicle; }
+bool BAPUpdateVehicle::isComposite() { return true; }
+
+// ---- BAPUseFlareOnMissileLock --------------------------------------------------------------
+
+BAPUseFlareOnMissileLock::BAPUseFlareOnMissileLock(int arg, unsigned long long inputMask, int id)
+    : m_arg18(arg), m_lockTime(-1.0), m_locked(false)
+{
+    m_inputMask = inputMask;
+    m_id = id;
+}
+
+BAPUseFlareOnMissileLock::~BAPUseFlareOnMissileLock() {}
+
+// The equipment is not null-checked, as shipped.
+bool BAPUseFlareOnMissileLock::execute(Bot* bot, bool& finished, bool& failed)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIUnit* const unit = equipment->getUnit();
+    const int status = unit->getMissileLockStatus();
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!m_locked && status > 0)
+    {
+        m_lockTime = now;
+        m_locked = true;
+    }
+    const double delay = ((equipment->getObjectTypeFlags() >> 4) & 1) ? 1.0 : 0.0;
+    if (m_locked && !(now - m_lockTime < delay))
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        if (input->mappingFlags & (1ULL << io::PIFlareFire))
+            input->inputs[io::PIFlareFire] = 1.0f;
+        unit->setMissileLockStatus(0);
+        m_locked = false;
+    }
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPUseFlareOnMissileLock::getType() { return BAPSTUseFlareOnMissileLock; }
+bool BAPUseFlareOnMissileLock::isComposite() { return true; }
+
+// ---- BAPSendRadioMessage -------------------------------------------------------------------
+
+BAPSendRadioMessage::BAPSendRadioMessage(int type, int channel, unsigned int priority, float delay, int id,
+                                         int flag)
+    : m_type(type), m_channel(channel), m_priority(priority), m_flag(flag), m_delay(delay)
+{
+    m_id = id;
+}
+
+BAPSendRadioMessage::~BAPSendRadioMessage() {}
+
+bool BAPSendRadioMessage::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->getCommunicationAgent()->enqueueRadioMessage(m_type, m_channel, m_priority, m_delay, m_flag);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPSendRadioMessage::getType() { return BAPSTSendRadioMessage; }
+bool BAPSendRadioMessage::isComposite() { return true; }
+
 // ---- BAPResetControls ----------------------------------------------------------------------
 
 BAPResetControls::BAPResetControls(bool movement, bool look, bool actions, int id)
@@ -421,6 +519,19 @@ BAPWhile::BAPWhile(BAPCondition* condition, BotScript* body, int id)
     , m_abort(false)
     , m_testCondition(true)
     , m_testAfterFailure(true)
+{
+    m_id = id;
+    condition->m_owner = this;
+    if (m_body)
+        m_body->m_owner = this;
+}
+
+BAPWhile::BAPWhile(BAPCondition* condition, BotScript* body, bool testAfterFailure, int id)
+    : m_condition(condition)
+    , m_body(body)
+    , m_abort(false)
+    , m_testCondition(true)
+    , m_testAfterFailure(testAfterFailure)
 {
     m_id = id;
     condition->m_owner = this;

@@ -453,6 +453,10 @@ public:
     static unsigned char mu8NBehaviours;
     static float* maBasicWeights;                           // ELF .bss
 
+public:
+    // Asks the next update to re-read the bot's equipment. PE 1017EDD0; [INFERRED] name.
+    void requestEquipmentUpdate() { m_gap88[0] = 1; }
+
 private:
     // [INFERRED] friendship: addUnspawnedBot directly replaces +28 in both images.
     friend class BotManager;
@@ -480,7 +484,7 @@ private:
     /*  80 */ bool         m_takingOrders;          // isTakingOrders
     /*  81 */ char         m_pad81[3];
     /*  84 */ void*        m_ptr84;                 // = 0
-    /*  88 */ char         m_gap88[3];              // +89, +90 zeroed [UNRESOLVED]
+    /*  88 */ char         m_gap88[3];              // +88 re-read equipment request; +89, +90 zeroed [UNRESOLVED]
     /*  91 */ bool         m_inTransitionPhase;     // isInTransitionPhase
     /*  92 */ char         m_pad92;
     /*  93 */ bool         m_deactivated;           // isDeactivated

@@ -110,6 +110,73 @@ public:
     /* +0x18 */ unsigned int m_target;
 };
 
+// Sets the bot's plan lock. Type 31. The constructor leaves the id unset. PE vtable 10282C24.
+// [INFERRED] name.
+class BAPICTurnLock : public BotScript
+{
+public:
+    explicit BAPICTurnLock(bool lock);                                 // PE 1019AAA0
+    virtual ~BAPICTurnLock();                                          // PE 1019AB40
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 1019AAF0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 1019AB30: true
+
+    /* +0x18 */ bool m_lock;
+};
+
+// Asks the bot to re-read its equipment. Type 27. PE vtable 10283858. [INFERRED] name.
+class BAPUpdateVehicle : public BotScript
+{
+public:
+    explicit BAPUpdateVehicle(int id);                                 // PE 101AC540
+    virtual ~BAPUpdateVehicle();                                       // PE 101AC5E0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101AC5B0
+    virtual unsigned long long getInputMask();                         // PE 101AC570: none
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101AC5D0: true
+};
+
+// Fires a flare once the equipment's missile-lock status turns positive, after a second's delay
+// for equipment with type flag 4, then clears the status. Type 40. PE vtable 10283338.
+// [INFERRED] name.
+class BAPUseFlareOnMissileLock : public BotScript
+{
+public:
+    // PE 101A7F20.
+    BAPUseFlareOnMissileLock(int arg, unsigned long long inputMask, int id);
+    virtual ~BAPUseFlareOnMissileLock();                               // PE 101A7FC0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101A8000
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101A7FB0: true
+
+    /* +0x18 */ int m_arg18;          // [UNRESOLVED] stored, not read
+    /* +0x20 */ double m_lockTime;    // = -1
+    /* +0x28 */ bool m_locked;        // = false
+};
+
+// Queues a radio message on the bot's communication agent. Type 37. PE vtable 10283780.
+// [INFERRED] name.
+class BAPSendRadioMessage : public BotScript
+{
+public:
+    // PE 101AA140.
+    BAPSendRadioMessage(int type, int channel, unsigned int priority, float delay, int id, int flag);
+    virtual ~BAPSendRadioMessage();                                    // PE 101AA210
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101AA1C0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101AA200: true
+
+    /* +0x18 */ int m_type;
+    /* +0x1C */ int m_channel;
+    /* +0x20 */ unsigned int m_priority;
+    /* +0x24 */ int m_flag;
+    /* +0x28 */ float m_delay;
+};
+
 // Releases the bot's controls in up to three groups. Type 14. PE vtable 10283378.
 class BAPResetControls : public BotScript
 {
@@ -187,6 +254,8 @@ class BAPWhile : public BotScript
 public:
     // PE 101A83A0.
     BAPWhile(BAPCondition* condition, BotScript* body, int id);
+    // PE 101A8400.
+    BAPWhile(BAPCondition* condition, BotScript* body, bool testAfterFailure, int id);
     virtual ~BAPWhile();                                               // PE 101A86C0
 
     virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101A84A0
