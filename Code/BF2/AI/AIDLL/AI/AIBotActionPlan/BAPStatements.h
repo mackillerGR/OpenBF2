@@ -222,6 +222,69 @@ protected:
     /* +0x30 */ unsigned int m_companion;
 };
 
+// Base of the moves that follow a path from the bot's navigation. Type 7. Construction clears
+// the bot's move-to status. PE vtable 10282D18 (twenty-one slots) with the pose selector at
+// +0x18 (PE vtable 10282CD8). An empty intermediate class (PE vtable 10282AF4) between
+// BotScript and this one is folded in. [INFERRED] name, after the attested BAPALook; slot and
+// member names are [INFERRED] where given and [UNRESOLVED] where numbered.
+class BAPAMove : public BotScript, public BAPSoldierPoseSelector
+{
+public:
+    explicit BAPAMove(Bot* bot);                                       // PE 1019B250
+    virtual ~BAPAMove();                                               // PE 1019B360
+
+    virtual unsigned long long getInputMask();                         // PE 1019B1B0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();
+    // Whether the move asked the sensing agent to focus.
+    virtual bool isFocusing();                                         // PE 1019B1C0
+    virtual bool slot8();                                              // PE 1019B100: false
+    virtual const Vec2& getSteerPoint();                               // PE 1019B110
+    // Works out the point to steer toward. [UNRESOLVED] the fourth argument.
+    virtual bool getSteering(Vec2& point, bool& flag, bool& failed, int arg);   // PE 1019B120: false
+    // Whether the stop condition holds; false without one.
+    virtual bool isFinished(Bot* bot);                                 // PE 1019B130
+    virtual bool getPathPoint(Vec2& point);                            // PE 1019B160: false
+    virtual bool getPathTurn(float& turn);                             // PE 1019B170: false
+    virtual float slot14();                                            // PE 1019B180: 0
+    virtual unsigned int getTargetObject();                            // PE 1019B190: -1
+    // The equipment's distance to the target; the equipment is not null-checked.
+    virtual float getDistance(Bot* bot);                               // PE 1019B430
+    virtual float getDistanceSq(Bot* bot);                             // PE 1019B4A0
+    virtual bool slot18() = 0;
+    virtual bool isWithinRange() = 0;
+    virtual bool slot20();                                             // PE 1019B1A0: false
+
+    // Turns the focus request on or off; when on, points the bot's sensing agent at the object,
+    // or at the position when the object is -1. PE 1019B3C0.
+    void setFocus(Bot* bot, bool focus, const Vec3& position, unsigned int object);
+
+    /* +0x50 */ bool m_focusing;           // = false
+    /* +0x54 */ Vec3 m_target;             // = 0
+    /* +0x60 */ float m_float60;           // set by the derived constructors [UNRESOLVED]
+    /* +0x64 */ float m_float64;           // likewise [UNRESOLVED]
+    /* +0x68 */ BAPCondition* m_until;     // owned; set by the derived constructors
+    /* +0x6C */ bool m_flag6C;             // [UNRESOLVED]
+    /* +0x70 */ int m_int70;               // = 0 [UNRESOLVED]
+    /* +0x74 */ float m_float74;           // = 1 [UNRESOLVED]
+    /* +0x78 */ int m_int78;               // = 0 [UNRESOLVED]
+    /* +0x7C */ Vec2 m_steerPoint;         // = 0
+    /* +0x84 */ int m_int84;               // = 0 [UNRESOLVED]
+    /* +0x88 */ int m_int88;               // = 0 [UNRESOLVED]
+    /* +0x8C */ int m_int8C;               // left unset [UNRESOLVED]
+    /* +0x90 */ int m_int90;               // = -1 [UNRESOLVED]
+    /* +0x94 */ int m_int94;               // = 0 [UNRESOLVED]
+    /* +0x98 */ int m_int98;               // = 0 [UNRESOLVED]
+    /* +0x9C */ int m_int9C;               // left unset [UNRESOLVED]
+    /* +0xA0 */ int m_intA0;               // left unset [UNRESOLVED]
+    /* +0xA4 */ int m_intA4;               // = 0 [UNRESOLVED]
+    /* +0xA8 */ int m_intA8;               // = 0 [UNRESOLVED]
+    /* +0xB0 */ double m_timeB0;           // = -1000 [UNRESOLVED]
+    /* +0xB8 */ int m_intB8;               // = 0 [UNRESOLVED]
+    /* +0xBC */ int m_intBC;               // = 0 [UNRESOLVED]
+    /* +0xC0 */ int m_intC0;               // left unset [UNRESOLVED]
+};
+
 // Moves the equipment to a position; the per-vehicle MoveTo entries drive it. Type 7. The
 // constructor caches the equipment's altitude along its speed and the axes of its
 // transformation. PE vtable 10282EB8. [INFERRED] name and field meanings.

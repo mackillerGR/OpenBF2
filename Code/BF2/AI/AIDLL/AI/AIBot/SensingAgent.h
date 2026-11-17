@@ -56,6 +56,13 @@ public:
     const Vec2& getLookDirection() const { return m_lookDirection; }
     const Vec3& getFocusPoint() const { return m_focusPoint; }
     unsigned int getFocusObject() const { return m_focusObject; }
+    // The two focus writes PE 1019B3C0 makes inline. [CHOSEN, not recovered] accessors.
+    void setFocusPoint(const Vec3& point) { m_focusPoint = point; }
+    void setFocusObject(unsigned int object)
+    {
+        m_focusObject = object;
+        m_focusPoint.x = m_focusPoint.y = m_focusPoint.z = 0.0f;
+    }
     // BotBehaviour::getPlan raises +120 when it replaces a bot's plan. [INFERRED] name.
     void setPlanReplaced() { m_flag120 = true; }
     // A thing worth looking at: its weight and where it is. Attested as a nested type by
@@ -128,8 +135,9 @@ private:
     /*  76 */ float m_planTargetWeight;    // clearPlanTargetInformation: 0
     // The look direction the plan last aimed along (PE +0x5C). [INFERRED] name.
     /*  80 */ Vec2 m_lookDirection;
-    // A focus point and object set from outside the agent (PE +0x64 / +0x70); the soldier input
-    // merger runs toward them. [UNRESOLVED] what writes them; the object is not initialised.
+    // A focus point and object set from outside the agent (PE +0x64 / +0x70) by the
+    // path-following move statements (PE 1019B3C0); the soldier input merger runs toward them.
+    // The object is not initialised.
     /*  88 */ Vec3 m_focusPoint;
     /* 100 */ unsigned int m_focusObject;
     /* 104 */ BotSenses* m_senses;         // new(0x94) - the mechanism this agent steers

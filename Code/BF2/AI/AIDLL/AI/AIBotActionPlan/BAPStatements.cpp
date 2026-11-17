@@ -352,6 +352,80 @@ int BAPSoldierPoseSelector::update(float measure, float value, double time, Bot*
     return m_currentPose;
 }
 
+// ---- BAPAMove ------------------------------------------------------------------------------
+
+// The pose selector: standing by default, lying above a threshold scaled by a random factor in
+// [1, 15), crouching below the limit 0, no companion, a ten-second interval.
+BAPAMove::BAPAMove(Bot* bot)
+    : BAPSoldierPoseSelector(SPStanding, SPLying,
+                             static_cast<float>(AIRandom::m_instance->next()) * 3.259629011154175e-09f + 1.0f,
+                             SPCrouching, 0.0f, static_cast<unsigned int>(-1), 10.0f)
+    , m_focusing(false), m_until(0), m_int70(0), m_float74(0.0f), m_int78(0), m_int84(0), m_int88(0),
+      m_int90(-1), m_int94(0), m_int98(0), m_intA4(0), m_intA8(0), m_timeB0(-1000.0), m_intB8(0),
+      m_intBC(0)
+{
+    m_target.x = m_target.y = m_target.z = 0.0f;
+    m_steerPoint.x = m_steerPoint.y = 0.0f;
+    m_float74 = 1.0f;
+    m_int78 = 0;
+    static_cast<BotMain*>(bot)->setMoveToStatus(0);
+}
+
+BAPAMove::~BAPAMove()
+{
+    if (m_until)
+        delete m_until;
+}
+
+unsigned long long BAPAMove::getInputMask() { return m_inputMask; }
+BAPStatementType BAPAMove::getType() { return BAPSTMoveTo; }
+bool BAPAMove::isComposite() { return false; }
+bool BAPAMove::isFocusing() { return m_focusing; }
+bool BAPAMove::slot8() { return false; }
+const Vec2& BAPAMove::getSteerPoint() { return m_steerPoint; }
+bool BAPAMove::getSteering(Vec2&, bool&, bool&, int) { return false; }
+
+bool BAPAMove::isFinished(Bot* bot)
+{
+    return m_until && m_until->evaluate(bot);
+}
+
+bool BAPAMove::getPathPoint(Vec2&) { return false; }
+bool BAPAMove::getPathTurn(float&) { return false; }
+float BAPAMove::slot14() { return 0.0f; }
+unsigned int BAPAMove::getTargetObject() { return static_cast<unsigned int>(-1); }
+
+float BAPAMove::getDistance(Bot* bot)
+{
+    const Vec3& position = informationManager->getInformation(bot->getCurrentEquipment())->getPosition();
+    const float dx = position.x - m_target.x;
+    const float dy = position.y - m_target.y;
+    const float dz = position.z - m_target.z;
+    return std::sqrt(dx * dx + dz * dz + dy * dy);
+}
+
+float BAPAMove::getDistanceSq(Bot* bot)
+{
+    const Vec3& position = informationManager->getInformation(bot->getCurrentEquipment())->getPosition();
+    const float dx = position.x - m_target.x;
+    const float dy = position.y - m_target.y;
+    const float dz = position.z - m_target.z;
+    return dx * dx + dz * dz + dy * dy;
+}
+
+bool BAPAMove::slot20() { return false; }
+
+void BAPAMove::setFocus(Bot* bot, bool focus, const Vec3& position, unsigned int object)
+{
+    m_focusing = focus;
+    if (!focus)
+        return;
+    if (object == static_cast<unsigned int>(-1))
+        bot->getSensingAgent()->setFocusPoint(position);
+    else
+        bot->getSensingAgent()->setFocusObject(object);
+}
+
 // ---- BAPMoveTo -----------------------------------------------------------------------------
 
 // The equipment is not null-checked, as shipped.
