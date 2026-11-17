@@ -105,6 +105,11 @@ public:
         int  m_index36;         // = -1
     };
 
+    int getVehicleNumber() const { return m_vehicleNumber; }
+    // Where the bot's equipment stands on a map's mesh: its polygon, island and position.
+    // PE 101727B0; [INFERRED] name. [FRONTIER]
+    void getMeshPosition(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
+
 private:
     /*   0 */ BotMain* m_bot;              // the ctor argument, and the first store
     /*   4 */ float m_float4;              // = 2.0f [UNRESOLVED]

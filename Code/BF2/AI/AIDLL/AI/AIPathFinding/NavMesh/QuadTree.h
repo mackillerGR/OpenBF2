@@ -90,6 +90,19 @@ public:
     const Vec3& getWrappedVertexOfPolygon(unsigned int polygon, unsigned char corner) const;
     // PE 10167E30.
     const Vec3& getNormalOfPolygon(unsigned int polygon) const;
+    // PE 10167ED0.
+    void setMaterialOfPolygon(unsigned int polygon, unsigned char material);
+    // The mean of the polygon's corners. PE 10167DA0.
+    void getCentreOfPolygon(Vec3& centre, unsigned int polygon) const;
+    // Where the horizontal ray from `origin` along `direction` leaves the polygon: the edge
+    // crossed (not the one leading to `ignoredNeighbour`, unless that is -1) and the crossing
+    // point, its height taken along the direction. A ray that only grazes the polygon within
+    // 0.001 still reports its nearest miss. `edgeDistance`, when given, receives how far the
+    // crossing lies from the nearer end of the edge; it is not written for a near miss.
+    // PE 10169B00; [INFERRED] name.
+    bool getLineExitFromPolygon(Vec3& exit, unsigned int polygon, unsigned char& edge,
+                                unsigned int ignoredNeighbour, const Vec3& origin, const Vec3& direction,
+                                float* edgeDistance) const;
 
     void initializeDestroyableMapPart(int, bool, const Vec3&, const Vec3&, const Mat4&,
                                       ClusterGraph*, bool);

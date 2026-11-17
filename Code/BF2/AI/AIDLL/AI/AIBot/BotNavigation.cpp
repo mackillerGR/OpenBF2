@@ -264,6 +264,11 @@ bool BotNavigation::isRunning()
     return true;
 }
 
+void BotNavigation::getMeshPosition(int, unsigned int&, unsigned int&, Vec3&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getMeshPosition");
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

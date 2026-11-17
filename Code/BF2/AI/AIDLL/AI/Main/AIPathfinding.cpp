@@ -9,6 +9,8 @@
 #include "../AIPathFinding/Cluster/ClusterNodeManager.h"   // init builds one per cluster search
 #include "../AIPathFinding/NavMesh/QuadTree.h"             // MapContainer polygon vertex query
 #include "../AIPathFinding/NavMesh/QTSearchNodeManager.h"  // init builds one per local search
+#include "../AIPathFinding/Material/MaterialManager.h"
+#include "../AIBot/BotNavigation.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h" // loadQuadTrees' tail calls initAreas
 #include "../AIUtils/checkPointer.h"
 #include "AIDllFrontier.h"
@@ -679,10 +681,13 @@ void AIPathfinding::MapContainer::getPolygonsInTriangle(std::list<unsigned int>&
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getPolygonsInTriangle");
 }
 
-bool AIPathfinding::MapContainer::getPolygonFromIsland(const Vec3&, unsigned int&, unsigned int&,
-                                                       MaterialManager*) const
+// PE 1009BD90. Looks only in the given island's tree.
+bool AIPathfinding::MapContainer::getPolygonFromIsland(const Vec3& position, unsigned int& polygon,
+                                                       unsigned int& island, MaterialManager* materials) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getPolygonFromIsland");
+    m_quadTreeManager->getIsland(island)->findPolygon(position, polygon, materials,
+                                                      m_properties->m_allowedHeightDiff);
+    return polygon != 0xFFFFFFFFu;
 }
 
 // PE 1009BDE0. The polygon under the position on any island; a miss writes material 0.
@@ -716,40 +721,153 @@ bool AIPathfinding::MapContainer::getMaterial(unsigned int quadTree, unsigned in
     return true;
 }
 
-bool AIPathfinding::MapContainer::setMaterial(unsigned int, unsigned int, unsigned char)
+// Inlined into PE 100A4A50.
+bool AIPathfinding::MapContainer::setMaterial(unsigned int island, unsigned int polygon,
+                                               unsigned char material)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::setMaterial");
+    if (island == 0xFFFFFFFFu || polygon == 0xFFFFFFFFu)
+        return false;
+    m_quadTreeManager->getIsland(island)->setMaterialOfPolygon(polygon, material);
+    return true;
 }
 
-void AIPathfinding::MapContainer::getPolygonCentre(Vec3&, unsigned int, unsigned int) const
+// Inlined into PE 100A4AA0.
+void AIPathfinding::MapContainer::getPolygonCentre(Vec3& centre, unsigned int polygon,
+                                                   unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getPolygonCentre");
+    m_quadTreeManager->getIsland(island)->getCentreOfPolygon(centre, polygon);
 }
 
-void AIPathfinding::MapContainer::getEdge(Vec3&, Vec3&, unsigned int, unsigned int,
-                                          unsigned int) const
+// PE 1009FBD0. The two ends of the polygon's edge toward the neighbour; the shipped body
+// answers false, writing nothing, when the polygon is unknown or has no such neighbour.
+bool AIPathfinding::MapContainer::getEdge(Vec3& first, Vec3& second, unsigned int polygon,
+                                          unsigned int neighbour, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getEdge");
+    QuadTree* const tree = m_quadTreeManager->getIsland(island);
+    Polygon* const record = tree->getPolygon(polygon);
+    unsigned char edge = 0;
+    if (!record || !tree->getNeighbourEdge(edge, polygon, neighbour))
+        return false;
+    first = tree->getVertexOfPolygon(polygon, edge);
+    second = tree->getVertexOfPolygon(
+        polygon, static_cast<unsigned char>(static_cast<unsigned char>(edge + 1) % record->m_numberOfVertices));
+    return true;
 }
 
-bool AIPathfinding::MapContainer::trace(unsigned int&, unsigned int&, const Vec3&, const Vec3&,
-                                        Vec3&, unsigned int&, int, float, MaterialManager*,
-                                        unsigned char, unsigned char*) const
+// PE 100A2500. Finds the start's polygon, trying the given polygon and island first, and
+// traces from there.
+bool AIPathfinding::MapContainer::trace(unsigned int& polygon, unsigned int& island, const Vec3& from,
+                                        const Vec3& to, Vec3& hit, unsigned int& lastPolygon,
+                                        int maxPolygons, float clearance, MaterialManager* materials,
+                                        unsigned char material, unsigned char* hitMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::trace");
+    island = m_quadTreeManager->findPolygon(from, polygon, polygon, island, materials,
+                                            m_properties->m_allowedHeightDiff);
+    if (polygon == 0xFFFFFFFFu || island == 0xFFFFFFFFu)
+        return false;
+    return traceKnown(polygon, island, from, to, hit, lastPolygon, maxPolygons, clearance, materials,
+                      material, hitMaterial);
 }
 
-bool AIPathfinding::MapContainer::traceKnown(unsigned int, unsigned int, const Vec3&, const Vec3&,
-                                             Vec3&, unsigned int&, int, float, MaterialManager*,
-                                             unsigned char, unsigned char*) const
+// PE 1009FC70. Walks the straight line across the mesh polygon by polygon; true when it reaches
+// `to`, with `hit` then set to it. It stops, false, with `hit` at the last edge reached and
+// `lastPolygon` the polygon before it, at the mesh's border, on an impassable material, on the
+// given material (or material 7 when the given one is 5 or 6), or after maxPolygons (30000 at
+// most) polygons.
+//
+// [CHOSEN, not recovered] With a clearance the shipped body compares twice the crossing's
+// distance from the edge's end against a stack word nothing writes (the crossing routine's
+// eighth argument, which it ignores). That word reads as 0 here, which leaves the clearance
+// without effect.
+bool AIPathfinding::MapContainer::traceKnown(unsigned int polygon, unsigned int island, const Vec3& from,
+                                             const Vec3& to, Vec3& hit, unsigned int& lastPolygon,
+                                             int maxPolygons, float clearance, MaterialManager* materials,
+                                             unsigned char material, unsigned char* hitMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::traceKnown");
+    QuadTree* const tree = m_quadTreeManager->getIsland(island);
+    Vec3 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = to.z - from.z;
+    const float length = std::sqrt(direction.z * direction.z + direction.x * direction.x
+                                   + direction.y * direction.y);
+    if (length <= 9.999999974752427e-07f)
+    {
+        lastPolygon = polygon;
+        return true;
+    }
+    const float inverse = 1.0f / length;
+    direction.x = direction.x * inverse;
+    direction.y = direction.y * inverse;
+    direction.z = direction.z * inverse;
+    unsigned int previous = 0xFFFFFFFFu;
+    hit = from;
+    lastPolygon = polygon;
+    if (polygon == 0xFFFFFFFFu)
+        return false;
+    for (int count = 0;;)
+    {
+        if (maxPolygons != -1 && count >= maxPolygons)
+            return false;
+        if (count > 30000)
+            return false;
+        ++count;
+        lastPolygon = polygon;
+        unsigned char edge;
+        float edgeDistance = 0.0f;
+        const float unwritten = 0.0f;
+        if (!tree->getLineExitFromPolygon(hit, polygon, edge, previous, from, direction,
+                                          clearance != 0.0f ? &edgeDistance : 0))
+        {
+            if (previous != 0xFFFFFFFFu)
+                return false;
+            hit = to;
+            return true;
+        }
+        previous = polygon;
+        const float dx = hit.x - from.x;
+        const float dy = hit.y - from.y;
+        const float dz = hit.z - from.z;
+        if (!(std::sqrt(dz * dz + dy * dy + dx * dx) + 0.05f < length))
+        {
+            hit = to;
+            return true;
+        }
+        const float flatX = to.x - hit.x;
+        const float flatZ = to.z - hit.z;
+        if (flatZ * flatZ + flatX * flatX <= 0.025f)
+        {
+            hit = to;
+            return true;
+        }
+        if (clearance != 0.0f && edgeDistance + edgeDistance < unwritten && edgeDistance < clearance)
+            return false;
+        polygon = tree->getNeighbour(polygon, edge);
+        if (polygon == 0xFFFFFFFFu)
+            return false;
+        const unsigned char found = tree->getMaterialOfPolygon(polygon);
+        if (hitMaterial)
+            *hitMaterial = found;
+        if (!materials->isValidMaterial(found))
+            return false;
+        if (material != 0)
+        {
+            if (found == material)
+                return false;
+            if ((material == 6 || material == 5) && found == 7)
+                return false;
+        }
+    }
 }
 
-bool AIPathfinding::MapContainer::getLineIntersectionWithPolygon(Vec3&, unsigned int, unsigned int,
-                                                                 const Vec3&, const Vec3&) const
+// Inlined into PE 100A4B40.
+bool AIPathfinding::MapContainer::getLineIntersectionWithPolygon(Vec3& exit, unsigned int polygon,
+                                                                 unsigned int island, const Vec3& origin,
+                                                                 const Vec3& direction) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::MapContainer::getLineIntersectionWithPolygon");
+    unsigned char edge;
+    return m_quadTreeManager->getIsland(island)->getLineExitFromPolygon(exit, polygon, edge, 0xFFFFFFFFu,
+                                                                        origin, direction, 0);
 }
 
 void AIPathfinding::MapContainer::drawPolygon(unsigned int, unsigned int, float*, float) const
@@ -946,9 +1064,15 @@ bool AIPathfinding::getPolygon(const Vec3& position, int map, unsigned int& poly
                                    materials);
 }
 
-int AIPathfinding::getPolygonFromIsland(const Vec3&, int, unsigned int&, unsigned int, int) const
+// PE 100A4940. False for a map out of range.
+int AIPathfinding::getPolygonFromIsland(const Vec3& position, int map, unsigned int& polygon,
+                                        unsigned int island, int equipmentType) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getPolygonFromIsland");
+    if (map < 0 || static_cast<int>(m_maps.size()) <= map)
+        return false;
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->getPolygonFromIsland(position, polygon, island, materials);
 }
 
 // PE 100A49A0. An out-of-range map, either side, answers false without touching the output.
@@ -974,25 +1098,31 @@ void* AIPathfinding::getClusterGraph(int map, unsigned int island) const
     return m_maps[map]->m_quadTreeManager->getClusterGraph(island);
 }
 
-void AIPathfinding::getPolygonCentre(Vec3&, int, unsigned int, unsigned int) const
+// PE 100A4AA0.
+void AIPathfinding::getPolygonCentre(Vec3& centre, int map, unsigned int polygon, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getPolygonCentre");
+    m_maps[map]->getPolygonCentre(centre, polygon, island);
 }
 
-void AIPathfinding::getEdge(Vec3&, Vec3&, int, unsigned int, unsigned int, unsigned int) const
+// PE 100A4B10.
+void AIPathfinding::getEdge(Vec3& first, Vec3& second, int map, unsigned int polygon,
+                            unsigned int neighbour, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getEdge");
+    m_maps[map]->getEdge(first, second, polygon, neighbour, island);
 }
 
-bool AIPathfinding::getLineIntersectionWithPolygon(Vec3&, int, unsigned int, unsigned int,
-                                                   const Vec3&, const Vec3&) const
+// PE 100A4B40.
+bool AIPathfinding::getLineIntersectionWithPolygon(Vec3& exit, int map, unsigned int polygon,
+                                                   unsigned int island, const Vec3& origin,
+                                                   const Vec3& direction) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getLineIntersectionWithPolygon");
+    return m_maps[map]->getLineIntersectionWithPolygon(exit, polygon, island, origin, direction);
 }
 
-int AIPathfinding::getClusterOfPolygon(int, unsigned int, unsigned int) const
+// PE 100A4BC0.
+int AIPathfinding::getClusterOfPolygon(int map, unsigned int island, unsigned int polygon) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getClusterOfPolygon");
+    return m_maps[map]->m_quadTreeManager->getIsland(island)->getPolygon(polygon)->m_cluster;
 }
 
 bool AIPathfinding::areNeighbouringClusters(int, unsigned int, unsigned short,
@@ -1009,22 +1139,45 @@ void AIPathfinding::updateClusterPortalCosts(unsigned int&,
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::updateClusterPortalCosts");
 }
 
-bool AIPathfinding::trace(int, const Vec3&, const Vec3&, Vec3&, unsigned int&, int, int, float,
-                          unsigned char, unsigned char*) const
+// PE 1009C120: the trace below without a known polygon or island.
+bool AIPathfinding::trace(int map, const Vec3& from, const Vec3& to, Vec3& hit, unsigned int& lastPolygon,
+                          int equipmentType, int maxPolygons, float clearance, unsigned char material,
+                          unsigned char* hitMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    return trace(0xFFFFFFFFu, 0xFFFFFFFFu, map, from, to, hit, lastPolygon, equipmentType, maxPolygons,
+                 clearance, material, hitMaterial);
 }
 
-bool AIPathfinding::trace(unsigned int, unsigned int, int, const Vec3&, const Vec3&, Vec3&,
-                          unsigned int&, int, int, float, unsigned char, unsigned char*) const
+// PE 100A4C60.
+bool AIPathfinding::trace(unsigned int polygon, unsigned int island, int map, const Vec3& from,
+                          const Vec3& to, Vec3& hit, unsigned int& lastPolygon, int equipmentType,
+                          int maxPolygons, float clearance, unsigned char material,
+                          unsigned char* hitMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    return m_maps[map]->trace(polygon, island, from, to, hit, lastPolygon, maxPolygons, clearance, materials,
+                              material, hitMaterial);
 }
 
-bool AIPathfinding::trace(BotNavigation*, bool, const Vec3&, Vec3&, unsigned int&, int, int, float,
-                          unsigned char, unsigned char*) const
+// PE 100A4CC0. Traces from where the navigation stands on the mesh of its own vehicle's map, or
+// of the trace map.
+bool AIPathfinding::trace(BotNavigation* navigation, bool onTraceMap, const Vec3& to, Vec3& hit,
+                          unsigned int& lastPolygon, int equipmentType, int maxPolygons, float clearance,
+                          unsigned char material, unsigned char* hitMaterial) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::trace");
+    MaterialManager* const materials =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    const int map = onTraceMap ? m_traceMapIndex : navigation->getVehicleNumber();
+    Vec3 from;
+    from.x = from.y = from.z = 0.0f;
+    unsigned int polygon;
+    unsigned int island;
+    navigation->getMeshPosition(map, polygon, island, from);
+    if (polygon == 0xFFFFFFFFu || island == 0xFFFFFFFFu)
+        return false;
+    return m_maps[map]->traceKnown(polygon, island, from, to, hit, lastPolygon, maxPolygons, clearance,
+                                   materials, material, hitMaterial);
 }
 
 // The

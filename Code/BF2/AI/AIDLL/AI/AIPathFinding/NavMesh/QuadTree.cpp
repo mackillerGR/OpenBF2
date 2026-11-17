@@ -2,6 +2,8 @@
 
 #include "QuadTree.h"
 
+#include <cmath>
+
 #include "../Cluster/ClusterGraph.h"
 #include "../Material/MaterialManager.h"
 #include "../../AIUtils/checkPointer.h"                 // and, through it, Core/Debug.h
@@ -302,6 +304,151 @@ const Vec3& QuadTree::getWrappedVertexOfPolygon(unsigned int polygon, unsigned c
 const Vec3& QuadTree::getNormalOfPolygon(unsigned int polygon) const
 {
     return m_polygons[polygon].m_normal;
+}
+
+void QuadTree::setMaterialOfPolygon(unsigned int polygon, unsigned char material)
+{
+    m_polygons[polygon].m_material = material;
+}
+
+void QuadTree::getCentreOfPolygon(Vec3& centre, unsigned int polygon) const
+{
+    const Polygon& record = m_polygons[polygon];
+    centre.x = 0.0f;
+    centre.y = 0.0f;
+    centre.z = 0.0f;
+    for (unsigned char corner = 0; corner < record.m_numberOfVertices; ++corner)
+    {
+        const Vec3& vertex = m_vertices[m_vertexIndices[record.m_firstIndex + corner]];
+        centre.x = vertex.x + centre.x;
+        centre.y = vertex.y + centre.y;
+        centre.z = vertex.z + centre.z;
+    }
+    const float scale = 1.0f / static_cast<float>(record.m_numberOfVertices);
+    centre.x = scale * centre.x;
+    centre.y = scale * centre.y;
+    centre.z = scale * centre.z;
+}
+
+namespace {
+
+// PE 1014B030: where the line through p1 and p2 meets the line through a and b, as the
+// parameter along p1->p2 and the parameter along a->b. False for parallel lines.
+bool intersectLines(const Vec2& p1, const Vec2& p2, const Vec2& a, const Vec2& b, float& along,
+                    float& alongEdge)
+{
+    const float denominator = (b.y - a.y) * (p2.x - p1.x) - (p2.y - p1.y) * (b.x - a.x);
+    if (denominator == 0.0f)
+        return false;
+    const float inverse = 1.0f / denominator;
+    along = ((p1.y - a.y) * (b.x - a.x) - (p1.x - a.x) * (b.y - a.y)) * inverse;
+    alongEdge = ((p1.y - a.y) * (p2.x - p1.x) - (p2.y - p1.y) * (p1.x - a.x)) * inverse;
+    return true;
+}
+
+} // anonymous namespace
+
+// The eighth shipped argument is never read and is dropped here.
+bool QuadTree::getLineExitFromPolygon(Vec3& exit, unsigned int polygon, unsigned char& edge,
+                                      unsigned int ignoredNeighbour, const Vec3& origin,
+                                      const Vec3& direction, float* edgeDistance) const
+{
+    Vec2 start;
+    start.x = origin.x;
+    start.y = origin.z;
+    const Polygon& record = m_polygons[polygon];
+    float nearestMiss = 99999.0f;
+    float nearestAlong = 0.0f;
+    Vec2 nearestEnd;
+    nearestEnd.x = 0.0f;
+    nearestEnd.y = 0.0f;
+    for (edge = 0; edge < record.m_numberOfVertices; ++edge)
+    {
+        if (ignoredNeighbour != static_cast<unsigned int>(-1)
+            && ignoredNeighbour == m_neighbours[record.m_firstIndex + edge])
+            continue;
+        const Vec3& cornerA = m_vertices[m_vertexIndices[record.m_firstIndex + edge]];
+        Vec2 a;
+        a.x = cornerA.x;
+        a.y = cornerA.z;
+        const Vec3& cornerB = m_vertices[m_vertexIndices[
+            record.m_firstIndex + static_cast<unsigned char>(static_cast<unsigned char>(edge + 1)
+                                                             % record.m_numberOfVertices)]];
+        Vec2 b;
+        b.x = cornerB.x;
+        b.y = cornerB.z;
+        Vec2 end;
+        end.x = direction.x + origin.x;
+        end.y = direction.z + origin.z;
+        float along;
+        float alongEdge;
+        if (!intersectLines(start, end, a, b, along, alongEdge))
+            continue;
+        if (along < 0.0f || alongEdge < 0.0f || alongEdge > 1.0f)
+        {
+            float miss = 9999.0f;
+            if (along < 0.0f)
+                miss = std::fabs(along);
+            bool settled = false;
+            if (alongEdge < 0.0f)
+            {
+                const float before = -alongEdge;
+                if (before < miss)
+                {
+                    miss = before;
+                    settled = true;
+                }
+            }
+            if (!settled && alongEdge > 1.0f)
+            {
+                const float beyond = alongEdge - 1.0f;
+                if (beyond < miss)
+                    miss = beyond;
+            }
+            if (miss < 0.001f && miss < nearestMiss)
+            {
+                nearestMiss = miss;
+                nearestAlong = along;
+                nearestEnd = end;
+            }
+            continue;
+        }
+        // A crossing at either end of the edge only counts when the ray heads out through it.
+        if (alongEdge <= 0.001f || !(alongEdge < 0.999f))
+        {
+            const float outward = -(b.x - a.x) * direction.z + (b.y - a.y) * direction.x;
+            if (!(outward < 0.0f))
+                continue;
+        }
+        const float rest = 1.0f - along;
+        exit.x = end.x * along + start.x * rest;
+        exit.y = 0.0f;
+        exit.z = end.y * along + start.y * rest;
+        const float dx = exit.x - start.x;
+        const float dz = exit.z - start.y;
+        exit.y = std::sqrt(dz * dz + dx * dx) * direction.y + origin.y;
+        if (edgeDistance)
+        {
+            const float ex = a.x - b.x;
+            const float ez = a.y - b.y;
+            const float length = std::sqrt(ez * ez + ex * ex);
+            float nearer = 1.0f - alongEdge;
+            if (alongEdge < nearer)
+                nearer = alongEdge;
+            *edgeDistance = nearer * length;
+        }
+        return true;
+    }
+    if (!(nearestMiss < 0.001f))
+        return false;
+    const float rest = 1.0f - nearestAlong;
+    exit.x = nearestEnd.x * nearestAlong + start.x * rest;
+    exit.y = 0.0f;
+    exit.z = nearestEnd.y * nearestAlong + start.y * rest;
+    const float dx = exit.x - start.x;
+    const float dz = exit.z - start.y;
+    exit.y = std::sqrt(dz * dz + dx * dx) * direction.y + origin.y;
+    return true;
 }
 
 // Tracks polygons affected by destroyable map parts and restores their original materials.

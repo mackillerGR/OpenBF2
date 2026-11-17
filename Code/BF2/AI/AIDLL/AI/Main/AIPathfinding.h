@@ -89,7 +89,7 @@ public:
         bool getMaterial(unsigned int, unsigned int, unsigned char&) const;
         bool setMaterial(unsigned int, unsigned int, unsigned char);
         void getPolygonCentre(Vec3&, unsigned int, unsigned int) const;
-        void getEdge(Vec3&, Vec3&, unsigned int, unsigned int, unsigned int) const;
+        bool getEdge(Vec3&, Vec3&, unsigned int, unsigned int, unsigned int) const;   // bool: PE 1009FBD0
         bool trace(unsigned int&, unsigned int&, const Vec3&, const Vec3&, Vec3&, unsigned int&, int, float, MaterialManager *, unsigned char, unsigned char *) const;
         bool traceKnown(unsigned int, unsigned int, const Vec3&, const Vec3&, Vec3&, unsigned int&, int, float, MaterialManager *, unsigned char, unsigned char *) const;
         bool getLineIntersectionWithPolygon(Vec3&, unsigned int, unsigned int, const Vec3&, const Vec3&) const;
