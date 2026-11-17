@@ -5,6 +5,7 @@
 #include "../AIBot/SquadMember.h"
 #include "../AIBot/CommunicationAgent.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../AIPlanInterpreter/PlanInterpreter.h"
 #include "../Main/AIDllFrontier.h"
@@ -16,6 +17,7 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIControlInfo.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIMobile.h"
 #include "../Main/IBotManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
@@ -249,6 +251,59 @@ bool BAPICChangeVehicle::execute(Bot* bot, bool& finished, bool& failed)
 
 BAPStatementType BAPICChangeVehicle::getType() { return BAPSTICChangeVehicle; }
 bool BAPICChangeVehicle::isComposite() { return true; }
+
+// ---- BAPMoveTo -----------------------------------------------------------------------------
+
+// The equipment is not null-checked, as shipped.
+BAPMoveTo::BAPMoveTo(Bot* bot, const Vec3& target, float speed, float cruiseSpeed, BAPCondition* until,
+                     unsigned long long inputMask, float radius, int id)
+    : m_int18(0), m_int1C(0), m_int20(0), m_speed(speed), m_cruiseSpeed(cruiseSpeed), m_until(until),
+      m_target(target), m_radius(radius), m_int50(0), m_int54(0)
+{
+    m_vec40.x = m_vec40.y = m_vec40.z = 0.0f;
+    m_forward.x = m_forward.y = m_forward.z = 0.0f;
+    m_up.x = m_up.y = m_up.z = 0.0f;
+    m_right.x = m_right.y = m_right.z = 0.0f;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    m_id = id;
+    if (m_until)
+        m_until->m_owner = this;
+    m_altitude = equipment->getAltitude(equipment->getMobile()->getSpeed());
+    m_inputMask = inputMask;
+    const float* const m = equipment->getTransformation().m;
+    m_forward.x = m[8];
+    m_forward.y = m[9];
+    m_forward.z = m[10];
+    m_right.x = m[0];
+    m_right.y = m[1];
+    m_right.z = m[2];
+    m_up.x = m[4];
+    m_up.y = m[5];
+    m_up.z = m[6];
+    m_vec40.x = m_vec40.y = m_vec40.z = 0.0f;
+}
+
+BAPMoveTo::~BAPMoveTo()
+{
+    if (m_until)
+        delete m_until;
+}
+
+bool BAPMoveTo::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+unsigned long long BAPMoveTo::getInputMask() { return m_inputMask; }
+BAPStatementType BAPMoveTo::getType() { return BAPSTMoveTo; }
+bool BAPMoveTo::isComposite() { return false; }
+
+bool BAPMoveTo::isStopConditionMet(Bot* bot)
+{
+    return m_until && m_until->evaluate(bot);
+}
 
 // ---- BAPICTurnLock -------------------------------------------------------------------------
 

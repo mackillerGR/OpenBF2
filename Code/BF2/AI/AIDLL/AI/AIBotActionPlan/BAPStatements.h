@@ -177,6 +177,43 @@ public:
     /* +0x28 */ float m_delay;
 };
 
+// Moves the equipment to a position; the per-vehicle MoveTo entries drive it. Type 7. The
+// constructor caches the equipment's altitude along its speed and the axes of its
+// transformation. PE vtable 10282EB8. [INFERRED] name and field meanings.
+class BAPMoveTo : public BotScript
+{
+public:
+    // PE 1019D160. `speed` and `cruiseSpeed` come from the vehicle's maximum speed in the callers.
+    BAPMoveTo(Bot* bot, const Vec3& target, float speed, float cruiseSpeed, BAPCondition* until,
+              unsigned long long inputMask, float radius, int id);
+    virtual ~BAPMoveTo();                                              // PE 1019D2B0
+
+    // The fallback when no entry is installed: unfinished and failed.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 1019D0E0
+    virtual unsigned long long getInputMask();                         // PE 1019D100
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 1019D110: false
+    // Whether the stop condition holds; false without one. PE 1019D0B0; [INFERRED] name.
+    virtual bool isStopConditionMet(Bot* bot);
+
+    /* +0x18 */ int m_int18;               // = 0 [UNRESOLVED]
+    /* +0x1C */ int m_int1C;               // = 0 [UNRESOLVED]
+    /* +0x20 */ int m_int20;               // = 0 [UNRESOLVED]
+    /* +0x24 */ float m_speed;
+    /* +0x28 */ float m_cruiseSpeed;
+    /* +0x2C */ BAPCondition* m_until;
+    /* +0x30 */ Vec3 m_target;
+    /* +0x3C */ int m_int3C;               // left unset [UNRESOLVED]
+    /* +0x40 */ Vec3 m_vec40;              // = 0 [UNRESOLVED]
+    /* +0x4C */ float m_radius;
+    /* +0x50 */ int m_int50;               // = 0 [UNRESOLVED]
+    /* +0x54 */ int m_int54;               // = 0 [UNRESOLVED]
+    /* +0x58 */ float m_altitude;
+    /* +0x5C */ Vec3 m_forward;            // transformation row 2
+    /* +0x68 */ Vec3 m_up;                 // transformation row 1
+    /* +0x74 */ Vec3 m_right;              // transformation row 0
+};
+
 // Releases the bot's controls in up to three groups. Type 14. PE vtable 10283378.
 class BAPResetControls : public BotScript
 {
