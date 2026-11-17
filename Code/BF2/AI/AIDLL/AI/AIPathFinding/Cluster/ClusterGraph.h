@@ -26,7 +26,9 @@ public:
     ClusterPortal() { m_position.x = 0.0f; m_position.y = 0.0f; m_position.z = 0.0f; }
 
     /* +0x00 */ Vec3          m_position;          // [INFERRED] name
-    /* +0x0C */ unsigned char m_unread0C[8];       // [UNRESOLVED] - see the note above
+    /* +0x0C */ unsigned short m_cluster;          // [INFERRED] the cluster the portal leads to
+    /* +0x0E */ unsigned char m_unread0E[2];       // [UNRESOLVED]
+    /* +0x10 */ unsigned int  m_value10;           // [UNRESOLVED] handed out with the position
 };
 
 typedef char ClusterPortalIsTheFileRecord[sizeof(ClusterPortal) == 20 ? 1 : -1];
@@ -42,6 +44,27 @@ public:
 
     // [CHOSEN name] Returns the stored cluster count used by QuadTreeManager.
     unsigned int getNumberOfClusters() const { return m_numberOfClusters; }
+
+    // A cluster's portal record for a cost type. Nothing is range-checked. PE 101574E0.
+    ClusterPortal* getClusterPortal(unsigned short cluster, unsigned short costType,
+                                    unsigned short portal) const
+    {
+        const Cluster& entry = m_clusters[cluster];
+        return &m_portals[entry.m_numberOfPortals * costType + entry.m_firstPortal + portal];
+    }
+
+    // Whether one of a cluster's first-cost-type portals leads to the other cluster.
+    // PE 10157940.
+    bool areNeighbouringClusters(unsigned short cluster, unsigned short other) const
+    {
+        const Cluster& entry = m_clusters[cluster];
+        for (unsigned short i = 0; i < entry.m_numberOfPortals; ++i)
+        {
+            if (m_portals[static_cast<unsigned short>(i) + entry.m_firstPortal].m_cluster == other)
+                return true;
+        }
+        return false;
+    }
 
 private:
     friend class QuadTree;

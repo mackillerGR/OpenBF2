@@ -8,6 +8,7 @@
 
 #include "../AIPathFinding/Cluster/ClusterNodeManager.h"   // init builds one per cluster search
 #include "../AIPathFinding/NavMesh/QuadTree.h"             // MapContainer polygon vertex query
+#include "../AIPathFinding/Cluster/ClusterGraph.h"
 #include "../AIPathFinding/NavMesh/QTSearchNodeManager.h"  // init builds one per local search
 #include "../AIPathFinding/Material/MaterialManager.h"
 #include "../AIBot/BotNavigation.h"
@@ -1125,10 +1126,26 @@ int AIPathfinding::getClusterOfPolygon(int map, unsigned int island, unsigned in
     return m_maps[map]->m_quadTreeManager->getIsland(island)->getPolygon(polygon)->m_cluster;
 }
 
-bool AIPathfinding::areNeighbouringClusters(int, unsigned int, unsigned short,
-                                            unsigned short) const
+// PE 100A4BF0.
+bool AIPathfinding::areNeighbouringClusters(int map, unsigned int island, unsigned short cluster,
+                                            unsigned short other) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::areNeighbouringClusters");
+    return m_maps[map]->m_quadTreeManager->getClusterGraph(island)->areNeighbouringClusters(cluster,
+                                                                                             other);
+}
+
+bool ClusterNodePath::getPortal(Vec3& position, unsigned int& value, unsigned int index) const
+{
+    if (index >= m_nodes.size() || m_nodes[index].second == 0xFFFF)
+        return false;
+
+    const ClusterGraph* const graph =
+        static_cast<const ClusterGraph*>(IAIPathfinding::instance->getClusterGraph(m_map, m_island));
+    const ClusterPortal* const portal =
+        graph->getClusterPortal(m_nodes[index].first, m_costType, m_nodes[index].second);
+    position = portal->m_position;
+    value = portal->m_value10;
+    return true;
 }
 
 void AIPathfinding::updateClusterPortalCosts(unsigned int&,
@@ -1173,7 +1190,7 @@ bool AIPathfinding::trace(BotNavigation* navigation, bool onTraceMap, const Vec3
     from.x = from.y = from.z = 0.0f;
     unsigned int polygon;
     unsigned int island;
-    navigation->getMeshPosition(map, polygon, island, from);
+    navigation->getTraceData(map, polygon, island, from);
     if (polygon == 0xFFFFFFFFu || island == 0xFFFFFFFFu)
         return false;
     return m_maps[map]->traceKnown(polygon, island, from, to, hit, lastPolygon, maxPolygons, clearance,

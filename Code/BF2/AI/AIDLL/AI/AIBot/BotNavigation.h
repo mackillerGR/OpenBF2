@@ -15,6 +15,7 @@ namespace hfe {
 namespace ai {
 
 class BotMain;
+class IAIPathfinding;
 class Information;
 
 class BotNavigation
@@ -44,15 +45,25 @@ public:
     void updateSpaceLeftAndRight();
     void updateClosestDistance();
 
-    void initPathfinding(const Vec3& to, float a, float b);
-    void initPathfinding(unsigned int a, unsigned int b, const Vec3& to, float c, float d);
+    // Requests a path to a position: finds the polygon under it on the equipment's map and
+    // forwards. False when the bot has no equipment or the position is off the mesh. PE 10176460.
+    bool initPathfinding(const Vec3& to, float a, float b);
+    // Requests a path to a position on a known island and polygon. Keeps the current path when
+    // the request repeats and the bot is still on it; otherwise restarts navigation, tries a
+    // straight line and marks the search as new. False when either end is off the mesh, the
+    // equipment is over 100 from its last valid position or on another island. PE 10175BD0.
+    bool initPathfinding(unsigned int island, unsigned int polygon, const Vec3& to, float a, float b);
     void doPolygonSearch(bool& a, bool* b);
     void doClusterSearch(bool& a, bool* b);
     void calculatePoints();
     void optimizePoints();
-    bool testDirectPath();
+    // Within 200 of the goal, traces a straight line to it; a clear line becomes a one-point
+    // path and state 2. PE 10174F10; no value is returned there.
+    void testDirectPath();
     void retrace();
 
+    // Whether the equipment's last valid polygon is the previous or current point's, an earlier
+    // point's, or one of the next 20 (which then becomes current). PE 101739B0.
     bool stillOnPath();
     bool hasIllegalPath();
     // [INFERRED] accessor name for the +192 byte, which retail reads inline (BotManager::
@@ -78,7 +89,9 @@ public:
     void getFirstPointBeyondDist(const Vec2& from, float distance, Vec2& out);
     void getSecondPoint(Vec2& out);
     void getLargestAngleDiff(float& out);
-    void getTraceData(int a, unsigned int& b, unsigned int& c, Vec3& d);
+    // The equipment's last valid polygon, island and position on a map, cached per position.
+    // Only the bot's own map and the trace map are supported. PE 101727B0.
+    void getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
 
     void getGrenadeWarning(Vec3& position, double& time);
     void setGrenadeWarning(const Vec3& position, double time, bool b);
@@ -87,60 +100,64 @@ public:
     void resetAll();
 
     // attested as a nested type by the container instantiations, which spell
-    // `std::vector<dice::hfe::ai::BotNavigation::NavigationPoint>` in full. sizeof is 40, from
-    // the constructor's divide; the members are [UNRESOLVED] because nothing recovered so far builds
-    // one. Declared as a sized block rather than guessed at.
+    // `std::vector<dice::hfe::ai::BotNavigation::NavigationPoint>` in full. sizeof is 40.
     struct NavigationPoint
     {
-        // Initializes the index to -1 and clears the preceding 36 bytes.
-        // [UNRESOLVED] The contents of that byte range remain unknown.
         NavigationPoint()
-            : m_index36(-1)
+            : m_polygon(static_cast<unsigned int>(-1))
         {
-            for (int i = 0; i < 36; ++i)
-                m_bytes[i] = 0;
+            m_vec0.x = m_vec0.y = m_vec0.z = 0.0f;
+            m_vec12.x = m_vec12.y = m_vec12.z = 0.0f;
+            m_position.x = m_position.y = m_position.z = 0.0f;
         }
 
-        char m_bytes[36];       // [UNRESOLVED]
-        int  m_index36;         // = -1
+        /*  +0 */ Vec3 m_vec0;              // [UNRESOLVED] role; testDirectPath stores the goal
+        /* +12 */ Vec3 m_vec12;             // [UNRESOLVED] role; testDirectPath stores the goal
+        /* +24 */ Vec3 m_position;          // [INFERRED] name
+        /* +36 */ unsigned int m_polygon;   // = -1 [INFERRED] name
     };
 
     int getVehicleNumber() const { return m_vehicleNumber; }
-    // Where the bot's equipment stands on a map's mesh: its polygon, island and position.
-    // PE 101727B0; [INFERRED] name. [FRONTIER]
-    void getMeshPosition(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
 
 private:
+    // Moves the bot back onto its cluster path from its last valid position, or resets when no
+    // remaining cluster is the bot's or a neighbour of it. PE 101750B0; [INFERRED] name.
+    void resumeClusterPath();
+    // Stores the length left along the points and the cluster portals. PE 10173DD0;
+    // [INFERRED] name.
+    void updateDistanceLeft();
+
     /*   0 */ BotMain* m_bot;              // the ctor argument, and the first store
     /*   4 */ float m_float4;              // = 2.0f [UNRESOLVED]
     /*   8 */ float m_float8;              // = 2.0f [UNRESOLVED]
-    /*  12 */ char  m_gap12[4];            // [UNRESOLVED] - never written
-    /*  16 */ int   m_int16;               // = -1
-    /*  20 */ int   m_int20;               // = -1
-    /*  24 */ int   m_zero24[3];           // +24..+32, all 0
-    /*  36 */ int   m_int36;               // = -1
-    /*  40 */ bool  m_flag40;              // = false
+    /*  12 */ float m_float8Squared;       // initPathfinding: m_float8 squared
+    /*  16 */ unsigned int m_startIsland;  // = -1 [INFERRED] name
+    /*  20 */ unsigned int m_startPolygon; // = -1 [INFERRED] name
+    /*  24 */ Vec3  m_start;               // [INFERRED] name
+    /*  36 */ unsigned int m_goalPolygon;  // = -1 [INFERRED] name
+    /*  40 */ unsigned char m_goalMaterial; // = 0 [INFERRED] name
     /*  41 */ char  m_pad41[3];
-    /*  44 */ int   m_zero44[3];           // +44..+52, all 0
-    /*  56 */ int   m_int56;               // not a gap - `reset` zeroes it
-    // Owns polygon and cluster path reservations, released through virtual slots +156 and
-    // +164 during reset. [UNRESOLVED] The interface type is not yet known.
-    /*  60 */ void* m_pathOwner;            // = 0
-    /*  64 */ int   m_zero64;               // = 0
-    /*  68 */ char  m_gap68[4];            // [UNRESOLVED] - never written
+    /*  44 */ Vec3  m_goal;                // [INFERRED] name
+    /*  56 */ int   m_state;               // reset: 0; testDirectPath: 2 [INFERRED] name
+    // Owns the polygon and cluster search reservations. Null until the first path request.
+    /*  60 */ IAIPathfinding* m_pathOwner;  // = 0
+    /*  64 */ void* m_quadTree;             // = 0; the start island's quad tree
+    /*  68 */ bool  m_flag68;               // [UNRESOLVED] role
+    /*  69 */ char  m_pad69[3];
     /*  72 */ QTPath* m_polygonPath;       // new(0x18) - the fine path
-    /*  76 */ int   m_int76;               // = -1
+    /*  76 */ unsigned int m_int76;        // = -1; polygon search resource
     /*  80 */ int   m_vehicleNumber;       // reset: the equipment's vehicle number. [INFERRED] name
-    /*  84 */ char  m_gap84[4];            // [UNRESOLVED] - never written
+    /*  84 */ int   m_equipmentType;       // initPathfinding [INFERRED] name
     // Handles of nearby obstacles, refreshed by updateObstacles (PE +0x58).
     /*  88 */ std::vector<unsigned int> m_obstacles;
     // the walkable result - see the header note. The constructor's dead resize targets this.
     /* 100 */ std::vector<NavigationPoint> m_points;
-    /* 112 */ char  m_gap112[4];           // [UNRESOLVED] - never written
+    /* 112 */ unsigned int m_island112;    // initPathfinding: the start island again
     /* 116 */ int   m_int116;              // = 0
-    /* 120 */ char  m_gap120[4];           // [UNRESOLVED] - never written
+    /* 120 */ bool  m_flag120;             // [UNRESOLVED] role
+    /* 121 */ char  m_pad121[3];
     /* 124 */ ClusterNodePath* m_clusterPath;   // new(0x1C) - the coarse path
-    /* 128 */ int   m_int128;              // = -1
+    /* 128 */ unsigned int m_int128;       // = -1; cluster search resource
     // `allocate(20)` with 0 / 0 / self / self is an `_Rb_tree` header at 16 + sizeof(value_type)
     // so the value type is four bytes - a set of pointers or handles. Which is [UNRESOLVED];
     // `void*` holds the width and claims nothing.
@@ -162,8 +179,12 @@ private:
     /* 204 */ int   m_int204;              // = -1
     /* 208 */ int   m_int208;              // = -1
     /* 212 */ int   m_int212;              // = -1
-    /* 216 */ int   m_zero216[3];          // +216, +220, +224
-    /* 228 */ char  m_gap228[12];          // [UNRESOLVED] - never written
+    // getTraceData's cache: the last valid position handed out and the map it was for.
+    /* 216 */ Vec3  m_tracePosition;
+    /* 228 */ int   m_traceMap;            // never initialised
+    /* 232 */ float m_smallestRadius;      // initPathfinding: the equipment's smallest radius
+    /* 236 */ bool  m_flag236;             // initPathfinding: object type bit 21
+    /* 237 */ char  m_pad237[3];
     /* 240 */ int   m_int240;              // = 0
     /* 244 */ double m_double244;          // not a gap - `reset` zeroes it
     // resetAll clears this field.
@@ -180,7 +201,8 @@ private:
     /* 292 */ float m_float292;
     /* 296 */ float m_float296;
     /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
-    /* 308 */ int   m_zero308[2];          // +308, +312
+    /* 308 */ int   m_zero308;             // +308
+    /* 312 */ float m_pathLength;          // updateDistanceLeft: length along the points
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false
     /* 317 */ char  m_pad317[3];

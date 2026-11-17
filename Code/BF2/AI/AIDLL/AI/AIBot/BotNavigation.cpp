@@ -11,6 +11,10 @@
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../Main/IAIPathfinding.h"
+#include "../../../../Core/Debug.h"
+#include <cmath>
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 #include "../AIKnowledge/AIInformationGrid.h"
@@ -25,16 +29,16 @@ BotNavigation::BotNavigation(BotMain* owner)
     : m_bot(owner)
     , m_float4(2.0f)
     , m_float8(2.0f)
-    , m_int16(-1)
-    , m_int20(-1)
-    , m_int36(-1)
-    , m_flag40(false)
+    , m_startIsland(static_cast<unsigned int>(-1))
+    , m_startPolygon(static_cast<unsigned int>(-1))
+    , m_goalPolygon(static_cast<unsigned int>(-1))
+    , m_goalMaterial(0)
     // the two paths, in the order the binary builds them: the fine one first.
     , m_polygonPath(checkPointer(new QTPath()))
-    , m_int76(-1)
+    , m_int76(static_cast<unsigned int>(-1))
     , m_int116(0)
     , m_clusterPath(checkPointer(new ClusterNodePath()))
-    , m_int128(-1)
+    , m_int128(static_cast<unsigned int>(-1))
     , m_double144(0.0)
     , m_double152(0.0)
     , m_double160(0.0)
@@ -56,16 +60,16 @@ BotNavigation::BotNavigation(BotMain* owner)
 {
     for (int i = 0; i < 3; ++i)
     {
-        m_zero24[i]  = 0;
-        m_zero44[i]  = 0;
         m_zero176[i] = 0;
-        m_zero216[i] = 0;
         m_zero256[i] = 0;
     }
-    m_pathOwner = 0;                   // +60 - a pointer, see BotNavigation.h
-    m_zero64 = 0;
-    m_zero308[0] = 0;
-    m_zero308[1] = 0;
+    m_start.x = m_start.y = m_start.z = 0.0f;
+    m_goal.x = m_goal.y = m_goal.z = 0.0f;
+    m_tracePosition.x = m_tracePosition.y = m_tracePosition.z = 0.0f;
+    m_pathOwner = 0;
+    m_quadTree = 0;
+    m_zero308 = 0;
+    m_pathLength = 0.0f;
     for (int i = 0; i < 3; ++i)
         m_zero280[i] = 0;
     m_float292 = 0.0f;
@@ -122,34 +126,28 @@ void BotNavigation::resetAll()
     m_flag276 = false;
     // Not the constructor's 0.0 - see the block above.
     m_double268 = -9999.0;
-    m_zero308[0] = 0;
+    m_zero308 = 0;
     m_double300 = -1.0;
 
     clearProgress();
 }
 
 // Resets navigation state and returns path resources to their owners.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] Incomplete resource paths stop by name.
-// [RETIRE-WHEN: aidll-02-skeleton] Implement and validate path release and progress reset.
-// [RETIRE-WHEN: botmain-bases] Remove when the corresponding implementation is complete and validated.
+// PE 10174D70.
 void BotNavigation::reset()
 {
     m_flag316 = false;
 
-    // giving the polygon path back. See the block above.
-    if (m_int76 != -1)
+    if (m_int76 != static_cast<unsigned int>(-1))
     {
-        // Retail: `m_pathOwner->release(&m_int76, m_bot->getBotId)`. The bot half is typed now;
-        // the object at +60 still has no class, so the slot cannot be.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (a polygon path is reserved)");
-        m_int76 = -1;
+        m_pathOwner->releaseResource(m_int76, m_bot->getBotId());
+        m_int76 = static_cast<unsigned int>(-1);
     }
 
-    // and the cluster path, through a different slot on the same object.
-    if (m_int128 != -1)
+    if (m_int128 != static_cast<unsigned int>(-1))
     {
-        BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::reset (a cluster path is reserved)");
-        m_int128 = -1;
+        m_pathOwner->releaseClusterResource(m_int128, m_bot->getBotId());
+        m_int128 = static_cast<unsigned int>(-1);
     }
 
     // Reaching through both path objects - see the block above.
@@ -160,7 +158,7 @@ void BotNavigation::reset()
     m_clusterPath->m_nodes.resize(0);
     m_clusterPath->m_i0 = 0;
 
-    m_int56 = 0;
+    m_state = 0;
 
     m_points.resize(0);
 
@@ -192,6 +190,359 @@ void BotNavigation::reset()
     m_sentinel188 = 9999999.0f;
     m_float292 = 0.0f;
     m_float296 = 0.0f;
+}
+
+namespace {
+
+// Component-wise equality within FLT_EPSILON, as the retail vector comparison. PE 100D2910.
+bool isSamePosition(const Vec3& a, const Vec3& b)
+{
+    return std::fabs(a.x - b.x) <= 1.1920929e-07f
+        && std::fabs(a.y - b.y) <= 1.1920929e-07f
+        && std::fabs(a.z - b.z) <= 1.1920929e-07f;
+}
+
+} // anonymous namespace
+
+// The equipment is not null-checked.
+void BotNavigation::getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position)
+{
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const IPIMobile::ValidPos& valid = info->getMobile()->getLastValidPosition(map);
+
+    if (m_traceMap == map && isSamePosition(valid.position, m_tracePosition))
+    {
+        position = m_tracePosition;
+        if (map == IAIPathfinding::instance->getTraceMapIndex())
+        {
+            polygon = static_cast<unsigned int>(m_int208);
+            island = static_cast<unsigned int>(m_int212);
+        }
+        else if (map == m_vehicleNumber)
+        {
+            polygon = static_cast<unsigned int>(m_int200);
+            island = static_cast<unsigned int>(m_int204);
+        }
+        else
+        {
+            Debug(DebugTypeError, __FILE__, __LINE__, "") << "Should not be here!";
+        }
+        return;
+    }
+
+    m_traceMap = map;
+    m_tracePosition = valid.position;
+    position = valid.position;
+    polygon = valid.polygon;
+    island = valid.quadTree;
+    if (m_vehicleNumber == map)
+    {
+        m_int200 = static_cast<int>(valid.polygon);
+        m_int204 = static_cast<int>(valid.quadTree);
+    }
+    if (map == IAIPathfinding::instance->getTraceMapIndex())
+    {
+        m_int208 = static_cast<int>(valid.polygon);
+        m_int212 = static_cast<int>(valid.quadTree);
+    }
+}
+
+bool BotNavigation::initPathfinding(const Vec3& to, float a, float b)
+{
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!info)
+    {
+        m_flag193 = false;
+        return false;
+    }
+
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    unsigned int polygon;
+    unsigned int island;
+    const int equipmentType = info->getUnit()->getEquipmentType();
+    if (!pathfinding->getPolygon(to, info->getMobile()->getVehicleNumber(), polygon, island,
+                                 equipmentType))
+    {
+        m_flag193 = false;
+        return false;
+    }
+    return initPathfinding(island, polygon, to, a, b);
+}
+
+bool BotNavigation::initPathfinding(unsigned int island, unsigned int polygon, const Vec3& to, float a,
+                                    float b)
+{
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!info)
+    {
+        m_flag193 = false;
+        return false;
+    }
+
+    m_flag236 = ((info->getObjectTypeFlags() >> 21) & 1) != 0;
+    if (!m_pathOwner)
+        m_pathOwner = IAIPathfinding::instance;
+
+    IPIMobile* const mobile = info->getMobile();
+    const IPIMobile::ValidPos& valid = mobile->getLastValidPosition();
+
+    if (!isSamePosition(to, m_goal))
+        clearProgress();
+
+    if (m_flag193 && isSamePosition(m_goal, to) && mobile->getVehicleNumber() == m_vehicleNumber
+        && info->getUnit()->getEquipmentType() == m_equipmentType)
+    {
+        if (m_state == 0 || m_state == 1)
+            return true;
+        if (m_points.size() != 0 && m_points[m_int116].m_polygon == valid.polygon)
+            return true;
+        if (m_points.size() != 0 && stillOnPath())
+            return true;
+        if (m_points.size() > 1)
+        {
+            resumeClusterPath();
+            return true;
+        }
+    }
+
+    if (island != static_cast<unsigned int>(-1) && polygon != static_cast<unsigned int>(-1))
+    {
+        m_goalPolygon = polygon;
+        m_goal = to;
+        if (valid.quadTree != static_cast<unsigned int>(-1)
+            && valid.polygon != static_cast<unsigned int>(-1))
+        {
+            const Vec3& position = info->getPosition();
+            const float dx = valid.position.x - position.x;
+            const float dy = valid.position.y - position.y;
+            const float dz = valid.position.z - position.z;
+            if (!(std::sqrt(dx * dx + dy * dy + dz * dz) > 100.0f))
+            {
+                if (island != valid.quadTree)
+                {
+                    Debug(DebugTypeError, __FILE__, __LINE__, "")
+                        << "Bot " << m_bot->getName()
+                        << " is ordered to go to an island that it is not on (" << island << " != "
+                        << valid.quadTree << ")";
+                    m_flag193 = false;
+                    return false;
+                }
+
+                m_flag68 = true;
+                m_flag120 = true;
+                m_flag192 = false;
+                m_startIsland = valid.quadTree;
+                m_island112 = valid.quadTree;
+                m_startPolygon = valid.polygon;
+                m_start = valid.position;
+                m_float8 = b;
+                m_float8Squared = b * b;
+                m_float4 = a;
+                m_vehicleNumber = mobile->getVehicleNumber();
+                const IPIMobile::ValidPos& last = mobile->getLastValidPosition(m_vehicleNumber);
+                m_int204 = static_cast<int>(last.quadTree);
+                m_int200 = static_cast<int>(last.polygon);
+                m_int212 = static_cast<int>(mobile->getLastValidInfantryPos().quadTree);
+                m_int208 = static_cast<int>(mobile->getLastValidInfantryPos().polygon);
+                m_equipmentType = info->getUnit()->getEquipmentType();
+                m_flag195 = false;
+                m_int240 = 0;
+                reset();
+                m_flag193 = true;
+                m_smallestRadius = info->getPhysical()->getSmallestRadius();
+                m_pathOwner->getMaterial(m_vehicleNumber, island, m_goalPolygon, m_goalMaterial);
+                testDirectPath();
+                m_quadTree = m_pathOwner->getQuadTree(m_vehicleNumber, m_startIsland);
+                m_flag316 = true;
+                return true;
+            }
+        }
+    }
+
+    m_flag192 = true;
+    m_flag193 = false;
+    return false;
+}
+
+void BotNavigation::testDirectPath()
+{
+    const float dx = m_goal.x - m_start.x;
+    const float dy = m_goal.y - m_start.y;
+    const float dz = m_goal.z - m_start.z;
+    if (!(dz * dz + dy * dy + dx * dx < 40000.0f))
+        return;
+
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!info || !info->getMobile())
+        return;
+
+    Vec3 hit;
+    hit.x = hit.y = hit.z = 0.0f;
+    unsigned int polygon;
+    unsigned char material;
+    if (!m_pathOwner->trace(m_startPolygon, m_island112, m_vehicleNumber, m_start, m_goal, hit, polygon,
+                            m_equipmentType, -1, 0.0f, 5, &material))
+        return;
+
+    const unsigned int index = static_cast<unsigned int>(m_points.size());
+    m_points.resize(index + 1);
+    NavigationPoint& point = m_points[index];
+    point.m_position = m_goal;
+    point.m_polygon = polygon;
+    point.m_vec0 = m_goal;
+    point.m_vec12 = m_goal;
+    m_goalPolygon = polygon;
+    m_goalMaterial = material;
+    m_flag68 = false;
+    m_flag120 = false;
+    m_int116 = 0;
+    m_state = 2;
+    updateDistanceLeft();
+}
+
+// Neither the equipment nor its mobile part is null-checked.
+bool BotNavigation::stillOnPath()
+{
+    if (m_points.size() < 2)
+        return false;
+
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const unsigned int polygon = info->getMobile()->getLastValidPosition().polygon;
+    if (polygon == static_cast<unsigned int>(-1))
+        return false;
+
+    const unsigned int current = static_cast<unsigned int>(m_int116);
+    if (current >= m_points.size())
+        return false;
+
+    unsigned int previous = static_cast<unsigned int>(-1);
+    if (current > 0)
+        previous = m_points[current - 1].m_polygon;
+    if (polygon == previous || polygon == m_points[current].m_polygon)
+        return true;
+
+    for (int i = m_int116; i >= 0; --i)
+    {
+        if (m_points[i].m_polygon == polygon)
+            return true;
+    }
+
+    unsigned int count = static_cast<unsigned int>(m_points.size()) - current;
+    if (count >= 20)
+        count = 20;
+    const unsigned int end = current + count;
+    for (unsigned int i = current; i < end; ++i)
+    {
+        if (m_points[i].m_polygon == polygon)
+        {
+            const int skipped = m_int116 - static_cast<int>(i) + m_int240;
+            m_int116 = static_cast<int>(i);
+            m_int240 = skipped <= 0 ? 0 : skipped;
+            return true;
+        }
+    }
+    return false;
+}
+
+// The equipment is not null-checked. The first pass looks for the bot's own cluster and the
+// second for a neighbour of it; both leave the cluster path's cursor on the match and neither
+// examines the last entry.
+void BotNavigation::resumeClusterPath()
+{
+    ClusterNodePath* const path = m_clusterPath;
+    const unsigned int count = static_cast<unsigned int>(path->m_nodes.size());
+    if (count > 1)
+    {
+        path->m_i0 = 0;
+        m_points.resize(0);
+
+        Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+        const IPIMobile::ValidPos& valid = info->getMobile()->getLastValidPosition();
+        m_startIsland = valid.quadTree;
+        m_startPolygon = valid.polygon;
+        m_start = valid.position;
+        m_flag195 = true;
+
+        const int cluster = m_pathOwner->getClusterOfPolygon(m_vehicleNumber, m_startIsland, m_startPolygon);
+        const unsigned int last = count - 1;
+
+        for (unsigned int i = 0; i < last; ++i)
+        {
+            const int cursor = m_clusterPath->m_i0;
+            unsigned short node = 0xFFFF;
+            if (cursor < static_cast<int>(m_clusterPath->m_nodes.size()))
+                node = m_clusterPath->m_nodes[cursor].first;
+            if (static_cast<unsigned short>(cluster) == node)
+                return;
+            ++m_clusterPath->m_i0;
+        }
+
+        m_clusterPath->m_i0 = 0;
+        for (unsigned int i = 0; i < last; ++i)
+        {
+            const int cursor = m_clusterPath->m_i0;
+            unsigned short node = 0xFFFF;
+            if (cursor < static_cast<int>(m_clusterPath->m_nodes.size()))
+                node = m_clusterPath->m_nodes[cursor].first;
+            if (m_pathOwner->areNeighbouringClusters(m_vehicleNumber, m_startIsland,
+                                                     static_cast<unsigned short>(cluster), node))
+                return;
+            ++m_clusterPath->m_i0;
+        }
+    }
+
+    m_flag195 = false;
+    reset();
+}
+
+// The equipment is not null-checked. A portal that cannot be resolved leaves the previous
+// portal position in place and so adds its distance again.
+void BotNavigation::updateDistanceLeft()
+{
+    if (m_points.size() == 0)
+    {
+        m_sentinel188 = 0.0f;
+        return;
+    }
+
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& position = info->getPosition();
+    const NavigationPoint& current = m_points[m_int116];
+    float dx = position.x - current.m_position.x;
+    float dy = position.y - current.m_position.y;
+    float dz = position.z - current.m_position.z;
+    float distance = std::sqrt(dz * dz + dy * dy + dx * dx);
+
+    unsigned int i = static_cast<unsigned int>(m_int116) + 1;
+    for (; i < m_points.size(); ++i)
+    {
+        dx = m_points[i - 1].m_position.x - m_points[i].m_position.x;
+        dy = m_points[i - 1].m_position.y - m_points[i].m_position.y;
+        dz = m_points[i - 1].m_position.z - m_points[i].m_position.z;
+        distance += std::sqrt(dz * dz + dy * dy + dx * dx);
+    }
+    m_pathLength = distance;
+
+    const unsigned int clusters = static_cast<unsigned int>(m_clusterPath->m_nodes.size());
+    const unsigned int cursor = static_cast<unsigned int>(m_clusterPath->m_i0);
+    if (clusters > cursor)
+    {
+        Vec3 previous = m_points[i - 1].m_position;
+        const unsigned int remaining = clusters - cursor;
+        Vec3 portal;
+        portal.x = portal.y = portal.z = 0.0f;
+        for (unsigned int j = 1; j < remaining; ++j)
+        {
+            unsigned int value;
+            m_clusterPath->getPortal(portal, value, j);
+            dx = previous.x - portal.x;
+            dy = previous.y - portal.y;
+            dz = previous.z - portal.z;
+            previous = portal;
+            distance += std::sqrt(dz * dz + dy * dy + dx * dx);
+        }
+    }
+    m_sentinel188 = distance;
 }
 
 // Clears progress counters and restarts the progress timer at the current game time.
@@ -262,11 +613,6 @@ void BotNavigation::updateOccationally()
 bool BotNavigation::isRunning()
 {
     return true;
-}
-
-void BotNavigation::getMeshPosition(int, unsigned int&, unsigned int&, Vec3&)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::getMeshPosition");
 }
 
 } // namespace ai

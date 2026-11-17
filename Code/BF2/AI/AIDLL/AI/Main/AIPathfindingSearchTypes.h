@@ -48,8 +48,17 @@ public:
         // m_gap4 deliberately not initialised - the binary steps over it. See above.
     }
 
-    /*  +0 */ int m_i0;                                       // = 0 [UNRESOLVED]
-    /*  +4 */ char m_gap4[12];                                // never written
+    // The position and trailing word of the portal an entry leaves its cluster through. False,
+    // writing nothing, when the index is past the end or the entry has no portal (0xFFFF).
+    // The index is relative to the start of the path, not to the cursor. PE 10139A40;
+    // [INFERRED] name. Defined in AIPathfinding.cpp.
+    bool getPortal(Vec3& position, unsigned int& value, unsigned int index) const;
+
+    /*  +0 */ int m_i0;                                       // = 0; the cursor into m_nodes
+    /*  +4 */ int m_map;                                      // not constructed [INFERRED] name
+    /*  +8 */ unsigned short m_costType;                      // not constructed [INFERRED] name
+    /* +12 */ unsigned int m_island;                          // not constructed [INFERRED] name
+    // Cluster and the portal leaving it.
     /* +16 */ std::vector<std::pair<unsigned short, unsigned short> > m_nodes;
 };
 
