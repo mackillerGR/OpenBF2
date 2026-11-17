@@ -100,7 +100,7 @@ int AIPathfinding::reset()
 
     m_debugPath->m_nodes.resize(0);
     m_debugPath->m_i0 = 0;
-    m_debugPath->m_i20 = 0;
+    m_debugPath->m_cost = 0.0f;
 
     m_debugClusterPath->m_nodes.resize(0);
     m_debugClusterPath->m_i0 = 0;
@@ -822,10 +822,27 @@ void AIPathfinding::resetDestroyableMapParts()
         m_maps[i]->m_quadTreeManager->resetDestroyableMapParts();
 }
 
-int AIPathfinding::localSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int,
-                               const Vec3&, int, QTPath*)
+// PE 100A71B0. A finished or failed search answers its status; a found one goes on to write the
+// path; an idle one starts when it has an island and both polygons. The material manager lookup
+// before the start is made and dropped, as shipped.
+int AIPathfinding::localSearch(int resource, int map, unsigned int island, unsigned int startPolygon,
+                               const Vec3& start, unsigned int goalPolygon, const Vec3& goal,
+                               int equipmentType, QTPath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::localSearch");
+    const int status = m_engine->m_searches[resource]->m_status;
+    if (status == 4 || status == 3)
+        return status;
+    if (status == 2)
+        return internalLocalSearch(resource, map, static_cast<unsigned int>(-1), static_cast<unsigned int>(-1),
+                                   start, static_cast<unsigned int>(-1), goal, equipmentType, path);
+    if (status == 1)
+        return 1;
+    static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+    if (island == static_cast<unsigned int>(-1) || startPolygon == static_cast<unsigned int>(-1)
+        || goalPolygon == static_cast<unsigned int>(-1))
+        return 4;
+    return internalLocalSearch(resource, map, island, startPolygon, start, goalPolygon, goal, equipmentType,
+                               path);
 }
 
 int AIPathfinding::clusterSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int,
@@ -834,10 +851,30 @@ int AIPathfinding::clusterSearch(int, int, unsigned int, unsigned int, const Vec
     BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::clusterSearch");
 }
 
-int AIPathfinding::internalLocalSearch(int, int, unsigned int, unsigned int, const Vec3&,
-                                       unsigned int, const Vec3&, int, QTPath*)
+// PE 100A96F0. An idle search is set up on the island's tree with start and goal nodes and the
+// equipment's material costs; a found one writes its path.
+int AIPathfinding::internalLocalSearch(int resource, int map, unsigned int island, unsigned int startPolygon,
+                                       const Vec3& start, unsigned int goalPolygon, const Vec3& goal,
+                                       int equipmentType, QTPath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::internalLocalSearch");
+    LocalResource* const search = m_engine->m_searches[resource];
+    if (search->m_status != 1 && search->m_status != 2)
+    {
+        QTSearchNodeManager* const nodes = search->m_nodeManager;
+        path->m_island = island;
+        nodes->setQuadTree(m_maps[map]->m_quadTreeManager->getIsland(island));
+        QTSearchNode* const from = nodes->allocNode(static_cast<int>(startPolygon), 0, 0);
+        from->m_position = start;
+        from->m_pathCost = 0.0f;
+        QTSearchNode* const to = nodes->allocNode(static_cast<int>(goalPolygon), 0, 0);
+        to->m_position = goal;
+        nodes->m_materialManager =
+            static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getVehicleMaterialManager(equipmentType);
+        return m_engine->start(resource, from, to);
+    }
+    if (search->m_status == 2 && search->m_goal)
+        search->m_nodeManager->buildPath(path, search->m_goal);
+    return m_engine->m_searches[resource]->m_status;
 }
 
 // PE 100A45D0. A negative map is always valid; the equipment type picks the vehicle material
@@ -925,14 +962,16 @@ bool AIPathfinding::getMaterial(const Vec3& position, int map, int equipmentType
     return m_maps[map]->getMaterial(position, materials, material);
 }
 
-void* AIPathfinding::getQuadTree(int, unsigned int) const
+// PE 100A4AD0.
+void* AIPathfinding::getQuadTree(int map, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getQuadTree");
+    return m_maps[map]->m_quadTreeManager->getIsland(island);
 }
 
-void* AIPathfinding::getClusterGraph(int, unsigned int) const
+// PE 100A4AF0.
+void* AIPathfinding::getClusterGraph(int map, unsigned int island) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getClusterGraph");
+    return m_maps[map]->m_quadTreeManager->getClusterGraph(island);
 }
 
 void AIPathfinding::getPolygonCentre(Vec3&, int, unsigned int, unsigned int) const
@@ -1005,14 +1044,21 @@ bool AIPathfinding::findClosestValidPolygon(unsigned int& quadTree, unsigned int
                                                 materials);
 }
 
-bool AIPathfinding::acquireResource(unsigned int&, int)
+// PE 100A9940. Nothing is handed out while the pathfinder is locking.
+bool AIPathfinding::acquireResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::acquireResource");
+    if (m_locking)
+    {
+        resource = static_cast<unsigned int>(-1);
+        return false;
+    }
+    return m_engine->acquire(resource, owner);
 }
 
-void AIPathfinding::releaseResource(unsigned int&, int)
+// PE 100A9970.
+void AIPathfinding::releaseResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::releaseResource");
+    m_engine->release(resource, owner);
 }
 
 bool AIPathfinding::acquireClusterResource(unsigned int&, int)
@@ -1027,44 +1073,52 @@ void AIPathfinding::releaseClusterResource(unsigned int&, int)
 
 // Search-record mutations remain unimplemented: status, iteration/depth limits,
 // additional goals, allowed clusters, and smoothing must use the confirmed record layout.
-void AIPathfinding::setMaxIterationsForResource(unsigned int&, unsigned int)
+// PE 100A7340.
+void AIPathfinding::setMaxIterationsForResource(unsigned int& resource, unsigned int iterations)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setMaxIterationsForResource");
+    m_engine->m_searches[resource]->m_maxIterations = static_cast<int>(iterations);
 }
 
-void AIPathfinding::setMaxSearchDepthForResource(unsigned int&, unsigned int)
+// PE 100A7360.
+void AIPathfinding::setMaxSearchDepthForResource(unsigned int& resource, unsigned int depth)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setMaxSearchDepthForResource");
+    m_engine->m_searches[resource]->m_maxSearchDepth = static_cast<int>(depth);
 }
 
-void AIPathfinding::setAdditionalGoals(unsigned int, const std::set<unsigned int>*)
+// PE 100A7460.
+void AIPathfinding::setAdditionalGoals(unsigned int resource, const std::set<unsigned int>* goals)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setAdditionalGoals");
+    m_engine->m_searches[resource]->m_nodeManager->m_additionalGoals = goals;
 }
 
-void AIPathfinding::setAllowedClusters(unsigned int, const std::set<unsigned short>*)
+// PE 100A7480.
+void AIPathfinding::setAllowedClusters(unsigned int resource, const std::set<unsigned short>* clusters)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setAllowedClusters");
+    m_engine->m_searches[resource]->m_nodeManager->m_allowedClusters = clusters;
 }
 
-void AIPathfinding::setUsePathTopologySmoothing(unsigned int, bool)
+// PE 100A74A0.
+void AIPathfinding::setUsePathTopologySmoothing(unsigned int resource, bool smoothing)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setUsePathTopologySmoothing");
+    m_engine->m_searches[resource]->m_nodeManager->m_usePathTopologySmoothing = smoothing;
 }
 
-int AIPathfinding::getStatus(unsigned int) const
+// PE 100A7380.
+int AIPathfinding::getStatus(unsigned int resource) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::getStatus");
+    return m_engine->m_searches[resource]->m_status;
 }
 
-void AIPathfinding::setStatus(unsigned int, astar::Status)
+// PE 100A73A0.
+void AIPathfinding::setStatus(unsigned int resource, astar::Status status)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::setStatus");
+    m_engine->m_searches[resource]->m_status = static_cast<int>(status);
 }
 
-void AIPathfinding::updateQuadTree(unsigned int, int, unsigned int)
+// PE 100A73C0. Points the search at another island's tree.
+void AIPathfinding::updateQuadTree(unsigned int resource, int map, unsigned int island)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::updateQuadTree");
+    m_engine->m_searches[resource]->m_nodeManager->setQuadTree(m_maps[map]->m_quadTreeManager->getIsland(island));
 }
 
 float AIPathfinding::calculateCostOfPath(unsigned int, int, unsigned int, const QTPath&) const
@@ -1153,16 +1207,16 @@ void AIPathfinding::init()
         resource->m_maxIterations = 30000;
         m_engine->m_searches.push_back(resource);
 
-        resource->m_i16      = 0;
+        resource->m_iterations      = 0;
         resource->m_openSize = 21;
         resource->m_hashSize = 1031;
         resource->m_open   = checkPointer(new BinarySearchTree<QTSearchNode, QTSearchNode>(21));
-        resource->m_closed =
+        resource->m_openOverflow =
             checkPointer(new Hash<QTSearchNode, QTSearchNodeManager, QTSearchNode>(1031));
-        resource->m_cache  =
+        resource->m_closed  =
             checkPointer(new Hash<QTSearchNode, QTSearchNodeManager, QTSearchNode>(1031));
-        resource->m_closed->m_nodeManager = resource->m_nodeManager;
-        resource->m_cache->m_nodeManager  = resource->m_nodeManager;
+        resource->m_openOverflow->m_nodeManager = resource->m_nodeManager;
+        resource->m_closed->m_nodeManager  = resource->m_nodeManager;
 
         m_engine->m_available.push_back(
             static_cast<unsigned int>(m_engine->m_searches.size() - 1));
@@ -1173,16 +1227,16 @@ void AIPathfinding::init()
         clusterResource->m_maxIterations = 5000;
         m_clusterEngine->m_searches.push_back(clusterResource);
 
-        clusterResource->m_i16      = 0;
+        clusterResource->m_iterations      = 0;
         clusterResource->m_openSize = 13;
         clusterResource->m_hashSize = 313;
         clusterResource->m_open   = checkPointer(new BinarySearchTree<ClusterNode, ClusterNode>(13));
-        clusterResource->m_closed =
+        clusterResource->m_openOverflow =
             checkPointer(new Hash<ClusterNode, ClusterNodeManager, ClusterNode>(313));
-        clusterResource->m_cache  =
+        clusterResource->m_closed  =
             checkPointer(new Hash<ClusterNode, ClusterNodeManager, ClusterNode>(313));
-        clusterResource->m_closed->m_nodeManager = clusterResource->m_nodeManager;
-        clusterResource->m_cache->m_nodeManager  = clusterResource->m_nodeManager;
+        clusterResource->m_openOverflow->m_nodeManager = clusterResource->m_nodeManager;
+        clusterResource->m_closed->m_nodeManager  = clusterResource->m_nodeManager;
 
         m_clusterEngine->m_available.push_back(
             static_cast<unsigned int>(m_clusterEngine->m_searches.size() - 1));

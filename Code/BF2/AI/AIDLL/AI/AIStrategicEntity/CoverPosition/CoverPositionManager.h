@@ -28,6 +28,15 @@ typedef PathfindingEngine<CPNode, CPNodeManager, CPNode, CPSearchKey, std::vecto
 typedef AStarResource<CPNode, CPNodeManager, CPNode, CPSearchKey, std::vector<int> >
         CPAStarResource;
 
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// The cover-position search runs the shared template once CPNode and CPNodeManager's search
+// members are recovered; until then its update is a named stop.
+template <>
+inline void CPAStarResource::update(double)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::AStarResource<CPNode>::update");
+}
+
 class CoverPositionManager
 {
 public:

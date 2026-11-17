@@ -155,7 +155,7 @@ void BotNavigation::reset()
     // Reaching through both path objects - see the block above.
     m_polygonPath->m_nodes.resize(0);
     m_polygonPath->m_i0 = 0;
-    m_polygonPath->m_i20 = 0;
+    m_polygonPath->m_cost = 0.0f;
 
     m_clusterPath->m_nodes.resize(0);
     m_clusterPath->m_i0 = 0;

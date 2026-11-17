@@ -77,6 +77,20 @@ public:
     void getVerticiesOfPolygon(std::vector<const Vec3*>&, unsigned int) const;
     unsigned char getMaterialOfPolygon(unsigned int polygon) const;
 
+    // The search's view of the mesh. None of these checks the polygon id except getPolygon.
+    // The polygon record, or null past the end. PE 10167C80.
+    Polygon* getPolygon(unsigned int polygon) const;
+    // The polygon across the edge, or -1 for an edge index past the polygon's last. PE 10167BE0.
+    unsigned int getNeighbour(unsigned int polygon, unsigned char edge) const;
+    // Writes which edge of `from` leads to `to`; false when none does. PE 10167E50.
+    bool getNeighbourEdge(unsigned char& edge, unsigned int from, unsigned int to) const;
+    // A corner of the polygon. PE 10167CD0; the index is not wrapped.
+    const Vec3& getVertexOfPolygon(unsigned int polygon, unsigned char corner) const;
+    // A corner of the polygon, the index taken modulo its corner count. PE 101690B0.
+    const Vec3& getWrappedVertexOfPolygon(unsigned int polygon, unsigned char corner) const;
+    // PE 10167E30.
+    const Vec3& getNormalOfPolygon(unsigned int polygon) const;
+
     void initializeDestroyableMapPart(int, bool, const Vec3&, const Vec3&, const Mat4&,
                                       ClusterGraph*, bool);
     void destroyMapPart(int, ClusterGraph*);

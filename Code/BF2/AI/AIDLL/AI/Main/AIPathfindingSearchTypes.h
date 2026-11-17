@@ -5,6 +5,7 @@
 #define AI_AIDLL_AI_MAIN_AIPATHFINDINGSEARCHTYPES_H
 
 #include <list>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -23,8 +24,8 @@ class QTPath
 public:
     QTPath()
         : m_i0(0)
-        , m_sentinel16(-1)
-        , m_i20(0)
+        , m_island(static_cast<unsigned int>(-1))
+        , m_cost(0.0f)
     {
         // The vector is default-constructed (three null pointers in retail) by the member above
         // being absent from this list - the binary's four zero stores at +0 and +4..+15 are that
@@ -33,8 +34,8 @@ public:
 
     /*  +0 */ int m_i0;                                       // = 0 [UNRESOLVED]
     /*  +4 */ std::vector<triple<unsigned int, unsigned int, Vec3> > m_nodes;
-    /* +16 */ int m_sentinel16;                               // = -1 [UNRESOLVED]
-    /* +20 */ int m_i20;                                      // = 0 [UNRESOLVED]
+    /* +16 */ unsigned int m_island;                          // = -1; the island searched
+    /* +20 */ float m_cost;                                   // = 0; the goal node's cost
 };
 
 // Cluster-level path result and traversal state.
@@ -217,6 +218,21 @@ public:
         return 0;
     }
 
+    // Returns every tree node to the pool. Inlined into PE 100A36D0 around the flatten
+    // (PE 1009E950).
+    void clear()
+    {
+        if (!m_root)
+            return;
+        BSTNode<SearchNode>* last;
+        flatten(m_root, last);
+        last->m_left = m_free;
+        m_free = m_root;
+        m_root = 0;
+        m_count = 0;
+        m_min = 0;
+    }
+
     /*  +0 */ int m_count;
     /*  +4 */ BSTNode<SearchNode>* m_free;   // the pool of spare tree nodes
     /*  +8 */ BSTNode<SearchNode>* m_min;    // the cheapest node; not written by the constructor
@@ -248,6 +264,35 @@ private:
                 }
                 at = at->m_right;
             }
+        }
+    }
+
+    // PE 1009E950: threads the subtree into one chain through the left links, a node before
+    // its left subtree before its right one, and reports the chain's last node.
+    static void flatten(BSTNode<SearchNode>* node, BSTNode<SearchNode>*& last)
+    {
+        if (node->m_left)
+        {
+            BSTNode<SearchNode>* leftLast;
+            flatten(node->m_left, leftLast);
+            if (node->m_right)
+            {
+                flatten(node->m_right, last);
+                leftLast->m_left = node->m_right;
+            }
+            else
+            {
+                last = leftLast;
+            }
+        }
+        else if (node->m_right)
+        {
+            flatten(node->m_right, last);
+            node->m_left = node->m_right;
+        }
+        else
+        {
+            last = node;
         }
     }
 
@@ -291,17 +336,17 @@ public:
     };
 
     explicit Hash(unsigned int n)
-        : m_self0((Hash*)this)
-        , m_i12(0)
-        , m_i16(0)
-        , m_self1((Hash*)this)
+        : m_walkHash((Hash*)this)
+        , m_endBucket(0)
+        , m_endNode(0)
+        , m_endHash((Hash*)this)
         , m_buckets(new Bucket[n + 1])
         , m_firstUsed(0)
         , m_count(0)
         , m_capacity((int)n)
         , m_nodeManager(0)
     {
-        // m_i0 and m_i4 deliberately not initialised - see above.
+        // The walk bucket and node are deliberately not initialised.
         // n + 1 entries, cleared from n down through zero.
         for (unsigned int i = 0; i <= n; ++i)
         {
@@ -380,14 +425,14 @@ public:
         m_firstUsed = 0;
     }
 
-    /*  +0 */ int m_i0;                  // never written by the constructor
-    /*  +4 */ int m_i4;                  // never written by the constructor
-    /*  +8 */ Hash* m_self0;             // = this
-    /* +12 */ int m_i12;                 // = 0
-    /* +16 */ int m_i16;                 // = 0
-    /* +20 */ Hash* m_self1;             // = this
-    // +0..+8 and +12..+20 are a walk position and its end mark (bucket, node, hash); see the
-    // open-set refill. [INFERRED]
+    // A walk position and its end mark, each (bucket, node, hash); the open-set refill writes
+    // the walk's start here. [INFERRED] names.
+    /*  +0 */ Bucket* m_walkBucket;      // never written by the constructor
+    /*  +4 */ SearchNode* m_walkNode;    // never written by the constructor
+    /*  +8 */ Hash* m_walkHash;          // = this
+    /* +12 */ Bucket* m_endBucket;       // = 0
+    /* +16 */ SearchNode* m_endNode;     // = 0
+    /* +20 */ Hash* m_endHash;           // = this
     /* +24 */ Bucket* m_buckets;
     /* +28 */ Bucket* m_firstUsed;       // head of the list of non-empty buckets
     /* +32 */ int m_count;
@@ -404,64 +449,322 @@ private:
     }
 };
 
-// State for one in-flight A* search. Its node manager and hash tables belong to the search resource.
+// State for one A* search. The open set is split: the tree holds up to m_openSize of the
+// cheapest open nodes, all cheaper than m_threshold, and every other open node waits in the
+// overflow hash; when the tree runs dry it is refilled from the hash. Closed nodes sit in their
+// own hash. The node type supplies the links, key, cost, depth and the successor walk; the
+// node manager supplies markOpen / markClosed / relax / freeNode / reset.
 template <class Node, class NodeManager, class SearchNode, class Key, class Path>
 class AStarResource
 {
 public:
+    // Status values. [INFERRED] names; 4 is only ever returned by the owner.
+    enum { Idle = 0, Searching = 1, Found = 2, Failed = 3 };
+
     explicit AStarResource(NodeManager* nodeManager)
         : m_status(0)
         , m_maxIterations(0)
         , m_maxSearchDepth(-1)
-        , m_i16(0)
+        , m_iterations(0)
         , m_openSize(0)
         , m_hashSize(0)
-        , m_i28(-1)
+        , m_owner(-1)
         , m_nodeManager(nodeManager)
-        , m_i36(0)
+        , m_threshold(0)
         , m_open(0)
+        , m_openOverflow(0)
         , m_closed(0)
-        , m_i48(0)
-        , m_i52(0)
-        , m_i56(0)
-        , m_cache(0)
-        , m_i64(0)
+        , m_goal(0)
     {
         // m_i4 deliberately not initialised - see above.
     }
 
-    // One A* step against a deadline. ELF: ClusterNode , QTSearchNode
-    // CPNode , all `...AStarResource...6updateEd`. The
-    // result is discarded by PathfindingEngine::update. A named stop until the search is read;
-    // the definition follows the class.
+    // Expands nodes until the update time reaches the deadline, the goal is found, the open
+    // set runs out, or the iteration or depth limit is hit. PE 100ACCD0 (QTSearchNode).
     void update(double deadline);
+    // Empties the open and closed sets and resets the node manager. PE 100A36D0.
+    void reset();
+    // Marks the node open and files it in the tree or the overflow. PE 100A6610.
+    void addOpen(SearchNode* node);
 
-    /*  +0 */ int m_status;          // = 0 `PathfindingEngine::getStatus` reads this word
+    /*  +0 */ int m_status;          // = 0
     /*  +4 */ int m_i4;              // never written
-    /*  +8 */ int m_maxIterations;   // = 0 [INFERRED] - `setMaxIterationsForResource` writes +8
-    /* +12 */ int m_maxSearchDepth;  // = -1 [INFERRED] - `setMaxSearchDepthForResource` writes +12
-    /* +16 */ int m_i16;             // = 0, set by the owner after the push
+    /*  +8 */ int m_maxIterations;   // = 0
+    /* +12 */ int m_maxSearchDepth;  // = -1
+    /* +16 */ int m_iterations;      // = 0
     /* +20 */ int m_openSize;        // = the int handed to BinarySearchTree's constructor
     /* +24 */ int m_hashSize;        // = the int handed to both Hash constructors
-    /* +28 */ int m_i28;             // = -1 [UNRESOLVED]
+    /* +28 */ int m_owner;           // = -1 while the resource is free
     /* +32 */ NodeManager* m_nodeManager;
-    /* +36 */ int m_i36;             // = 0 [UNRESOLVED]
+    /* +36 */ SearchNode* m_threshold;   // = 0; the dearest node of the last refill
     /* +40 */ BinarySearchTree<Node, SearchNode>* m_open;
-    /* +44 */ Hash<Node, NodeManager, SearchNode>* m_closed;   // [INFERRED] which is which
-    /* +48 */ int m_i48;             // = 0 [UNRESOLVED]
-    /* +52 */ int m_i52;             // = 0 [UNRESOLVED]
-    /* +56 */ int m_i56;             // = 0 [UNRESOLVED]
-    /* +60 */ Hash<Node, NodeManager, SearchNode>* m_cache;    // [INFERRED]
-    /* +64 */ int m_i64;             // = 0 [UNRESOLVED]
+    /* +44 */ Hash<Node, NodeManager, SearchNode>* m_openOverflow;
+    /* +48 */ std::vector<SearchNode*> m_scratch;    // only ever emptied [UNRESOLVED] purpose
+    /* +60 */ Hash<Node, NodeManager, SearchNode>* m_closed;
+    /* +64 */ SearchNode* m_goal;    // = 0; the goal node of a finished search
+
+private:
+    struct CostLess
+    {
+        bool operator()(const SearchNode* a, const SearchNode* b) const { return a->m_cost < b->m_cost; }
+    };
+
+    SearchNode* popBest();                               // PE 100AC880
+    void refill();                                       // PE 100ABE20
+    void spill();                                        // PE 100A3DE0
+    SearchNode* findOpen(SearchNode* node);              // PE 100A3A30
+    bool removeOpen(SearchNode* node);                   // PE 100A3AA0
+    void close(SearchNode* node);                        // PE 100A3B10
+    // Advances a walk over the overflow hash; both become null at the end.
+    static void advance(typename Hash<Node, NodeManager, SearchNode>::Bucket*& bucket, SearchNode*& node)
+    {
+        node = node->m_next;
+        if (!node)
+        {
+            bucket = bucket->m_next;
+            if (bucket)
+                node = bucket->m_head;
+        }
+    }
 };
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Defined here because every instantiation needs it; reached only when a search is in flight.
 template <class Node, class NodeManager, class SearchNode, class Key, class Path>
-void AStarResource<Node, NodeManager, SearchNode, Key, Path>::update(double)
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AStarResource::update");
+    m_iterations = 0;
+    m_status = Idle;
+    m_threshold = 0;
+    m_open->clear();
+    m_openOverflow->clear();
+    m_closed->clear();
+    m_nodeManager->reset();
 }
+
+// A node at least as dear as the threshold, or any node while the tree is empty, waits in the
+// overflow. A full tree is spilled to the overflow before it takes a cheaper node.
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::addOpen(SearchNode* node)
+{
+    m_nodeManager->markOpen(node);
+    if (m_open->m_count != 0 && node->m_cost < m_threshold->m_cost)
+    {
+        if (m_open->m_count >= m_openSize)
+            spill();
+        m_open->insert(node);
+        return;
+    }
+    m_openOverflow->insert(node);
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::spill()
+{
+    while (m_open->m_count != 0)
+        m_openOverflow->insert(m_open->popMin());
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+SearchNode* AStarResource<Node, NodeManager, SearchNode, Key, Path>::popBest()
+{
+    while (m_open->m_count == 0)
+    {
+        if (m_openOverflow->m_count == 0)
+            return 0;
+        refill();
+    }
+    return m_open->popMin();
+}
+
+// Moves the cheapest overflow nodes into the tree. The first m_openSize nodes of the walk seed
+// an ordered set; each later node at most as dear as the set's dearest replaces it - the erase
+// is by cost, so every node of that cost leaves the set together, as shipped. The threshold
+// becomes the dearest node kept. The walk's start is written into the hash's own position words.
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::refill()
+{
+    typedef typename Hash<Node, NodeManager, SearchNode>::Bucket Bucket;
+    m_scratch.resize(0, 0);
+    Hash<Node, NodeManager, SearchNode>* const hash = m_openOverflow;
+    Bucket* bucket;
+    SearchNode* node;
+    if (hash->m_count > 0)
+    {
+        bucket = hash->m_firstUsed;
+        hash->m_walkBucket = bucket;
+        node = bucket->m_head;
+        hash->m_walkNode = node;
+    }
+    else
+    {
+        hash->m_walkBucket = hash->m_endBucket;
+        bucket = hash->m_walkBucket;
+        hash->m_walkNode = hash->m_endNode;
+        hash->m_walkHash = hash->m_endHash;
+        node = hash->m_endNode;
+    }
+    if (bucket == hash->m_endBucket && node == hash->m_endNode)
+        return;
+
+    std::multiset<SearchNode*, CostLess> best;
+    SearchNode* dearest = node;
+    for (int i = 0; i < m_openSize; ++i)
+    {
+        if (bucket == hash->m_endBucket && node == hash->m_endNode)
+            break;
+        best.insert(node);
+        if (dearest->m_cost < node->m_cost)
+            dearest = node;
+        advance(bucket, node);
+    }
+    while (!(bucket == hash->m_endBucket && node == hash->m_endNode))
+    {
+        if (dearest->m_cost < node->m_cost)
+        {
+            advance(bucket, node);
+            continue;
+        }
+        typename std::multiset<SearchNode*, CostLess>::iterator last = best.end();
+        --last;
+        best.erase(*last);
+        best.insert(node);
+        advance(bucket, node);
+        last = best.end();
+        --last;
+        dearest = *last;
+    }
+    for (typename std::multiset<SearchNode*, CostLess>::iterator it = best.begin(); it != best.end(); ++it)
+    {
+        m_openOverflow->remove(*it);
+        m_open->insert(*it);
+    }
+    m_threshold = dearest;
+}
+
+// The open node with the given node's key: from the overflow, else from the tree.
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+SearchNode* AStarResource<Node, NodeManager, SearchNode, Key, Path>::findOpen(SearchNode* node)
+{
+    if (SearchNode* const found = m_openOverflow->find(node->m_key))
+        return found;
+    BSTNode<SearchNode>* const treeNode = m_open->find(node, m_open->m_root);
+    return treeNode ? treeNode->m_value : 0;
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+bool AStarResource<Node, NodeManager, SearchNode, Key, Path>::removeOpen(SearchNode* node)
+{
+    if (SearchNode* const found = m_openOverflow->find(node->m_key))
+    {
+        m_openOverflow->remove(found);
+        return true;
+    }
+    return m_open->remove(node) != 0;
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::close(SearchNode* node)
+{
+    m_nodeManager->markClosed(node);
+    m_closed->insert(node);
+}
+
+// A successor leading straight back to the node's parent is dropped before it is looked at.
+// An already-open or already-closed polygon is re-queued when the new way is cheaper; the
+// successor node itself is always returned to the pool. Finding the goal leaves the expanded
+// node closed and the goal node in m_goal.
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void AStarResource<Node, NodeManager, SearchNode, Key, Path>::update(double deadline)
+{
+    IBFTimer* const timer = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    if (m_status != Searching)
+        return;
+    while (timer->getUpdateTime() < deadline)
+    {
+        SearchNode* const current = popBest();
+        if (!current)
+        {
+            m_status = Failed;
+            return;
+        }
+        int kind;
+        unsigned short edge;
+        SearchNode* successor = current->getFirstSuccessor(m_nodeManager, kind, edge);
+        while (successor)
+        {
+            if (current->m_parent && successor->m_key == current->m_parent->m_key)
+            {
+                m_nodeManager->freeNode(successor);
+                successor = current->getNextSuccessor(m_nodeManager, kind, edge);
+                continue;
+            }
+            switch (kind)
+            {
+            case SearchNode::New:
+                addOpen(successor);
+                break;
+            case SearchNode::AlreadyOpen:
+            {
+                SearchNode* const existing = findOpen(successor);
+                if (m_nodeManager->relax(current, existing, m_maxSearchDepth))
+                {
+                    removeOpen(successor);
+                    addOpen(existing);
+                }
+                m_nodeManager->freeNode(successor);
+                break;
+            }
+            case SearchNode::AlreadyClosed:
+            {
+                SearchNode* const existing = m_closed->find(successor->m_key);
+                if (m_nodeManager->relax(current, existing, m_maxSearchDepth))
+                {
+                    m_closed->remove(existing);
+                    addOpen(existing);
+                }
+                m_nodeManager->freeNode(successor);
+                break;
+            }
+            case SearchNode::Goal:
+                m_goal = successor;
+                successor->m_parent = current;
+                close(current);
+                m_status = Found;
+                return;
+            case SearchNode::Skip:
+                m_nodeManager->freeNode(successor);
+                break;
+            default:
+                break;
+            }
+            if (m_status == Found)
+                return;
+            successor = current->getNextSuccessor(m_nodeManager, kind, edge);
+        }
+        if (m_status == Found)
+            return;
+        const int depth = current->m_depth;
+        close(current);
+        ++m_iterations;
+        if (m_iterations == m_maxIterations || m_maxSearchDepth == depth)
+        {
+            m_status = Failed;
+            return;
+        }
+    }
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// The cluster search runs the same template once ClusterNode and ClusterNodeManager's search
+// members are recovered; until then its update is a named stop.
+class ClusterNode;
+class ClusterNodeManager;
+template <>
+inline void AStarResource<ClusterNode, ClusterNodeManager, ClusterNode, unsigned short,
+                          ClusterNodePath>::update(double)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::AStarResource<ClusterNode>::update");
+}
+
 // Pathfinding engine and its pool of reusable search resources.
 template <class Node, class NodeManager, class SearchNode, class Key, class Path>
 class PathfindingEngine
@@ -472,6 +775,14 @@ public:
     // [INFERRED] Steps active searches round-robin until now + budget, at most once per
     // search per call, moving each processed search from front to back.
     void update(double budget);
+    // Hands out the first available search for the owner; -1 and false when there is none or
+    // it is still owned. PE 100A8F30.
+    bool acquire(unsigned int& id, int owner);
+    // Takes the search back from the owner that holds it and clears its limits. PE 100A8FE0.
+    void release(unsigned int& id, int owner);
+    // Starts the search between two nodes; a start on the goal's polygon is found at once.
+    // PE 100A9080.
+    int start(unsigned int id, SearchNode* from, SearchNode* goal);
 
     /*  +0 */ std::vector<AStarResource<Node, NodeManager, SearchNode, Key, Path>*> m_searches;
     /* +12 */ std::list<unsigned int> m_available;    // [INFERRED] the free list
@@ -499,6 +810,65 @@ void PathfindingEngine<Node, NodeManager, SearchNode, Key, Path>::update(double 
         m_inFlight.erase(m_inFlight.begin());
         m_inFlight.insert(m_inFlight.end(), id);
     }
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+bool PathfindingEngine<Node, NodeManager, SearchNode, Key, Path>::acquire(unsigned int& id, int owner)
+{
+    if (m_available.size() == 0)
+    {
+        id = static_cast<unsigned int>(-1);
+        return false;
+    }
+    id = m_available.front();
+    AStarResource<Node, NodeManager, SearchNode, Key, Path>* const search = m_searches[id];
+    if (search->m_owner >= 0)
+    {
+        id = static_cast<unsigned int>(-1);
+        return false;
+    }
+    search->m_owner = owner;
+    m_available.pop_front();
+    m_inFlight.push_back(id);
+    return true;
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+void PathfindingEngine<Node, NodeManager, SearchNode, Key, Path>::release(unsigned int& id, int owner)
+{
+    AStarResource<Node, NodeManager, SearchNode, Key, Path>* const search = m_searches[id];
+    if (search->m_owner != owner)
+        return;
+    search->m_owner = -1;
+    search->m_maxSearchDepth = -1;
+    search->m_maxIterations = 0;
+    search->m_nodeManager->returnReset();
+    search->m_status = 0;
+    search->m_owner = -1;
+    m_available.push_back(id);
+    m_inFlight.remove(id);
+    id = static_cast<unsigned int>(-1);
+}
+
+template <class Node, class NodeManager, class SearchNode, class Key, class Path>
+int PathfindingEngine<Node, NodeManager, SearchNode, Key, Path>::start(unsigned int id, SearchNode* from,
+                                                                       SearchNode* goal)
+{
+    m_searches[id]->reset();
+    AStarResource<Node, NodeManager, SearchNode, Key, Path>* const search = m_searches[id];
+    if (from->m_key != goal->m_key)
+    {
+        search->m_nodeManager->setGoal(goal);
+        search->addOpen(from);
+        search->m_status = 1;
+    }
+    else
+    {
+        search->m_nodeManager->freeNode(goal);
+        search->m_goal = from;
+        search->m_status = 2;
+    }
+    return search->m_status;
 }
 
 } // namespace ai

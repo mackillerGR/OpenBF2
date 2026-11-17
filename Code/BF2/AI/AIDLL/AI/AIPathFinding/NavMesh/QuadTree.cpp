@@ -260,6 +260,50 @@ unsigned char QuadTree::getMaterialOfPolygon(unsigned int polygon) const
     return m_polygons[polygon].m_material;
 }
 
+Polygon* QuadTree::getPolygon(unsigned int polygon) const
+{
+    if (polygon < m_numberOfPolygons)
+        return &m_polygons[polygon];
+    return 0;
+}
+
+unsigned int QuadTree::getNeighbour(unsigned int polygon, unsigned char edge) const
+{
+    const Polygon& record = m_polygons[polygon];
+    if (edge < record.m_numberOfVertices)
+        return m_neighbours[record.m_firstIndex + edge];
+    return static_cast<unsigned int>(-1);
+}
+
+bool QuadTree::getNeighbourEdge(unsigned char& edge, unsigned int from, unsigned int to) const
+{
+    const Polygon& record = m_polygons[from];
+    edge = 0;
+    while (m_neighbours[record.m_firstIndex + edge] != to)
+    {
+        ++edge;
+        if (edge >= record.m_numberOfVertices)
+            return false;
+    }
+    return true;
+}
+
+const Vec3& QuadTree::getVertexOfPolygon(unsigned int polygon, unsigned char corner) const
+{
+    return m_vertices[m_vertexIndices[m_polygons[polygon].m_firstIndex + corner]];
+}
+
+const Vec3& QuadTree::getWrappedVertexOfPolygon(unsigned int polygon, unsigned char corner) const
+{
+    const Polygon& record = m_polygons[polygon];
+    return m_vertices[m_vertexIndices[record.m_firstIndex + corner % record.m_numberOfVertices]];
+}
+
+const Vec3& QuadTree::getNormalOfPolygon(unsigned int polygon) const
+{
+    return m_polygons[polygon].m_normal;
+}
+
 // Tracks polygons affected by destroyable map parts and restores their original materials.
 void QuadTree::getPolygonsWithinBoundary(const Vec3& minimum, const Vec3& maximum,
                                          const Mat4& transformation,

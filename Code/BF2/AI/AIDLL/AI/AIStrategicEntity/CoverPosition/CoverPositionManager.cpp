@@ -26,16 +26,16 @@ CoverPositionManager::CoverPositionManager()
 
         pool->m_searches.push_back(resource);
 
-        resource->m_i16 = 0;
+        resource->m_iterations = 0;
         resource->m_openSize = 15;
         resource->m_hashSize = 20;
 
         resource->m_open   = checkPointer(new BinarySearchTree<CPNode, CPNode>(15));
-        resource->m_closed = checkPointer(new Hash<CPNode, CPNodeManager, CPNode>(20));
-        resource->m_cache  = checkPointer(new Hash<CPNode, CPNodeManager, CPNode>(20));
+        resource->m_openOverflow = checkPointer(new Hash<CPNode, CPNodeManager, CPNode>(20));
+        resource->m_closed  = checkPointer(new Hash<CPNode, CPNodeManager, CPNode>(20));
 
-        resource->m_closed->m_nodeManager = resource->m_nodeManager;
-        resource->m_cache->m_nodeManager  = resource->m_nodeManager;
+        resource->m_openOverflow->m_nodeManager = resource->m_nodeManager;
+        resource->m_closed->m_nodeManager  = resource->m_nodeManager;
 
         pool->m_available.push_back((unsigned int)(pool->m_searches.size() - 1));
     }
