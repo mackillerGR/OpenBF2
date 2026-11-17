@@ -1,11 +1,15 @@
 #include "BAPConditions.h"
 
+#include <cmath>
 #include <ostream>
 
 #include "../AIBot/BotMain.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIArmament.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/ObjectOccupancy.h"
 #include "../AIKnowledge/WeaponInfo.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../Main/AIDllFrontier.h"
@@ -42,6 +46,12 @@ std::ostream& operator<<(std::ostream& out, BAPConditionType type)
     if (index < sizeof(kConditionTypePrintNames) / sizeof(kConditionTypePrintNames[0]) &&
         kConditionTypePrintNames[index])
         out << kConditionTypePrintNames[index];
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, BAPCondition& condition)
+{
+    condition.printDebug(out);
     return out;
 }
 
@@ -83,11 +93,90 @@ bool BAPConNot::evaluate(Bot* bot)
 
 BAPConditionType BAPConNot::getType() { return static_cast<BAPConditionType>(14); }
 
-// PE 101A9A40. [FRONTIER] [TEMP] [CHOSEN, not recovered] Debug output only.
-// [RETIRE-WHEN: bap-debug-print] Recover the body and validate the plan debugger.
-void BAPConNot::printDebug(std::ostream&)
+// PE 101A9A40.
+void BAPConNot::printDebug(std::ostream& out)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPConNot::printDebug");
+    out << "NOT(" << *m_conditions.front() << ")";
+}
+
+void BAPConNot::addCondition(BAPCondition* condition)
+{
+    if (m_conditions.size() != 0)
+        return;
+    condition->m_owner = this;
+    m_conditions.push_front(condition);
+}
+
+namespace {
+
+// Prints the conditions between parentheses, separated by `separator`.
+void printConditions(std::ostream& out, const std::list<BAPCondition*>& conditions, const char* separator)
+{
+    std::list<BAPCondition*>::const_iterator it = conditions.begin();
+    out << "(";
+    if (it != conditions.end())
+    {
+        out << **it;
+        for (++it; it != conditions.end(); ++it)
+            out << separator << **it;
+    }
+    out << ")";
+}
+
+// Destroys the owned conditions.
+void destroyConditions(std::list<BAPCondition*>& conditions)
+{
+    for (std::list<BAPCondition*>::iterator it = conditions.begin(); it != conditions.end(); ++it)
+    {
+        if (*it)
+            delete *it;
+    }
+}
+
+} // anonymous namespace
+
+bool BAPConAnd::evaluate(Bot* bot)
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if (!(*it)->evaluate(bot))
+            return false;
+    }
+    return true;
+}
+
+BAPConditionType BAPConAnd::getType() { return static_cast<BAPConditionType>(4); }
+
+void BAPConAnd::printDebug(std::ostream& out) { printConditions(out, m_conditions, " && "); }
+
+BAPConAnd::~BAPConAnd() { destroyConditions(m_conditions); }
+
+void BAPConAnd::addCondition(BAPCondition* condition)
+{
+    condition->m_owner = this;
+    m_conditions.push_back(condition);
+}
+
+bool BAPConOr::evaluate(Bot* bot)
+{
+    for (std::list<BAPCondition*>::iterator it = m_conditions.begin(); it != m_conditions.end(); ++it)
+    {
+        if ((*it)->evaluate(bot))
+            return true;
+    }
+    return false;
+}
+
+BAPConditionType BAPConOr::getType() { return static_cast<BAPConditionType>(35); }
+
+void BAPConOr::printDebug(std::ostream& out) { printConditions(out, m_conditions, " || "); }
+
+BAPConOr::~BAPConOr() { destroyConditions(m_conditions); }
+
+void BAPConOr::addCondition(BAPCondition* condition)
+{
+    condition->m_owner = this;
+    m_conditions.push_back(condition);
 }
 
 // PE 101A9A90: the conditions are destroyed before the list goes.
@@ -118,6 +207,269 @@ BAPConditionType BAPConZoomed::getType() { return static_cast<BAPConditionType>(
 
 // PE 101A9D50.
 BAPConZoomed::~BAPConZoomed() {}
+
+namespace {
+
+// PE 100E9DE0, the conditional Vec2 normaliser (file-local copies also live beside the statements
+// and the squad code).
+void normaliseFlat(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+
+// PE 1014ADC0: the horizontal part (x, z) of a position.
+Vec2 flatOf(const Vec3& position)
+{
+    Vec2 flat;
+    flat.x = position.x;
+    flat.y = position.z;
+    return flat;
+}
+
+} // anonymous namespace
+
+BAPConPosition::BAPConPosition(const Vec2& point, float radius)
+{
+    m_flatPoint = new Vec2(point);
+    m_radiusSq = radius * radius;
+    m_spatial = false;
+}
+
+BAPConPosition::BAPConPosition(const Vec3& point, float radius)
+{
+    m_point = new Vec3(point);
+    m_radiusSq = radius * radius;
+    m_spatial = true;
+}
+
+// The flat test is strict and the spatial one inclusive, as shipped.
+bool BAPConPosition::evaluate(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return true;
+    const Vec3& position = equipment->getPosition();
+    if (m_spatial)
+    {
+        const float dx = position.x - m_point->x;
+        const float dy = position.y - m_point->y;
+        const float dz = position.z - m_point->z;
+        return dz * dz + dx * dx + dy * dy <= m_radiusSq;
+    }
+    const float dx = position.x - m_flatPoint->x;
+    const float dz = position.z - m_flatPoint->y;
+    return dz * dz + dx * dx < m_radiusSq;
+}
+
+BAPConditionType BAPConPosition::getType() { return static_cast<BAPConditionType>(37); }
+
+BAPConPosition::~BAPConPosition()
+{
+    if (m_spatial)
+        delete m_point;
+    else
+        delete m_flatPoint;
+}
+
+BAPConObjectMoved::BAPConObjectMoved(unsigned int object, float distance)
+    : m_object(object), m_distanceSq(distance * distance)
+{
+    m_lastPosition.x = 0.0f;
+    m_lastPosition.y = 0.0f;
+    m_lastPosition.z = 0.0f;
+}
+
+bool BAPConObjectMoved::evaluate(Bot*)
+{
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return false;
+    const Vec3& position = object->getPosition();
+    const float dx = position.x - m_lastPosition.x;
+    const float dy = position.y - m_lastPosition.y;
+    const float dz = position.z - m_lastPosition.z;
+    if (dz * dz + dy * dy + dx * dx <= m_distanceSq)
+        return false;
+    m_lastPosition = object->getPosition();
+    return true;
+}
+
+BAPConditionType BAPConObjectMoved::getType() { return static_cast<BAPConditionType>(28); }
+
+BAPConObjectMoved::~BAPConObjectMoved() {}   // PE 101A7230
+
+BAPConObjectOccupied::BAPConObjectOccupied(unsigned int object) : m_object(object) {}
+
+bool BAPConObjectOccupied::evaluate(Bot*)
+{
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object || !object->getUnit())
+        return false;
+    return object->getUnit()->isOccupied();
+}
+
+BAPConditionType BAPConObjectOccupied::getType() { return static_cast<BAPConditionType>(29); }
+
+BAPConObjectOccupied::~BAPConObjectOccupied() {}   // PE 101AC3E0
+
+BAPConObjectEnemyOccupied::BAPConObjectEnemyOccupied(unsigned int object) : m_object(object) {}
+
+bool BAPConObjectEnemyOccupied::evaluate(Bot* bot)
+{
+    if (!isOccupiedObject(m_object, bot->getSide()))
+        return false;
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return false;
+    return object->getSide() != bot->getSide();
+}
+
+BAPConditionType BAPConObjectEnemyOccupied::getType() { return static_cast<BAPConditionType>(20); }
+
+BAPConObjectEnemyOccupied::~BAPConObjectEnemyOccupied() {}   // PE 101AC490
+
+BAPConObjectBehind::BAPConObjectBehind(unsigned int object, float threshold, bool estimate)
+    : m_object(object), m_threshold(threshold), m_estimate(estimate)
+{
+}
+
+// The equipment is not null-checked, as shipped.
+bool BAPConObjectBehind::evaluate(Bot* bot)
+{
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return true;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Vec2 objectFlat;
+    if (m_estimate && object->getMobile())
+    {
+        Vec3 estimate;
+        estimate.x = estimate.y = estimate.z = 0.0f;
+        object->getMobile()->getPositionEstimate(estimate);
+        objectFlat = flatOf(estimate);
+    }
+    else
+    {
+        objectFlat = flatOf(object->getPosition());
+    }
+    const Vec2 equipmentFlat = flatOf(equipment->getPosition());
+    const float* const m = object->getTransformation().m;
+    Vec3 forward;
+    forward.x = m[8];
+    forward.y = m[9];
+    forward.z = m[10];
+    Vec2 facing = flatOf(forward);
+    normaliseFlat(facing);
+    Vec2 toEquipment;
+    toEquipment.x = equipmentFlat.x - objectFlat.x;
+    toEquipment.y = equipmentFlat.y - objectFlat.y;
+    normaliseFlat(toEquipment);
+    return toEquipment.y * facing.y + toEquipment.x * facing.x <= m_threshold;
+}
+
+BAPConditionType BAPConObjectBehind::getType() { return static_cast<BAPConditionType>(17); }
+
+BAPConObjectBehind::~BAPConObjectBehind() {}   // PE 101AC670
+
+BAPConObjectDistance::BAPConObjectDistance(unsigned int object, float distance, bool estimate, bool flat,
+                                           bool outside)
+    : m_object(object), m_minSq(0.0f), m_maxSq(distance * distance), m_estimate(estimate), m_flat(flat),
+      m_outside(outside), m_lastSq(0.0f)
+{
+}
+
+// The equipment is not null-checked, as shipped.
+bool BAPConObjectDistance::evaluate(Bot* bot)
+{
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return true;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    float distanceSq;
+    if (m_estimate)
+    {
+        Vec3 position;
+        position.x = position.y = position.z = 0.0f;
+        if (object->getMobile())
+            object->getMobile()->getPositionEstimate(position);
+        else
+            position = object->getPosition();
+        const Vec3& own = equipment->getPosition();
+        if (m_flat)
+        {
+            const float dx = position.x - own.x;
+            const float dz = position.z - own.z;
+            distanceSq = dz * dz + dx * dx;
+        }
+        else
+        {
+            const float dx = own.x - position.x;
+            const float dy = own.y - position.y;
+            const float dz = own.z - position.z;
+            distanceSq = dx * dx + dy * dy + dz * dz;
+        }
+    }
+    else if (m_flat)
+    {
+        const float ownX = equipment->getPosition().x;
+        const float ownZ = equipment->getPosition().z;
+        const float objectZ = object->getPosition().z;
+        const float objectX = object->getPosition().x;
+        const float dx = objectX - ownX;
+        const float dz = objectZ - ownZ;
+        distanceSq = dz * dz + dx * dx;
+    }
+    else
+    {
+        const Vec3& objectPosition = object->getPosition();
+        const Vec3& own = equipment->getPosition();
+        const float dx = own.x - objectPosition.x;
+        const float dy = own.y - objectPosition.y;
+        const float dz = own.z - objectPosition.z;
+        distanceSq = dx * dx + dy * dy + dz * dz;
+    }
+    m_lastSq = distanceSq;
+    if (m_outside)
+        return distanceSq > m_maxSq;
+    if (distanceSq < m_minSq)
+        return false;
+    return distanceSq <= m_maxSq;
+}
+
+BAPConditionType BAPConObjectDistance::getType() { return static_cast<BAPConditionType>(18); }
+
+void BAPConObjectDistance::printDebug(std::ostream& out)
+{
+    if (m_outside)
+    {
+        out << "ObjectDistance[";
+        if (m_lastSq != 0.0f)
+            out << std::sqrt(m_lastSq);
+        else
+            out << "not calculated";
+        out << "] > " << std::sqrt(m_maxSq);
+        return;
+    }
+    out << "ObjectDistance(" << std::sqrt(m_minSq) << " <= [";
+    if (m_lastSq != 0.0f)
+        out << std::sqrt(m_lastSq);
+    else
+        out << "not calculated";
+    out << "] <= " << std::sqrt(m_maxSq) << ")";
+}
+
+BAPConObjectDistance::~BAPConObjectDistance() {}   // PE 101AC9A0
 
 } // namespace ai
 } // namespace hfe

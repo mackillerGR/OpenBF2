@@ -58,6 +58,58 @@ private:
     /* +0x40 */ bool m_neverFail;
 };
 
+// Runs its children one at a time. Type 1. With the base flag set (always, from this
+// constructor) a child that reports failure hands over to the next, and failure is reported only
+// after the last child; without it the cursor advances every call. PE vtable 10282C8C.
+// [INFERRED] name, from the "Serial combiner" debug title.
+class BAPSerial : public BAPStatementList
+{
+public:
+    BAPSerial(int id, int limit);                                      // PE 1019AE30
+    virtual ~BAPSerial();                                              // PE 1019AD90: destroys the children
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 1019ACC0
+    virtual unsigned long long getInputMask();                         // PE 1019AD80
+    virtual BAPStatementType getType();
+    virtual bool isComposite();
+    virtual void printDebug(std::ostream& out);                        // PE 1019AB90
+    virtual void addStatement(BotScript* statement);                   // PE 1019AF40
+
+private:
+    /* +0x30 */ int m_limit;           // [UNRESOLVED] meaning
+};
+
+// Evaluates a condition once: finished, failed when the condition holds. Type 4. PE vtable
+// 102839BC. [INFERRED] name; the type's script spelling is "Wait".
+class BAPWait : public BotScript
+{
+public:
+    BAPWait(BAPCondition* condition, int id);                          // PE 101AD200
+    virtual ~BAPWait();                                                // PE 101AD250
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101AD280
+    virtual unsigned long long getInputMask();                         // PE 101AD2B0: none
+    virtual BAPStatementType getType();
+    virtual bool isComposite();
+
+    /* +0x18 */ BAPCondition* m_condition;
+};
+
+// Asks the bot to change into the target vehicle or seat. Type 29. The constructor leaves the id
+// unset, as shipped. PE vtable 102839A0. [INFERRED] name.
+class BAPICChangeVehicle : public BotScript
+{
+public:
+    explicit BAPICChangeVehicle(unsigned int target);                  // PE 101AD140
+    virtual ~BAPICChangeVehicle();                                     // PE 101AD170
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101AD1B0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101AD1F0: true
+
+    /* +0x18 */ unsigned int m_target;
+};
+
 // Releases the bot's controls in up to three groups. Type 14. PE vtable 10283378.
 class BAPResetControls : public BotScript
 {

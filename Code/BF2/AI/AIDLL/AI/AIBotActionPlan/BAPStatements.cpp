@@ -120,6 +120,133 @@ void BAPParallel::addStatement(BotScript* statement)
     m_childFailed.push_back(false);
 }
 
+// ---- BAPSerial -----------------------------------------------------------------------------
+
+BAPSerial::BAPSerial(int id, int limit)
+    : m_limit(limit)
+{
+    m_cursor = m_children.end();
+    m_id = id;
+    m_failOnlyIfAllFail = true;
+    // The freshly built list is cleared once more, as shipped.
+    m_children.clear();
+    m_cursor = m_children.begin();
+}
+
+BAPSerial::~BAPSerial()
+{
+    for (std::list<BotScript*>::iterator it = m_children.begin(); it != m_children.end(); ++it)
+    {
+        if (*it)
+            delete *it;
+    }
+}
+
+bool BAPSerial::execute(Bot* bot, bool& finished, bool& failed)
+{
+    if (m_cursor == m_children.end())
+    {
+        finished = true;
+        failed = true;
+        m_cursor = m_children.begin();
+        return true;
+    }
+    static_cast<BotMain*>(bot)->getPlanInterpreter()->execute(*m_cursor, bot, finished, failed);
+    if (m_failOnlyIfAllFail)
+    {
+        if (!failed)
+            return true;
+        ++m_cursor;
+        if (m_cursor != m_children.end())
+        {
+            failed = false;
+            return true;
+        }
+        failed = true;
+        m_cursor = m_children.begin();
+        return true;
+    }
+    ++m_cursor;
+    if (failed || m_cursor == m_children.end())
+    {
+        failed = true;
+        m_cursor = m_children.begin();
+    }
+    return true;
+}
+
+// The cursor is dereferenced without an end check, as shipped.
+unsigned long long BAPSerial::getInputMask()
+{
+    return (*m_cursor)->getInputMask();
+}
+
+BAPStatementType BAPSerial::getType() { return BAPSTSerial; }
+bool BAPSerial::isComposite() { return true; }
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] Debug output only.
+// [RETIRE-WHEN: bap-debug-print] Recover the body and validate the plan debugger.
+void BAPSerial::printDebug(std::ostream&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPSerial::printDebug");
+}
+
+// The child's input mask is not merged, and the cursor returns to the first child.
+void BAPSerial::addStatement(BotScript* statement)
+{
+    if (!statement)
+        return;
+    statement->m_owner = this;
+    m_children.push_back(statement);
+    m_cursor = m_children.begin();
+}
+
+// ---- BAPWait -------------------------------------------------------------------------------
+
+BAPWait::BAPWait(BAPCondition* condition, int id)
+    : m_condition(condition)
+{
+    m_id = id;
+    condition->m_owner = this;
+}
+
+BAPWait::~BAPWait()
+{
+    if (m_condition)
+        delete m_condition;
+}
+
+bool BAPWait::execute(Bot* bot, bool& finished, bool& failed)
+{
+    failed = m_condition->evaluate(bot);
+    finished = true;
+    return true;
+}
+
+unsigned long long BAPWait::getInputMask() { return 0; }
+BAPStatementType BAPWait::getType() { return BAPSTWait; }
+bool BAPWait::isComposite() { return true; }   // PE 101AD2C0
+
+// ---- BAPICChangeVehicle --------------------------------------------------------------------
+
+BAPICChangeVehicle::BAPICChangeVehicle(unsigned int target)
+    : m_target(target)
+{
+}
+
+BAPICChangeVehicle::~BAPICChangeVehicle() {}
+
+bool BAPICChangeVehicle::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->setChangeTarget(m_target);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPICChangeVehicle::getType() { return BAPSTICChangeVehicle; }
+bool BAPICChangeVehicle::isComposite() { return true; }
+
 // ---- BAPResetControls ----------------------------------------------------------------------
 
 BAPResetControls::BAPResetControls(bool movement, bool look, bool actions, int id)
