@@ -55,89 +55,353 @@ public:
 // Reusable A* node pools, hash tables and search state.
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AIPathfindingSearchTypes operation.
 
-// Allocated only by `BinarySearchTree`'s constructor, which writes two of
-// its four words: `+0 = 0` and `+8 = <the previous free-list head>`. The other two are whatever the
-// allocator returned. A classic node shape, but which word is left/right/parent is [UNRESOLVED]
-// until `insert`/`merge`/`flatten` are read.
+// One tree node. PE layout: value, parent, left, right; a spare node is chained through its
+// left link. The constructor (inlined into the tree's) clears only the value.
 template <class T>
 class BSTNode
 {
 public:
     BSTNode()
-        : m_i0(0)
+        : m_value(0)
     {
-        // +4 and +12 deliberately not initialised - the constructor at writes only +0 and
-        // +8, and +8 is the free-list link the tree sets after construction.
     }
 
-    /*  +0 */ int m_i0;              // = 0 [UNRESOLVED]
-    /*  +4 */ int m_i4;              // never written by the constructor
-    /*  +8 */ BSTNode<T>* m_next;    // the free-list link [INFERRED]
-    /* +12 */ int m_i12;             // never written by the constructor
+    /*  +0 */ T* m_value;
+    /*  +4 */ BSTNode<T>* m_parent;
+    /*  +8 */ BSTNode<T>* m_left;    // also the free-list link
+    /* +12 */ BSTNode<T>* m_right;
 };
 
-// Search-node tree and reusable node storage.
+// The open set: an unbalanced binary search tree over the nodes' cost (PE node +0x18), with a
+// pointer to the cheapest node and a pool of spare tree nodes. Equal costs go right. The node
+// type supplies `m_key` and `m_cost`.
 template <class Node, class SearchNode>
 class BinarySearchTree
 {
 public:
     explicit BinarySearchTree(int n)
-        : m_root(0)
+        : m_count(0)
         , m_free(0)
-        , m_i12(0)
+        , m_root(0)
     {
-        // m_i8 deliberately not initialised - see above.
+        // m_min deliberately not initialised, as shipped.
         for (int i = n; i > 0; --i)
         {
             BSTNode<SearchNode>* const node = new BSTNode<SearchNode>();
-            node->m_next = m_free;
+            node->m_left = m_free;
             m_free = node;
         }
     }
 
-    /*  +0 */ BSTNode<SearchNode>* m_root;   // [INFERRED]
-    /*  +4 */ BSTNode<SearchNode>* m_free;   // the pre-allocated pool, proven by the loop
-    /*  +8 */ int m_i8;                      // never written by the constructor [UNRESOLVED]
-    /* +12 */ int m_i12;                     // = 0 [UNRESOLVED]
+    // PE 100A1730.
+    void insert(SearchNode* value)
+    {
+        BSTNode<SearchNode>* node = m_free;
+        if (node)
+            m_free = node->m_left;
+        else
+            node = new BSTNode<SearchNode>();
+        node->m_value = value;
+        node->m_left = 0;
+        node->m_right = 0;
+        if (m_count != 0)
+        {
+            attach(m_root, node);
+            if (node->m_value->m_cost < m_min->m_value->m_cost)
+                m_min = node;
+            ++m_count;
+        }
+        else
+        {
+            m_min = node;
+            m_root = node;
+            node->m_parent = 0;
+            ++m_count;
+        }
+    }
+
+    // Removes and returns the cheapest node, or null when empty. PE 100A17C0.
+    SearchNode* popMin()
+    {
+        BSTNode<SearchNode>* const node = m_min;
+        if (!node)
+            return 0;
+        --m_count;
+        if (node->m_right)
+        {
+            if (node->m_parent)
+            {
+                node->m_parent->m_left = node->m_right;
+                node->m_right->m_parent = node->m_parent;
+            }
+            else
+            {
+                m_root = node->m_right;
+                node->m_right->m_parent = 0;
+            }
+            m_min = leftmost(node->m_right);
+        }
+        else
+        {
+            m_min = node->m_parent;
+            if (m_min)
+            {
+                m_min->m_left = 0;
+            }
+            else
+            {
+                // The shipped body reloads the (null) right child into both pointers here.
+                m_min = node->m_right;
+                m_root = node->m_right;
+            }
+        }
+        release(node);
+        return node->m_value;
+    }
+
+    // Removes the node with the value's key and returns it, or null. PE 100A18B0. A root
+    // without a right child hands the tree to its left child unchecked, as shipped.
+    SearchNode* remove(SearchNode* value)
+    {
+        if (m_count == 0)
+            return 0;
+        if (value->m_key == m_min->m_value->m_key)
+            return popMin();
+        BSTNode<SearchNode>* const node = find(value, m_root);
+        if (!node)
+            return 0;
+        --m_count;
+        if (node->m_parent)
+        {
+            BSTNode<SearchNode>*& slot =
+                node->m_parent->m_left == node ? node->m_parent->m_left : node->m_parent->m_right;
+            if (node->m_right)
+            {
+                slot = node->m_right;
+                node->m_right->m_parent = node->m_parent;
+                reattach(slot, node->m_left);
+            }
+            else
+            {
+                slot = node->m_left;
+                if (node->m_left)
+                    node->m_left->m_parent = node->m_parent;
+            }
+        }
+        else if (node->m_right)
+        {
+            m_root = node->m_right;
+            node->m_right->m_parent = 0;
+            reattach(node->m_right, node->m_left);
+        }
+        else
+        {
+            m_root = node->m_left;
+            node->m_left->m_parent = 0;
+        }
+        release(node);
+        return node->m_value;
+    }
+
+    // The tree node holding the value's key in the subtree, searching each node's left subtree
+    // before moving right. PE 1009F430.
+    BSTNode<SearchNode>* find(SearchNode* value, BSTNode<SearchNode>* node)
+    {
+        for (; node; node = node->m_right)
+        {
+            if (value->m_key == node->m_value->m_key)
+                return node;
+            if (BSTNode<SearchNode>* const found = find(value, node->m_left))
+                return found;
+        }
+        return 0;
+    }
+
+    /*  +0 */ int m_count;
+    /*  +4 */ BSTNode<SearchNode>* m_free;   // the pool of spare tree nodes
+    /*  +8 */ BSTNode<SearchNode>* m_min;    // the cheapest node; not written by the constructor
+    /* +12 */ BSTNode<SearchNode>* m_root;
+
+private:
+    // PE 1009F3E0: descends from `at` and hangs the node where its cost belongs.
+    static void attach(BSTNode<SearchNode>* at, BSTNode<SearchNode>* node)
+    {
+        for (;;)
+        {
+            if (node->m_value->m_cost < at->m_value->m_cost)
+            {
+                if (!at->m_left)
+                {
+                    at->m_left = node;
+                    node->m_parent = at;
+                    return;
+                }
+                at = at->m_left;
+            }
+            else
+            {
+                if (!at->m_right)
+                {
+                    at->m_right = node;
+                    node->m_parent = at;
+                    return;
+                }
+                at = at->m_right;
+            }
+        }
+    }
+
+    // PE 1009F480: attach, for a subtree that may be absent.
+    static void reattach(BSTNode<SearchNode>* at, BSTNode<SearchNode>* node)
+    {
+        if (node)
+            attach(at, node);
+    }
+
+    // PE 1009F4D0.
+    static BSTNode<SearchNode>* leftmost(BSTNode<SearchNode>* node)
+    {
+        if (!node)
+            return 0;
+        while (node->m_left)
+            node = node->m_left;
+        return node;
+    }
+
+    void release(BSTNode<SearchNode>* node)
+    {
+        node->m_left = m_free;
+        m_free = node;
+    }
 };
 
-// Bucketed search-node lookup with a shared node manager.
+// Chained hash over the nodes' key (PE node +0x10), with the non-empty buckets linked so they
+// can be walked and cleared without scanning the table. The node type supplies `m_next`,
+// `m_prev` and `m_key`.
 template <class Node, class NodeManager, class SearchNode>
 class Hash
 {
 public:
+    // A bucket: its links in the list of non-empty buckets, and its chain.
+    struct Bucket
+    {
+        Bucket* m_next;
+        Bucket* m_prev;
+        SearchNode* m_head;
+    };
+
     explicit Hash(unsigned int n)
         : m_self0((Hash*)this)
         , m_i12(0)
         , m_i16(0)
         , m_self1((Hash*)this)
-        , m_buckets(new int[3 * n + 3])
-        , m_i28(0)
-        , m_i32(0)
+        , m_buckets(new Bucket[n + 1])
+        , m_firstUsed(0)
+        , m_count(0)
         , m_capacity((int)n)
         , m_nodeManager(0)
     {
         // m_i0 and m_i4 deliberately not initialised - see above.
-        // n + 1 entries of three words each, cleared from n down through zero.
+        // n + 1 entries, cleared from n down through zero.
         for (unsigned int i = 0; i <= n; ++i)
         {
-            m_buckets[3 * i]     = 0;
-            m_buckets[3 * i + 1] = 0;
-            m_buckets[3 * i + 2] = 0;
+            m_buckets[i].m_next = 0;
+            m_buckets[i].m_prev = 0;
+            m_buckets[i].m_head = 0;
         }
+    }
+
+    // PE 100A19C0: the node goes to the front of its chain.
+    void insert(SearchNode* node)
+    {
+        Bucket* const bucket = bucketOf(node->m_key);
+        SearchNode* const head = bucket->m_head;
+        if (!head)
+        {
+            bucket->m_next = m_firstUsed;
+            if (m_firstUsed)
+                m_firstUsed->m_prev = bucket;
+            bucket->m_prev = 0;
+            m_firstUsed = bucket;
+        }
+        else
+        {
+            head->m_prev = node;
+        }
+        node->m_next = head;
+        node->m_prev = 0;
+        bucket->m_head = node;
+        ++m_count;
+    }
+
+    // PE 100A1A80.
+    void remove(SearchNode* node)
+    {
+        if (!node->m_prev)
+        {
+            Bucket* const bucket = bucketOf(node->m_key);
+            bucket->m_head = node->m_next;
+            if (!bucket->m_head)
+            {
+                if (m_firstUsed == bucket)
+                    m_firstUsed = bucket->m_next;
+                else
+                    bucket->m_prev->m_next = bucket->m_next;
+                if (bucket->m_next)
+                    bucket->m_next->m_prev = bucket->m_prev;
+            }
+        }
+        else
+        {
+            node->m_prev->m_next = node->m_next;
+        }
+        --m_count;
+        if (node->m_next)
+            node->m_next->m_prev = node->m_prev;
+    }
+
+    // The stored node with the key, or null. Inlined at every PE use.
+    SearchNode* find(int key) const
+    {
+        for (SearchNode* node = bucketOf(key)->m_head; node; node = node->m_next)
+        {
+            if (key == node->m_key)
+                return node;
+        }
+        return 0;
+    }
+
+    // Empties every used bucket without touching the nodes. Inlined into PE 100A36D0.
+    void clear()
+    {
+        m_count = 0;
+        for (Bucket* bucket = m_firstUsed; bucket; bucket = bucket->m_next)
+            bucket->m_head = 0;
+        m_firstUsed = 0;
     }
 
     /*  +0 */ int m_i0;                  // never written by the constructor
     /*  +4 */ int m_i4;                  // never written by the constructor
-    /*  +8 */ Hash* m_self0;             // = this (an intrusive list sentinel)
+    /*  +8 */ Hash* m_self0;             // = this
     /* +12 */ int m_i12;                 // = 0
     /* +16 */ int m_i16;                 // = 0
     /* +20 */ Hash* m_self1;             // = this
-    /* +24 */ int* m_buckets;            // operator new[](3 * n + 3) ints, all zeroed
-    /* +28 */ int m_i28;                 // = 0
-    /* +32 */ int m_i32;                 // = 0
+    // +0..+8 and +12..+20 are a walk position and its end mark (bucket, node, hash); see the
+    // open-set refill. [INFERRED]
+    /* +24 */ Bucket* m_buckets;
+    /* +28 */ Bucket* m_firstUsed;       // head of the list of non-empty buckets
+    /* +32 */ int m_count;
     /* +36 */ int m_capacity;            // = n
     /* +40 */ NodeManager* m_nodeManager;// = 0, written by the owner right after construction
+
+private:
+    Bucket* bucketOf(int key) const
+    {
+        int index = key % m_capacity;
+        if (key < 0)
+            index += m_capacity;
+        return &m_buckets[index];
+    }
 };
 
 // State for one in-flight A* search. Its node manager and hash tables belong to the search resource.
