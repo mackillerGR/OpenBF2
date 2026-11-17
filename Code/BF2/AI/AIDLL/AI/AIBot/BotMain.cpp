@@ -163,7 +163,7 @@ BotMain::BotMain(IAIPlayer* player,
         (&m_wantsToSimulateArtillery)[k] = false;   // +500..+502
     m_avoidSideFlipped = false;                    // +512
     m_collidedObject = -1;
-    m_double516 = 0.0;
+    m_moveToStatusTime = 0.0;
     for (int k = 0; k < 3; ++k)
         m_collidedObjectPosition[k] = 0;                // +528..+536
 
@@ -303,7 +303,7 @@ void BotMain::reset()
     m_grenadeThrownTime[2] = 0.0;
     m_timeOfLastFailedStaticAttack = 0.0;
     m_timeOfLastFailedStaticSkyAttack = 0.0;
-    m_double516 = 0.0;
+    m_moveToStatusTime = 0.0;
     m_wantsToSimulateArtillery = false;
     m_isSimulatingArtillery = false;
     m_flag502 = false;
@@ -2161,9 +2161,18 @@ int BotMain::getMoveToStatus() const
 }
 
 // +0x244
+// PE 1017F7B0. At most one change per game-time instant; a stamp from the future (a clock that
+// restarted) is dropped first.
 void BotMain::setMoveToStatus(int status)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setMoveToStatus");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now < m_moveToStatusTime)
+        m_moveToStatusTime = 0.0;
+    if (now - m_moveToStatusTime > 0.0)
+    {
+        m_moveToStatusTime = now;
+        m_moveToStatus = status;
+    }
 }
 
 // +0x248

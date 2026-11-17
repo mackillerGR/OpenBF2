@@ -369,7 +369,7 @@ public:
     virtual bool setAvoidSide(int side);                                                          // +0x238
     virtual int getAvoidSide() const;                                                             // +0x23C
     virtual int getMoveToStatus() const;                                                          // +0x240
-    virtual void setMoveToStatus(int status);                                                     // +0x244 [FRONTIER]
+    virtual void setMoveToStatus(int status);                                                     // +0x244
     virtual void setCollidedObject(unsigned int h);                                               // +0x248
     virtual unsigned int getCollidedObject() const;                                               // +0x24C
     virtual void setCollidedObjectPosition(const Vec3& v);                                        // +0x250 [FRONTIER]
@@ -612,7 +612,7 @@ private:
     // Set when the avoid side changes from one side to the other; cleared with the side.
     /* 512 */ bool         m_avoidSideFlipped;      // = false
     /* 513 */ char         m_pad513[3];
-    /* 516 */ double       m_double516;             // = 0.0
+    /* 516 */ double       m_moveToStatusTime;      // = 0.0; game time of the last status change
     /* 524 */ unsigned int m_collidedObject;        // = -1
     /* 528 */ float        m_collidedObjectPosition[3];  // a Vec3 - getCollidedObjectPosition
     /* 540 */ bool         m_ignoreObstacles;       // = false

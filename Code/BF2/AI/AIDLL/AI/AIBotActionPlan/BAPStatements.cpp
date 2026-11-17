@@ -20,6 +20,9 @@
 #include "../AIKnowledge/IPIMobile.h"
 #include "../Main/IBotManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../../../AIInterface/BFKnowledge/BFTerrain.h"
+#include "../Main/AIRandom.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../../Game/Objects/IObject.h"
 #include "../../../../Game/Objects/ObjectLayoutAccess.h"
@@ -251,6 +254,103 @@ bool BAPICChangeVehicle::execute(Bot* bot, bool& finished, bool& failed)
 
 BAPStatementType BAPICChangeVehicle::getType() { return BAPSTICChangeVehicle; }
 bool BAPICChangeVehicle::isComposite() { return true; }
+
+// ---- BAPSoldierPoseSelector ----------------------------------------------------------------
+
+namespace {
+
+// Whether the object is a soldier a human controls that is not standing.
+bool isLowHumanSoldier(Information* object)
+{
+    if (!object || !((object->getObjectTypeFlags() >> 21) & 1))
+        return false;
+    IAIPlayer* const player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                  ->getPlayerFromId(object->getPlayerId());
+    return player && player->getSoldier() && object->getSoldierPose() != SPStanding;
+}
+
+} // anonymous namespace
+
+BAPSoldierPoseSelector::BAPSoldierPoseSelector(int defaultPose, int abovePose, float threshold, int belowPose,
+                                               float limit, unsigned int companion, float interval)
+    : m_defaultPose(defaultPose), m_abovePose(abovePose), m_belowPose(belowPose), m_currentPose(defaultPose),
+      m_interval(interval), m_lastTime(-3.4028234663852886e+38), m_companion(companion)
+{
+    m_threshold = (static_cast<float>(AIRandom::m_instance->next()) * 1.1641532182693481e-09f + 1.0f) * threshold;
+    if (-1.0f > limit)
+        m_limit = -1.0f;
+    else if (1.0f < limit)
+        m_limit = 1.0f;
+    else
+        m_limit = limit;
+}
+
+BAPSoldierPoseSelector::~BAPSoldierPoseSelector() {}
+void BAPSoldierPoseSelector::setDefaultPose(int pose) { m_defaultPose = pose; }
+void BAPSoldierPoseSelector::setAbovePose(int pose) { m_abovePose = pose; }
+void BAPSoldierPoseSelector::setThreshold(float threshold) { m_threshold = threshold; }
+void BAPSoldierPoseSelector::setBelowPose(int pose) { m_belowPose = pose; }
+void BAPSoldierPoseSelector::setLimit(float limit) { m_limit = limit; }
+void BAPSoldierPoseSelector::setInterval(float interval) { m_interval = interval; }
+
+int BAPSoldierPoseSelector::getPose()
+{
+    if (m_companion != static_cast<unsigned int>(-1)
+        && isLowHumanSoldier(informationManager->getInformation(m_companion)))
+        return SPCrouching;
+    return m_defaultPose;
+}
+
+int BAPSoldierPoseSelector::getAbovePose() { return m_abovePose; }
+float BAPSoldierPoseSelector::getThreshold() { return m_threshold; }
+int BAPSoldierPoseSelector::getBelowPose() { return m_belowPose; }
+float BAPSoldierPoseSelector::getLimit() { return m_limit; }
+float BAPSoldierPoseSelector::getInterval() { return m_interval; }
+int BAPSoldierPoseSelector::getCurrentPose() { return m_currentPose; }
+
+int BAPSoldierPoseSelector::update(float measure, float value, double time, Bot* bot, const Vec3& position)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return m_currentPose;
+    if (equipment->getSoldierPose() == SPSwimming)
+    {
+        m_currentPose = SPSwimming;
+        return m_currentPose;
+    }
+    if (!(m_interval <= time - m_lastTime))
+        return m_currentPose;
+    m_lastTime = time;
+    if (m_companion != static_cast<unsigned int>(-1)
+        && isLowHumanSoldier(informationManager->getInformation(m_companion)))
+    {
+        m_currentPose = SPCrouching;
+        return m_currentPose;
+    }
+    int pose;
+    if (measure > m_threshold)
+        pose = m_abovePose;
+    else if (value < m_limit)
+        pose = m_belowPose;
+    else
+        pose = m_defaultPose;
+    // Only kit types 1 and 3 lie down.
+    if (pose == SPLying && equipment->getKitType() != 1 && equipment->getKitType() != 3)
+        pose = SPCrouching;
+    m_currentPose = pose;
+
+    IAITerrain* const terrain = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain);
+    const float water = terrain->getWaterLevel(position.x, position.z);
+    const float depth = water - terrain->getHeight(position.x, position.z);
+    if (depth > 0.4f)
+    {
+        m_currentPose = SPStanding;
+        return m_currentPose;
+    }
+    if (depth > 0.0f && m_currentPose == SPLying)
+        m_currentPose = SPCrouching;
+    return m_currentPose;
+}
 
 // ---- BAPMoveTo -----------------------------------------------------------------------------
 

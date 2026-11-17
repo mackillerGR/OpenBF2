@@ -177,6 +177,51 @@ public:
     /* +0x28 */ float m_delay;
 };
 
+// Chooses the soldier pose for a moving bot from two measures the caller supplies, re-deciding
+// at most once per interval. Lying is only kept for kit types 1 and 3 (others crouch); water
+// deeper than 0.4 forces standing and any water turns lying into crouching. With a companion
+// object that is a human-controlled soldier not standing, the bot crouches. The path-following
+// moves carry one as a second base. PE vtable 102853C0, fifteen slots. [INFERRED] name and
+// member names.
+class BAPSoldierPoseSelector
+{
+public:
+    // PE 101DEED0. The threshold is scaled by a random factor in [1, 6); the limit is clamped
+    // to [-1, 1].
+    BAPSoldierPoseSelector(int defaultPose, int abovePose, float threshold, int belowPose, float limit,
+                           unsigned int companion, float interval);
+    virtual ~BAPSoldierPoseSelector();                                 // PE 101DEF80
+    virtual void setDefaultPose(int pose);                             // PE 101DEE10
+    virtual void setAbovePose(int pose);                               // PE 101DEE20
+    virtual void setThreshold(float threshold);                        // PE 101DEE30
+    virtual void setBelowPose(int pose);                               // PE 101DEE40
+    virtual void setLimit(float limit);                                // PE 101DEE50
+    virtual void setInterval(float interval);                          // PE 101DEE60
+    // The pose to start from: crouching beside a non-standing human companion, else the default.
+    virtual int getPose();                                             // PE 101DEFB0
+    virtual int getAbovePose();                                        // PE 101DEE70
+    virtual float getThreshold();                                      // PE 101DEE80
+    virtual int getBelowPose();                                        // PE 101DEE90
+    virtual float getLimit();                                          // PE 101DEEA0
+    virtual float getInterval();                                       // PE 101DEEB0
+    virtual int getCurrentPose();                                      // PE 101DEEC0
+    // Re-decides when the interval has passed and returns the current pose: the above pose
+    // when `measure` exceeds the threshold, else the below pose when `value` is under the limit,
+    // else the default. PE 101DF040.
+    virtual int update(float measure, float value, double time, Bot* bot, const Vec3& position);
+
+protected:
+    /* +0x08 */ int m_defaultPose;
+    /* +0x0C */ int m_abovePose;
+    /* +0x10 */ float m_threshold;
+    /* +0x14 */ int m_belowPose;
+    /* +0x18 */ int m_currentPose;
+    /* +0x1C */ float m_limit;
+    /* +0x20 */ float m_interval;
+    /* +0x28 */ double m_lastTime;     // starts at the lowest float
+    /* +0x30 */ unsigned int m_companion;
+};
+
 // Moves the equipment to a position; the per-vehicle MoveTo entries drive it. Type 7. The
 // constructor caches the equipment's altitude along its speed and the axes of its
 // transformation. PE vtable 10282EB8. [INFERRED] name and field meanings.
