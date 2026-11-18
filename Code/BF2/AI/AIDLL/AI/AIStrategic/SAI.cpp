@@ -970,14 +970,53 @@ bool SAI::haveAnyOwnedCps(int side)
     return false;
 }
 
-bool SAI::haveAnyOwnedAndTakeableCps(int)
+// PE 1013CA70. Whether the side owns a control point that the game reports as active. Every
+// strategic object's control-point id is read through the area layout, as shipped.
+bool SAI::haveAnyOwnedAndTakeableCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::haveAnyOwnedAndTakeableCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it || (*it)->getStatus(side) != StatusMap::Owned)
+            continue;
+        const unsigned int id = static_cast<AIStrategicArea*>(*it)->m_controlPointId;
+        if (id == static_cast<unsigned int>(-1))
+            continue;
+        bool active = false;
+        Vec3 position;
+        position.x = position.y = position.z = 0.0f;
+        float radius = 0.0f;
+        static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(id, position, radius, active);
+        if (active)
+            return true;
+    }
+    return false;
 }
 
-bool SAI::ownAllTakeableCps(int)
+// PE 1013CB20. Whether no control point the side does not own is reported active.
+bool SAI::ownAllTakeableCps(int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::ownAllTakeableCps");
+    const std::vector<AIStrategicObject*>& objects =
+        AIStrategicObjectManager::getInstance()->getStrategicObjects();
+    for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end();
+         ++it)
+    {
+        if (!*it || (*it)->getStatus(side) == StatusMap::Owned)
+            continue;
+        const unsigned int id = static_cast<AIStrategicArea*>(*it)->m_controlPointId;
+        if (id == static_cast<unsigned int>(-1))
+            continue;
+        bool active = false;
+        Vec3 position;
+        position.x = position.y = position.z = 0.0f;
+        float radius = 0.0f;
+        static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->getControlPointInfo(id, position, radius, active);
+        if (active)
+            return false;
+    }
+    return true;
 }
 
 // preserve unAssignSquads' full integer return.
