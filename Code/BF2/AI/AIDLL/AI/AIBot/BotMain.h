@@ -71,7 +71,7 @@ public:
     virtual void cheatExecution() = 0;                                                            // +0x018
     virtual void see(const double& dt) = 0;                                                       // +0x01C
     virtual void updateSensing(const double& dt) = 0;                                             // +0x020
-    virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024 [FRONTIER]
+    virtual void updatePathfinding(bool& a, bool* b) = 0;                                         // +0x024
     virtual void reset() = 0;                                                                     // +0x028
     // True when the bot's equipment was re-evaluated; *changed reports whether it has a vehicle.
     virtual bool updateBotVehicle(bool* changed) = 0;                                             // +0x02C
@@ -233,7 +233,7 @@ public:
     virtual void cheatExecution();                                                                // +0x018
     virtual void see(const double& dt);                                                           // +0x01C
     virtual void updateSensing(const double& dt);                                                 // +0x020
-    virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024 [FRONTIER]
+    virtual void updatePathfinding(bool& a, bool* b);                                             // +0x024
     virtual void reset();                                                                         // +0x028
     virtual bool updateBotVehicle(bool* changed);                                                 // +0x02C
     virtual bool updateBot();                                                                     // +0x030

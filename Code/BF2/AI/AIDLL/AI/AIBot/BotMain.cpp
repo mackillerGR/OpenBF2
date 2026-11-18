@@ -1010,9 +1010,11 @@ void BotMain::updateSensing(const double& dt)
 }
 
 // +0x024
-void BotMain::updatePathfinding(bool& a, bool* b)
+// PE 1017EA10. Retail tail-calls BotNavigation::update, so its bool reaches the caller's
+// register; the slot is kept void, as every recovered caller ignores it.
+void BotMain::updatePathfinding(bool& finished, bool* busy)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::updatePathfinding");
+    m_navigation->update(finished, busy);
 }
 
 // +0x02C, PE 10180FB0. Re-reads the player's current vehicle. Without one the bot drops its
