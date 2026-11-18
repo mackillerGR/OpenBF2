@@ -60,6 +60,12 @@ public:
     // Points the look plan's target along a direction from the current equipment with a weight.
     // PE 101AED80; [INFERRED] name.
     void setPlanTarget(float weight, const Vec3& direction, bool flag);
+    // Sets the look direction and clears the double at 124. PE 10134690; [INFERRED] name.
+    void setLookDirection(const Vec2& direction)
+    {
+        m_lookDirection = direction;
+        m_double124 = 0.0;
+    }
     // The object overload does nothing. PE 101AE220; [INFERRED] name.
     void setPlanTarget(float, unsigned int, bool) {}
     void setFocusPoint(const Vec3& point) { m_focusPoint = point; }

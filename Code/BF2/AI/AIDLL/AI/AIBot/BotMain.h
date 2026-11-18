@@ -166,7 +166,7 @@ public:
     virtual void addToFireInclination(float f) = 0;                                               // +0x188
     virtual float getMoveInclination() = 0;                                                       // +0x18C
     virtual float getFireInclination() = 0;                                                       // +0x190
-    virtual void requestSoldierPose(int pose, bool b) = 0;                                        // +0x194 [FRONTIER]
+    virtual void requestSoldierPose(int pose, bool b) = 0;                                        // +0x194
     virtual int getRequestedSolderPose() = 0;                                                     // +0x198
     virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b) = 0;                     // +0x19C [FRONTIER]
     virtual void event_airborn() = 0;                                                             // +0x1A0 [FRONTIER]
@@ -325,7 +325,7 @@ public:
     virtual void addToFireInclination(float f);                                                   // +0x188
     virtual float getMoveInclination();                                                           // +0x18C
     virtual float getFireInclination();                                                           // +0x190
-    virtual void requestSoldierPose(int pose, bool b);                                            // +0x194 [FRONTIER]
+    virtual void requestSoldierPose(int pose, bool b);                                            // +0x194
     virtual int getRequestedSolderPose();                                                         // +0x198
     virtual void setPoseStatus(int pose, unsigned int h, bool a, bool b);                         // +0x19C
     virtual void event_airborn();                                                                 // +0x1A0 [FRONTIER]

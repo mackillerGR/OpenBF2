@@ -365,9 +365,11 @@ BAPAMove::BAPAMove(Bot* bot)
                              static_cast<float>(AIRandom::m_instance->next()) * 3.259629011154175e-09f + 1.0f,
                              SPCrouching, 0.0f, static_cast<unsigned int>(-1), 10.0f)
     , m_focusing(false), m_until(0), m_int70(0), m_float74(0.0f), m_int78(0), m_int84(0), m_int88(0),
-      m_int90(-1), m_int94(0), m_int98(0), m_intA4(0), m_intA8(0), m_timeB0(-1000.0), m_intB8(0),
-      m_intBC(0)
+      m_avoidObject(static_cast<unsigned int>(-1)), m_nextAvoidTime(-1000.0)
 {
+    m_avoidPoint.x = m_avoidPoint.y = 0.0f;
+    m_avoidCentre.x = m_avoidCentre.y = 0.0f;
+    m_cachedSteer.x = m_cachedSteer.y = 0.0f;
     m_target.x = m_target.y = m_target.z = 0.0f;
     m_steerPoint.x = m_steerPoint.y = 0.0f;
     m_float74 = 1.0f;
@@ -430,8 +432,6 @@ void BAPAMove::setFocus(Bot* bot, bool focus, const Vec3& position, unsigned int
         bot->getSensingAgent()->setFocusObject(object);
 }
 
-// ---- BAPMoveToFinding ----------------------------------------------------------------------
-
 namespace {
 
 // Component-wise equality within FLT_EPSILON. PE 100D2910.
@@ -448,7 +448,212 @@ bool differs(const Vec2& a, const Vec2& b)
     return !(std::fabs(a.y - b.y) + std::fabs(a.x - b.x) <= 1.1920929e-07f);
 }
 
+// The conditional Vec2 normaliser: unit vectors are left alone, near-zero ones are zeroed.
+// PE 100E9DE0.
+void normaliseFlat2(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+
 } // anonymous namespace
+
+// The cached answer is reused while the game time has not advanced past the last computation.
+// The equipment is not null-checked.
+bool BAPAMove::getAvoidanceSteering(Bot* bot, Vec2 steer, Vec2& out, Information* ignore, bool allowIgnored)
+{
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now < m_nextAvoidTime)
+    {
+        out = m_cachedSteer;
+        return m_cachedAvoidResult;
+    }
+    m_nextAvoidTime = now;
+    m_cachedAvoidResult = true;
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Vec2 flat;
+    flat.x = equipment->getPosition().x;
+    flat.y = equipment->getPosition().z;
+
+    if (slot18()
+        && (m_avoidObject == static_cast<unsigned int>(-1)
+            || hasAvoidedObstacleMoved(m_avoidPoint, m_avoidObject, m_avoidRadius)))
+    {
+        Vec2 beyond;
+        beyond.x = beyond.y = 0.0f;
+        bot->getBotNavigation()->getFirstPointBeyondDist(flat, 10.0f, beyond);
+        if (findObstacleToAvoid(bot, beyond, m_target, getTargetObject(), m_avoidPoint, m_avoidObject,
+                                m_avoidOffset, m_avoidCentre, m_avoidRadius, m_avoidingTarget, ignore,
+                                allowIgnored))
+            return true;
+    }
+
+    out.x = steer.x - flat.x;
+    out.y = steer.y - flat.y;
+    bool passing = false;
+    float distance = std::sqrt(out.x * out.x + out.y * out.y);
+
+    Information* const obstacle = informationManager->getInformation(m_avoidObject);
+    if (!obstacle)
+    {
+        m_avoidObject = static_cast<unsigned int>(-1);
+    }
+    else
+    {
+        Vec2 toCentre;
+        toCentre.x = m_avoidCentre.x - flat.x;
+        toCentre.y = m_avoidCentre.y - flat.y;
+        const float fx = flat.x - m_avoidCentre.x;
+        const float fy = flat.y - m_avoidCentre.y;
+        const float centreDistanceSq = fx * fx + fy * fy;
+        const float reach = m_avoidRadius + 1.0f;
+        if (!(centreDistanceSq <= reach * reach))
+            m_avoidObject = static_cast<unsigned int>(-1);
+
+        bool isTarget = false;
+        if (m_avoidObject != static_cast<unsigned int>(-1))
+        {
+            unsigned int change = bot->getChangeTarget();
+            Information* const changeInfo = informationManager->getInformation(change);
+            if (changeInfo && !changeInfo->isPrimary())
+                change = changeInfo->getPrimaryObject(bot->getSide());
+            unsigned int repair = bot->getRepairTarget();
+            Information* const repairInfo = informationManager->getInformation(repair);
+            if (repairInfo && !repairInfo->isPrimary())
+                repair = repairInfo->getPrimaryObject(bot->getSide());
+            isTarget = m_avoidObject == repair || m_avoidObject == change;
+        }
+
+        passing = isTarget;
+        if (m_avoidObject != static_cast<unsigned int>(-1))
+        {
+            if (!isTarget && !m_avoidingTarget)
+            {
+                if (toCentre.y * out.y + toCentre.x * out.x < 0.0f)
+                    passing = true;
+                else if (!ignore)
+                    passing = false;
+                else
+                    passing = !(toCentre.x * toCentre.x + toCentre.y * toCentre.y < distance * distance);
+            }
+
+            const Vec3& objectPosition = obstacle->getPosition();
+            Vec2 objectFlat;
+            objectFlat.x = objectPosition.x;
+            objectFlat.y = objectPosition.z;
+            const float mx = m_avoidCentre.x - objectFlat.x;
+            const float my = m_avoidCentre.y - objectFlat.y;
+            if (!(mx * mx + my * my < 0.25f))
+            {
+                m_avoidObject = static_cast<unsigned int>(-1);
+            }
+            else
+            {
+                const float tx = m_target.x - flat.x;
+                const float ty = m_target.z - flat.y;
+                const float ox = objectFlat.x - m_target.x;
+                const float oy = objectFlat.y - m_target.z;
+                const float targetToObject = std::sqrt(ox * ox + oy * oy);
+                const float threshold = m_avoidRadius - targetToObject + 0.8f;
+                const bool targetInside = !(threshold * threshold <= tx * tx + ty * ty);
+
+                bool keep = false;
+                if (m_avoidingTarget && targetToObject <= m_avoidRadius)
+                {
+                    if (targetInside)
+                        keep = true;
+                    else if (m_avoidOffset < m_avoidRadius && centreDistanceSq <= reach * reach)
+                        keep = true;
+                }
+                if (!keep && !(passing && !isTarget) && targetToObject <= m_avoidRadius && targetInside)
+                    keep = true;
+                if (keep)
+                {
+                    m_cachedSteer = out;
+                    return true;
+                }
+                out.x = m_avoidPoint.x - flat.x;
+                out.y = m_avoidPoint.y - flat.y;
+                distance = std::sqrt(out.x * out.x + out.y * out.y);
+            }
+        }
+    }
+
+    if (isFocusing())
+    {
+        Vec2 zero;
+        zero.x = zero.y = 0.0f;
+        if (differs(steer, zero))
+        {
+            m_focusing = true;
+            Vec3 point;
+            point.x = steer.x;
+            point.y = 0.0f;
+            point.z = steer.y;
+            bot->getSensingAgent()->setFocusPoint(point);
+        }
+    }
+
+    if (m_avoidObject != static_cast<unsigned int>(-1) && distance < 0.3f)
+        m_avoidObject = static_cast<unsigned int>(-1);
+
+    if (m_avoidObject != static_cast<unsigned int>(-1) && !passing && distance > 0.5f)
+    {
+        Vec2 toPoint;
+        toPoint.x = m_avoidPoint.x - flat.x;
+        toPoint.y = m_avoidPoint.y - flat.y;
+        normaliseFlat2(toPoint);
+        Vec2 toCentre;
+        toCentre.x = m_avoidCentre.x - flat.x;
+        toCentre.y = m_avoidCentre.y - flat.y;
+        normaliseFlat2(toCentre);
+        if (toCentre.y * toPoint.y + toCentre.x * toPoint.x > 0.05f)
+        {
+            Vec2 away;
+            away.x = toPoint.x + flat.x - m_avoidCentre.x;
+            away.y = toPoint.y + flat.y - m_avoidCentre.y;
+            normaliseFlat2(away);
+            out.x = away.x * m_avoidOffset + m_avoidCentre.x - flat.x;
+            out.y = away.y * m_avoidOffset + m_avoidCentre.y - flat.y;
+            normaliseFlat2(out);
+        }
+        else
+        {
+            const float scale = 1.0f / distance;
+            out.x *= scale;
+            out.y *= scale;
+        }
+    }
+    else if (distance > 0.001f)
+    {
+        const float scale = 1.0f / distance;
+        out.x *= scale;
+        out.y *= scale;
+    }
+    else
+    {
+        out.x = 1.0f;
+        out.y = 0.0f;
+    }
+
+    m_cachedSteer = out;
+    m_cachedAvoidResult = false;
+    return false;
+}
+
+// ---- BAPMoveToFinding ----------------------------------------------------------------------
+
 
 BAPMoveToFinding::BAPMoveToFinding(Bot* bot, const Vec3& target, float float60, float float64,
                                    BAPCondition* until, unsigned long long inputMask, int id, float maxRange,

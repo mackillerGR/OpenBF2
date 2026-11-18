@@ -258,6 +258,11 @@ public:
     // Turns the focus request on or off; when on, points the bot's sensing agent at the object,
     // or at the position when the object is -1. PE 1019B3C0.
     void setFocus(Bot* bot, bool focus, const Vec3& position, unsigned int object);
+    // Steers around the nearest obstacle on the way to `steer`: a direction from the equipment
+    // in `out`. Recomputed at most once per game time step; true when no avoidance is needed
+    // (then `out` is untouched or the plain direction), false with an avoiding unit direction.
+    // `ignore` and `allowIgnored` are handed to the obstacle search. PE 1019B510; [INFERRED] name.
+    bool getAvoidanceSteering(Bot* bot, Vec2 steer, Vec2& out, Information* ignore, bool allowIgnored);
 
     /* +0x50 */ bool m_focusing;           // = false
     /* +0x54 */ Vec3 m_target;             // = 0
@@ -272,18 +277,30 @@ public:
     /* +0x84 */ int m_int84;               // = 0 [UNRESOLVED]
     /* +0x88 */ int m_int88;               // = 0 [UNRESOLVED]
     /* +0x8C */ int m_int8C;               // left unset [UNRESOLVED]
-    /* +0x90 */ int m_int90;               // = -1 [UNRESOLVED]
-    /* +0x94 */ int m_int94;               // = 0 [UNRESOLVED]
-    /* +0x98 */ int m_int98;               // = 0 [UNRESOLVED]
-    /* +0x9C */ int m_int9C;               // left unset [UNRESOLVED]
-    /* +0xA0 */ int m_intA0;               // left unset [UNRESOLVED]
-    /* +0xA4 */ int m_intA4;               // = 0 [UNRESOLVED]
-    /* +0xA8 */ int m_intA8;               // = 0 [UNRESOLVED]
-    /* +0xB0 */ double m_timeB0;           // = -1000 [UNRESOLVED]
-    /* +0xB8 */ int m_intB8;               // = 0 [UNRESOLVED]
-    /* +0xBC */ int m_intBC;               // = 0 [UNRESOLVED]
-    /* +0xC0 */ int m_intC0;               // left unset [UNRESOLVED]
+    // The obstacle being avoided and how ([INFERRED] names, from getAvoidanceSteering).
+    /* +0x90 */ unsigned int m_avoidObject;   // = -1; none
+    /* +0x94 */ Vec2 m_avoidPoint;            // = 0; the point steered for beside it
+    /* +0x9C */ float m_avoidRadius;          // left unset
+    /* +0xA0 */ float m_avoidOffset;          // left unset; the sideways distance chosen
+    /* +0xA4 */ Vec2 m_avoidCentre;           // = 0; the obstacle's flat position when chosen
+    /* +0xAC */ bool m_avoidingTarget;        // left unset; a change/repair target or unhealthy
+    /* +0xB0 */ double m_nextAvoidTime;       // = -1000; the game time of the cached answer
+    /* +0xB8 */ Vec2 m_cachedSteer;           // = 0
+    /* +0xC0 */ bool m_cachedAvoidResult;     // left unset
 };
+
+// Free helpers of the infantry move entries, used by BAPAMove too. [INFERRED] names and
+// placement; defined in BAPEntries.cpp.
+//
+// Whether an avoided obstacle (handle) is no longer where it was chosen: false only while its
+// flat position lies between `radius` and `radius` + 1.5 from `point`. PE 101C42B0.
+bool hasAvoidedObstacleMoved(const Vec2& point, unsigned int object, float radius);
+// Picks the nearest sensed obstacle ahead on the line from the equipment to `towards` and the
+// side to pass it on, tracing 15 to either side. Writes the avoidance point and the obstacle's
+// records; false either way except when the obstacle stands off the mesh (true). PE 101C4AA0.
+bool findObstacleToAvoid(Bot* bot, const Vec2& towards, const Vec3& target, unsigned int targetObject,
+                         Vec2& avoidPoint, unsigned int& avoidObject, float& avoidOffset, Vec2& avoidCentre,
+                         float& avoidRadius, bool& avoidingTarget, Information* ignore, bool allowIgnored);
 
 // Follows a path from the bot's navigation to a position until it is within the range band
 // or the stop condition holds. Type 7. PE vtable 10283250 (pose selector at +0x18: 10283210).

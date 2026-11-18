@@ -1843,9 +1843,29 @@ float BotMain::getFireInclination()
 }
 
 // +0x194
-void BotMain::requestSoldierPose(int pose, bool b)
+// PE 1017F640. A new pose is taken when forced, or when the pose is not held and a second has
+// passed since it last changed; forcing also sets the force flag (+502).
+void BotMain::requestSoldierPose(int pose, bool force)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::requestSoldierPose");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (pose == m_requestedSoldierPose)
+    {
+        if (force)
+            m_flag502 = true;
+        return;
+    }
+    if (!m_flag285 && now > m_time288 + 1.0)
+    {
+        m_requestedSoldierPose = pose;
+        if (force)
+            m_flag502 = true;
+        return;
+    }
+    if (force)
+    {
+        m_requestedSoldierPose = pose;
+        m_flag502 = true;
+    }
 }
 
 // +0x198

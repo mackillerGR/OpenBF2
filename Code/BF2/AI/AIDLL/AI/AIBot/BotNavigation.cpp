@@ -648,6 +648,20 @@ bool BotNavigation::checkArrivedAtPoint(float)
     return radius * radius > dz * dz + dx * dx;
 }
 
+// PE 10174130. Starting at the current point, hands out each point's flat position until one
+// lies at least `distance` from `from`; with none, the last point examined (or nothing).
+void BotNavigation::getFirstPointBeyondDist(const Vec2& from, float distance, Vec2& out)
+{
+    for (unsigned int i = static_cast<unsigned int>(m_int116); i < m_points.size(); ++i)
+    {
+        out = flatOf(m_points[i].m_position);
+        const float dx = from.x - out.x;
+        const float dy = from.y - out.y;
+        if (distance * distance < dx * dx + dy * dy)
+            return;
+    }
+}
+
 bool BotNavigation::getSecondPoint(Vec2& out)
 {
     if (m_points.size() > static_cast<unsigned int>(m_int116) + 1)
