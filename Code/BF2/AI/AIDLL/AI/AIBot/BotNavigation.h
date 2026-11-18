@@ -16,6 +16,7 @@ namespace ai {
 
 class BotMain;
 class IAIPathfinding;
+class QuadTree;
 class Information;
 
 class BotNavigation
@@ -38,7 +39,10 @@ public:
     // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
     void update(bool& a, bool* b);
     void updateOccationally();                  // dice's spelling - "Occationally"
-    void updatePath(Vec2& a, bool& b, bool& c, float d);
+    // Advances along the path and hands out the horizontal position to steer for. `arrived`
+    // is set on reaching the last point, `waiting` while a search or a firing stop holds the
+    // bot. False when no point can be given. PE 10175360.
+    bool updatePath(Vec2& target, bool& arrived, bool& waiting, float distance);
     void updateNavPoints();
     void updateObstacles();
     void updateLastPoint(Information* info);
@@ -82,13 +86,20 @@ public:
     bool isRunning();
     void checkProgress();
     void clearProgress();
+    // Whether the equipment is within 3 vertically and the arrival radius horizontally of the
+    // current point. The argument is not read. PE 10173FC0.
     bool checkArrivedAtPoint(float distance);
     void setIsStuck(bool stuck);
 
     bool pointWithinObstacleRadius(const Vec3& point);
     void getFirstPointBeyondDist(const Vec2& from, float distance, Vec2& out);
-    void getSecondPoint(Vec2& out);
-    void getLargestAngleDiff(float& out);
+    // The horizontal position of the point after the current one; false at the end of the
+    // path. PE 10173B30.
+    bool getSecondPoint(Vec2& out);
+    // The largest absolute angle between the equipment's facing and the path segments within
+    // reach (twice its speed, at least 3), recomputed at most every half second. Always true.
+    // PE 10173B80.
+    bool getLargestAngleDiff(float& out);
     // The equipment's last valid polygon, island and position on a map, cached per position.
     // Only the bot's own map and the trace map are supported. PE 101727B0.
     void getTraceData(int map, unsigned int& polygon, unsigned int& island, Vec3& position);
@@ -141,7 +152,7 @@ private:
     /*  56 */ int   m_state;               // reset: 0; testDirectPath: 2 [INFERRED] name
     // Owns the polygon and cluster search reservations. Null until the first path request.
     /*  60 */ IAIPathfinding* m_pathOwner;  // = 0
-    /*  64 */ void* m_quadTree;             // = 0; the start island's quad tree
+    /*  64 */ QuadTree* m_quadTree;         // = 0; the start island's quad tree
     /*  68 */ bool  m_flag68;               // [UNRESOLVED] role
     /*  69 */ char  m_pad69[3];
     /*  72 */ QTPath* m_polygonPath;       // new(0x18) - the fine path
@@ -201,7 +212,7 @@ private:
     /* 292 */ float m_float292;
     /* 296 */ float m_float296;
     /* 300 */ double m_double300;          // Initially -1.0; independent of the distance sentinel.
-    /* 308 */ int   m_zero308;             // +308
+    /* 308 */ float m_largestAngleDiff;    // getLargestAngleDiff's cached answer
     /* 312 */ float m_pathLength;          // updateDistanceLeft: length along the points
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false

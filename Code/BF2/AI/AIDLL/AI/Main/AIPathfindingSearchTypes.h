@@ -54,6 +54,16 @@ public:
     // [INFERRED] name. Defined in AIPathfinding.cpp.
     bool getPortal(Vec3& position, unsigned int& value, unsigned int index) const;
 
+    // The cluster an offset past the cursor, or 0xFFFF past the end. PE 101742A0;
+    // [INFERRED] name.
+    unsigned short getCluster(int offset) const
+    {
+        const int index = m_i0 + offset;
+        if (index < static_cast<int>(m_nodes.size()))
+            return m_nodes[index].first;
+        return 0xFFFF;
+    }
+
     /*  +0 */ int m_i0;                                       // = 0; the cursor into m_nodes
     /*  +4 */ int m_map;                                      // not constructed [INFERRED] name
     /*  +8 */ unsigned short m_costType;                      // not constructed [INFERRED] name
