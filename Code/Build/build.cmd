@@ -198,6 +198,7 @@ for /r "%ROOT%" %%F in (*.cpp) do (
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIMobileReal.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIMobileKnown.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIUnit.cpp" set "ENGINE_OBJECT=0"
+            if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationKnown.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationReal.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfoReal.cpp" set "ENGINE_OBJECT=0"
             if /i "%%~fF"=="%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIPhysicalReal.cpp" set "ENGINE_OBJECT=0"

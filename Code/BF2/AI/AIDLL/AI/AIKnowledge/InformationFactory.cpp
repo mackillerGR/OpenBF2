@@ -6,6 +6,7 @@
 
 #include "Information.h"
 #include "InformationManager.h"
+#include "InformationKnown.h"
 #include "InformationReal.h"
 #include "IPIArmamentReal.h"
 #include "IPIControlInfo.h"
@@ -93,14 +94,15 @@ unsigned int InformationFactory::requestInformationReal(unsigned int handle, IAI
                                                                         time, allowedTimeDiff)));
 }
 
-// The same with an InformationKnown
-// (ELF , PE ; , / , `(object, types, time
-// degeneration, basicTemp, allowedTimeDiff, side)`), registered through the same vtable slot.
-// [FRONTIER] InformationKnown is not written.
-unsigned int InformationFactory::requestInformationKnown(unsigned int, IAIObject*, unsigned int,
-                                                         double, float, float, float, int) const
+// The same with an InformationKnown, registered through the same vtable slot.
+unsigned int InformationFactory::requestInformationKnown(unsigned int handle, IAIObject* object,
+                                                         unsigned int types, double time,
+                                                         float degeneration, float basicTemp,
+                                                         float allowedTimeDiff, int side) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::InformationFactory::requestInformationKnown [InformationKnown]");
+    return registerInformation(handle, checkPointer(new InformationKnown(
+                                           object, types, time, degeneration, basicTemp,
+                                           allowedTimeDiff, side)));
 }
 
 // the plug-in halves

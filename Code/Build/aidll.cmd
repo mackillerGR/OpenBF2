@@ -142,6 +142,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIMobileReal.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIMobileKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIUnit.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationReal.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfoReal.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIPhysicalReal.cpp" ^

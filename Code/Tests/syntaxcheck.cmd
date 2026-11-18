@@ -984,6 +984,8 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIMobileKnown.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIUnit.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\InformationKnown.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\InformationReal.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\WeaponInfoReal.cpp"
