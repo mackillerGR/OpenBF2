@@ -212,6 +212,8 @@ public:
 
     // primary slot 90, introduced by this class and in neither interface
     virtual int internalLocalSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int, const Vec3&, int, QTPath *);
+    // Writes a found cluster search's path. PE 100A5DA0; [INFERRED] name and placement.
+    bool writeClusterPath(int resource, ClusterNodePath* path);
 
     // non-virtual, and the debug tool's own accessors
     int getSearchPointToSet() const;

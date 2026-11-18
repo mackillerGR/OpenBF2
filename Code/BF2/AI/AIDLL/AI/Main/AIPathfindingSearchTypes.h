@@ -53,6 +53,9 @@ public:
     // The index is relative to the start of the path, not to the cursor. PE 10139A40;
     // [INFERRED] name. Defined in AIPathfinding.cpp.
     bool getPortal(Vec3& position, unsigned int& value, unsigned int index) const;
+    // Records the map and the equipment's cluster cost type. PE 10139910; [INFERRED] name.
+    // Defined in AIPathfinding.cpp.
+    void setMapAndCostType(int map, int equipmentType);
 
     // The cluster an offset past the cursor, or 0xFFFF past the end. PE 101742A0;
     // [INFERRED] name.
@@ -772,17 +775,6 @@ void AStarResource<Node, NodeManager, SearchNode, Key, Path>::update(double dead
     }
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// The cluster search runs the same template once ClusterNode and ClusterNodeManager's search
-// members are recovered; until then its update is a named stop.
-class ClusterNode;
-class ClusterNodeManager;
-template <>
-inline void AStarResource<ClusterNode, ClusterNodeManager, ClusterNode, unsigned short,
-                          ClusterNodePath>::update(double)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::AStarResource<ClusterNode>::update");
-}
 
 // Pathfinding engine and its pool of reusable search resources.
 template <class Node, class NodeManager, class SearchNode, class Key, class Path>

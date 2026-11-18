@@ -94,6 +94,72 @@ void ClusterGraph::readFromFile(io::File& file)
     }
 }
 
+float ClusterGraph::getPortalToPortalCost(unsigned short cluster, unsigned short a, unsigned short b,
+                                          unsigned short costType) const
+{
+    const Cluster& entry = m_clusters[cluster];
+    unsigned short low;
+    unsigned short high;
+    if (a < b)
+    {
+        low = a;
+        high = b;
+    }
+    else
+    {
+        low = b;
+        high = a;
+    }
+    const int count = entry.m_numberOfPortals;
+    const int pairs = (count - 1) * count / 2;
+    const int rest = static_cast<unsigned short>(count - low);
+    const int tail = (rest - 1) * rest / 2;
+    const unsigned short within = static_cast<unsigned short>(pairs - tail - low + high);
+    const unsigned int index = within + static_cast<unsigned short>(pairs) * costType + entry.m_firstPortalCost;
+    return m_portalCosts[index - 1];
+}
+
+unsigned short ClusterGraph::getPortalTo(unsigned short cluster, unsigned short costType,
+                                         unsigned short other) const
+{
+    const Cluster& entry = m_clusters[cluster];
+    const unsigned short count = entry.m_numberOfPortals;
+    for (unsigned short i = 0; i < count; ++i)
+    {
+        if (m_portals[i + entry.m_firstPortal + count * costType].m_cluster == other)
+            return i;
+    }
+    return 0xFFFF;
+}
+
+unsigned short ClusterGraph::getPortalIndexTo(unsigned short cluster, unsigned short costType,
+                                              unsigned short other) const
+{
+    if (cluster == 0xFFFF)
+        return 0xFFFF;
+    return getPortalTo(cluster, costType, other);
+}
+
+unsigned short ClusterGraph::getMatchingPortal(const ClusterPortal& portal, unsigned short costType) const
+{
+    if (portal.m_cluster == 0xFFFF)
+        return 0xFFFF;
+    const Cluster& entry = m_clusters[portal.m_cluster];
+    const unsigned short count = entry.m_numberOfPortals;
+    for (unsigned short i = 0; i < count; ++i)
+    {
+        const ClusterPortal& candidate = m_portals[i + count * costType + entry.m_firstPortal];
+        if (candidate.m_value10 != portal.m_value10)
+            continue;
+        const float dx = portal.m_position.x - candidate.m_position.x;
+        const float dy = portal.m_position.y - candidate.m_position.y;
+        const float dz = portal.m_position.z - candidate.m_position.z;
+        if (dx * dx + dy * dy + dz * dz < 0.01f)
+            return i;
+    }
+    return 0xFFFF;
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

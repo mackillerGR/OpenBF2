@@ -28,7 +28,7 @@ public:
     /* +0x00 */ Vec3          m_position;          // [INFERRED] name
     /* +0x0C */ unsigned short m_cluster;          // [INFERRED] the cluster the portal leads to
     /* +0x0E */ unsigned char m_unread0E[2];       // [UNRESOLVED]
-    /* +0x10 */ unsigned int  m_value10;           // [UNRESOLVED] handed out with the position
+    /* +0x10 */ unsigned int  m_value10;           // a polygon: the polygon search ends on it
 };
 
 typedef char ClusterPortalIsTheFileRecord[sizeof(ClusterPortal) == 20 ? 1 : -1];
@@ -52,6 +52,22 @@ public:
         const Cluster& entry = m_clusters[cluster];
         return &m_portals[entry.m_numberOfPortals * costType + entry.m_firstPortal + portal];
     }
+
+    const Cluster& getCluster(unsigned short cluster) const { return m_clusters[cluster]; }
+
+    // The cost table entry between two of a cluster's portals for a cost type. The table holds
+    // each unordered pair once. PE 10157840; [INFERRED] name.
+    float getPortalToPortalCost(unsigned short cluster, unsigned short a, unsigned short b,
+                                unsigned short costType) const;
+    // The index of the cluster's portal for a cost type that leads to another cluster, or
+    // 0xFFFF. PE 101578D0; [INFERRED] name.
+    unsigned short getPortalTo(unsigned short cluster, unsigned short costType, unsigned short other) const;
+    // The same, answering 0xFFFF for the cluster 0xFFFF. PE 10157520; [INFERRED] name.
+    unsigned short getPortalIndexTo(unsigned short cluster, unsigned short costType,
+                                    unsigned short other) const;
+    // The index of the portal on the far side of a portal: same polygon, within 0.1. 0xFFFF
+    // when none matches or the portal leads nowhere. PE 10159850; [INFERRED] name.
+    unsigned short getMatchingPortal(const ClusterPortal& portal, unsigned short costType) const;
 
     // Whether one of a cluster's first-cost-type portals leads to the other cluster.
     // PE 10157940.

@@ -964,10 +964,53 @@ int AIPathfinding::localSearch(int resource, int map, unsigned int island, unsig
                                path);
 }
 
-int AIPathfinding::clusterSearch(int, int, unsigned int, unsigned int, const Vec3&, unsigned int,
-                                 const Vec3&, int, ClusterNodePath*)
+// PE 100A9810. A finished or failed search answers its status; a found one writes the path and
+// answers 2; an idle one is set up on the island's quad tree and cluster graph with the
+// equipment's cluster cost type and started.
+int AIPathfinding::clusterSearch(int resource, int map, unsigned int island, unsigned int startPolygon,
+                                 const Vec3& start, unsigned int goalPolygon, const Vec3& goal,
+                                 int equipmentType, ClusterNodePath* path)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::clusterSearch");
+    ClusterResource* const search = m_clusterEngine->m_searches[resource];
+    const int status = search->m_status;
+    if (status == 4 || status == 3)
+        return status;
+    if (status == 2)
+    {
+        writeClusterPath(resource, path);
+        return status;
+    }
+    if (status == 1)
+        return status;
+
+    ClusterNodeManager* const nodes = search->m_nodeManager;
+    path->m_island = island;
+    path->setMapAndCostType(map, equipmentType);
+    QuadTree* const quadTree = m_maps[map]->m_quadTreeManager->getIsland(island);
+    nodes->setQuadTree(quadTree);
+    nodes->setClusterGraph(m_maps[map]->m_quadTreeManager->getClusterGraph(island));
+    ClusterNode* const from = nodes->allocNode(quadTree->getPolygon(startPolygon)->m_cluster, 0, 0);
+    ClusterNode* const to = nodes->allocNode(quadTree->getPolygon(goalPolygon)->m_cluster, 0, 0);
+    nodes->setPositions(start, goal);
+    nodes->setCostType(static_cast<unsigned short>(m_maps[map]->m_clusterCostTypes[equipmentType]));
+    return m_clusterEngine->start(resource, from, to);
+}
+
+// PE 100A5DA0. Writes the found cluster path; false when the search has not found one.
+bool AIPathfinding::writeClusterPath(int resource, ClusterNodePath* path)
+{
+    ClusterResource* const search = m_clusterEngine->m_searches[resource];
+    if (search->m_status != 2 || !search->m_goal)
+        return false;
+    search->m_nodeManager->buildPath(path, search->m_goal);
+    return true;
+}
+
+// PE 10139910.
+void ClusterNodePath::setMapAndCostType(int map, int equipmentType)
+{
+    m_map = map;
+    m_costType = static_cast<unsigned short>(IAIPathfinding::instance->getClusterCostType(map, equipmentType));
 }
 
 // PE 100A96F0. An idle search is set up on the island's tree with start and goal nodes and the
@@ -1231,14 +1274,21 @@ void AIPathfinding::releaseResource(unsigned int& resource, int owner)
     m_engine->release(resource, owner);
 }
 
-bool AIPathfinding::acquireClusterResource(unsigned int&, int)
+// PE 100A9980. Nothing is handed out while the pathfinder is locking.
+bool AIPathfinding::acquireClusterResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::acquireClusterResource");
+    if (m_locking)
+    {
+        resource = static_cast<unsigned int>(-1);
+        return false;
+    }
+    return m_clusterEngine->acquire(resource, owner);
 }
 
-void AIPathfinding::releaseClusterResource(unsigned int&, int)
+// PE 100A99B0.
+void AIPathfinding::releaseClusterResource(unsigned int& resource, int owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPathfinding::releaseClusterResource");
+    m_clusterEngine->release(resource, owner);
 }
 
 // Search-record mutations remain unimplemented: status, iteration/depth limits,

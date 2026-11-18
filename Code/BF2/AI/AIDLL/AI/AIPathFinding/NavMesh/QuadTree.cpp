@@ -579,7 +579,7 @@ void QuadTree::destroyMapPart(int mapPartId, ClusterGraph* graph)
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_walkable
                     = static_cast<unsigned char>(!part->m_initiallyWalkable);
             }
             part->m_destroyed = true;
@@ -603,7 +603,7 @@ void QuadTree::restoreMapPart(int mapPartId, ClusterGraph* graph)
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_walkable
                     = static_cast<unsigned char>(part->m_initiallyWalkable);
             }
             part->m_destroyed = false;
@@ -624,7 +624,7 @@ void QuadTree::resetOriginalMaterialOfDestroyableMapPart(int mapPartId, ClusterG
             if (graph && !part->m_polygons.empty())
             {
                 const unsigned int first = part->m_polygons[0];
-                graph->m_clusters[m_polygons[first].m_cluster].m_unread0C[2]
+                graph->m_clusters[m_polygons[first].m_cluster].m_walkable
                     = static_cast<unsigned char>(part->m_initiallyWalkable);
             }
             part->m_destroyed = false;

@@ -18,7 +18,11 @@ public:
     /* +0x00 */ unsigned char  m_unread00[8];         // [UNRESOLVED] - see the note above
     /* +0x08 */ unsigned short m_firstPortal;         // getClusterPortal's base
     /* +0x0A */ unsigned short m_numberOfPortals;     // getClusterPortal's stride
-    /* +0x0C */ unsigned char  m_unread0C[4];         // index 2 (+0x0E): map-part walkability state
+    /* +0x0C */ unsigned short m_firstPortalCost;     // base of the portal-to-portal cost table
+    /* +0x0E */ unsigned char  m_walkable;            // map-part walkability state
+    /* +0x0F */ unsigned char  m_unread0F;            // [UNRESOLVED]
+
+    bool isWalkable() const { return m_walkable != 0; }
 };
 
 typedef char ClusterIsTheFileRecord[sizeof(Cluster) == 16 ? 1 : -1];
