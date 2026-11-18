@@ -11,6 +11,9 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIArmament.h"
 #include "../AIKnowledge/IPIUnit.h"
+#include "../AIKnowledge/IPIControlInfo.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIBot/WaypointList.h"
 #include "../AIKnowledge/WeaponInfo.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../AIPlanInterpreter/BAPContext.h"
@@ -206,9 +209,157 @@ void BBPGotoWaypointInfantery::setWaypoint(Bot* bot)
     m_hasPlan[bot->getBotId()] = true;
 }
 
-BotScript* BBPGotoWaypointInfantery::generate(Bot*)
+namespace {
+
+// Type-0 waypoint lists hold an object handle (+0x10) and get the MoveToObject plan (PE ctor
+// 101A6130) towards it, rebuilt when the object moved by more than four times the speed. Neither
+// that list class nor BAPMoveToObject is recovered yet, so this branch stops by name.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-move-to-object] Recover both and
+// build the plan as PE 100F1AC3..100F1C4C and 100F1E37..100F1F1C do.
+BotScript* objectWaypointPlan()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypointInfantery::generate");
+    BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypointInfantery::generate (object waypoint)");
+}
+
+// The position-waypoint plan: a serial that first turns the sensing agent towards the waypoint
+// and then follows the path there, wrapped as the MoveTo behaviour.
+BotScript* buildPositionWaypointPlan(Bot* bot, Information* equipment, const Vec3& position, float speed,
+                                     unsigned long long inputMask, float tolerance, int behaviourId,
+                                     PlanGenerator* owner)
+{
+    BAPMoveToFinding* const move = checkPointer(new BAPMoveToFinding(
+        bot, position, speed, speed, 0, inputMask, behaviourId, tolerance, 0.0f));
+    BAPSerial* const serial = checkPointer(new BAPSerial(behaviourId, -1));
+    const Vec3& from = equipment->getPosition();
+    Vec3 direction;
+    direction.x = position.x - from.x;
+    direction.y = position.y - from.y;
+    direction.z = position.z - from.z;
+    BAPSetSensingAgentFocus* const focus =
+        checkPointer(new BAPSetSensingAgentFocus(0.5f, direction, behaviourId, false));
+    serial->addStatement(focus);
+    serial->addStatement(move);
+    BAPMoveToWrapper* const wrapper = checkPointer(new BAPMoveToWrapper(position, serial, behaviourId));
+    wrapper->m_owner = owner;
+    return wrapper;
+}
+
+// Deletes the plan and clears it when the bot has one.
+void dropPlan(Bot* bot)
+{
+    if (bot->getPlan())
+    {
+        if (bot->getPlan())
+            delete bot->getPlan();
+        bot->setPlan(0);
+    }
+}
+
+// Deletes any plan and clears it unconditionally.
+void clearPlan(Bot* bot)
+{
+    if (BotScript* const plan = bot->getPlan())
+        delete plan;
+    bot->setPlan(0);
+}
+
+} // anonymous namespace
+
+// PE 100F1770. A current MoveTo plan of this behaviour is kept until its waypoint list asks
+// for a new one and, for type-2 lists, the waypoint moved by more than four times the squad
+// member's speed (type-1 lists always rebuild). Position waypoints (types 1 and 2) get a path-following
+// plan; object waypoints (type 0) the MoveToObject plan; other lists none. The equipment is not
+// null-checked where its position is read.
+BotScript* BBPGotoWaypointInfantery::generate(Bot* bot)
+{
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        releaseScriptState(bot);
+        dropPlan(bot);
+        return 0;
+    }
+
+    const float speed = bot->getSquadMember()->getMaxSpeed();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId)
+    {
+        if (!bot->getWaypoints()->isActive() || bot->getWaypoints()->isPaused())
+            return bot->getPlan();
+        bot->getWaypoints()->setActive(false);
+
+        if (static_cast<BAPWrapper*>(bot->getPlan())->getWrapperIndex() == 2)
+        {
+            WaypointList* const waypoints = bot->getWaypoints();
+            const unsigned long long inputMask = equipment->getControlInfo()->getDriveControls();
+            // Only the object-waypoint branch uses the radius.
+            const float radius = equipment->getPhysical()->getRadius() * 4.0f;
+            (void)radius;
+            Vec3 position;
+            position.x = position.y = position.z = 0.0f;
+            switch (waypoints->getType())
+            {
+            case 0:
+                return objectWaypointPlan();
+            case 1:
+            {
+                if (!waypoints->getCurrentWaypoint(position))
+                    return 0;
+                clearPlan(bot);
+                releaseScriptState(bot);
+                return buildPositionWaypointPlan(bot, equipment, position, speed, inputMask,
+                                                 waypoints->getTolerance(), m_behaviourId, this);
+            }
+            case 2:
+            {
+                if (!waypoints->getCurrentWaypoint(position))
+                    return 0;
+                const Vec3& planned = static_cast<BAPMoveToWrapper*>(bot->getPlan())->m_position;
+                const float dx = planned.x - position.x;
+                const float dz = planned.z - position.z;
+                const float reach = speed * 4.0f;
+                if (!(reach * reach < dx * dx + dz * dz))
+                    return bot->getPlan();
+                clearPlan(bot);
+                releaseScriptState(bot);
+                return buildPositionWaypointPlan(bot, equipment, position, speed, inputMask,
+                                                 waypoints->getTolerance(), m_behaviourId, this);
+            }
+            default:
+                dropPlan(bot);
+                return 0;
+            }
+        }
+        clearPlan(bot);
+    }
+    else
+    {
+        dropPlan(bot);
+    }
+    releaseScriptState(bot);
+    if (bot->getWaypoints()->isPaused())
+        return 0;
+
+    WaypointList* const waypoints = bot->getWaypoints();
+    const unsigned long long inputMask = equipment->getControlInfo()->getDriveControls();
+    const float radius = equipment->getPhysical()->getRadius() * 4.0f;
+    (void)radius;
+    bot->getSquadMember()->clearRequest();
+    Vec3 position;
+    position.x = position.y = position.z = 0.0f;
+    switch (waypoints->getType())
+    {
+    case 0:
+        return objectWaypointPlan();
+    case 1:
+    case 2:
+        if (!waypoints->getCurrentWaypoint(position))
+            return 0;
+        return buildPositionWaypointPlan(bot, equipment, position, speed, inputMask, waypoints->getTolerance(),
+                                         m_behaviourId, this);
+    default:
+        return 0;
+    }
 }
 
 // ---- Assistance, change and the single-array generators -----------------------------------

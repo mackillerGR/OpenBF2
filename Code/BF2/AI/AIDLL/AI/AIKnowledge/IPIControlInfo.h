@@ -27,6 +27,7 @@ public:
 
     // Read through to the engine object's control info. PE 1019CA90 / 1019CAB0 / 1019CAD0.
     float getCameraRelativeDofRotationOffset() const;
+    unsigned long long getDriveControls() const;     // PE 1019C6B0
     unsigned long long getLookControls() const;      // PE 1019C6F0
     io::PlayerInputMap getLookVerticalControl() const;     // PE 1019CA30
     io::PlayerInputMap getLookHorizontalControl() const;   // PE 1019CA50
@@ -61,6 +62,11 @@ inline bool IPIControlInfo::validateCameraDirectionByPos(const Vec3& position) c
 inline float IPIControlInfo::getCameraRelativeDofRotationOffset() const
 {
     return m_information->getAIObject()->getControlInfo()->getCameraRelativeDofRotationOffset();
+}
+
+inline unsigned long long IPIControlInfo::getDriveControls() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDriveControls();
 }
 
 inline unsigned long long IPIControlInfo::getLookControls() const

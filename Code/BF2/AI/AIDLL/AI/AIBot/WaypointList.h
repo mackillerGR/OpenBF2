@@ -38,6 +38,7 @@ public:
     bool isFinished() const { return m_finished; }
     int getKind() const { return m_kind; }     // read inline (PE +0xC)
     bool isActive() const { return m_active; } // read inline (PE byte +4); [INFERRED] name
+    void setActive(bool active) { m_active = active; }   // written inline (PE byte +4)
 
 protected:
     /* +0x04 */ bool  m_active;      // = true

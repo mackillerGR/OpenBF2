@@ -74,6 +74,7 @@ public:
     // while alive and standing, and the area has a status for the member's side. PE 1017C700;
     // [INFERRED] name.
     bool isAtSquadArea();
+    float getMaxSpeed() const { return m_maxSpeed; }          // PE 1017BC10
     // PE 1017BB70: no action, no handle. [INFERRED] name.
     void clearRequest() { m_request->m_action = 0; m_request->m_handle = static_cast<unsigned int>(-1); }
     // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.
