@@ -42,7 +42,10 @@ public:
     // when no search resource was free. False without a path owner, in state 4 or when a
     // search fails. PE 10176520.
     bool update(bool& finished, bool* busy);
-    void updateOccationally();                  // dice's spelling - "Occationally"
+    // The periodic upkeep BotManager runs for recently steered bots: skip ahead, refresh the
+    // distance left, reset an illegal path or flag one with no progress, and for ground
+    // vehicles measure the room to either side. PE 101756F0. Dice's spelling - "Occationally".
+    void updateOccationally();
     // Advances along the path and hands out the horizontal position to steer for. `arrived`
     // is set on reaching the last point, `waiting` while a search or a firing stop holds the
     // bot. False when no point can be given. PE 10175360.
@@ -53,6 +56,8 @@ public:
     void updateNavPoints();
     void updateObstacles();
     void updateLastPoint(Information* info);
+    // Traces 2 to the right and to the left of the equipment's last valid position (ground
+    // vehicles); a clear side stores 2, a blocked one the distance to the hit. PE 101725B0.
     void updateSpaceLeftAndRight();
     void updateClosestDistance();
 
@@ -84,6 +89,7 @@ public:
     // Whether the equipment's last valid polygon is the previous or current point's, an earlier
     // point's, or one of the next 20 (which then becomes current). PE 101739B0.
     bool stillOnPath();
+    // Whether a point's polygon is missing or has material 0. PE 10173380.
     bool hasIllegalPath();
     // [INFERRED] accessor name for the +192 byte, which retail reads inline (BotManager::
     // actionComAgent). initPathfinding and updateOccationally set it; clearProgress
@@ -104,7 +110,12 @@ public:
     bool isActive();
     // returns true, unconditionally, in both images.
     bool isRunning();
-    void checkProgress();
+    // Whether the bot is still making progress along a followed path (state 2): moving the
+    // controls or getting more than 2 (ground vehicles) or 4 from where progress was last seen
+    // restarts the clock; false after 10 (ground vehicles) or 20 seconds without. Also releases
+    // the action input a second after it was pressed and, for a ground vehicle stuck in place
+    // for 2 seconds, arms another press. PE 10172CC0.
+    bool checkProgress();
     void clearProgress();
     // Whether the equipment is within 3 vertically and the arrival radius horizontally of the
     // current point. The argument is not read. PE 10173FC0.
@@ -196,7 +207,7 @@ private:
     /* 152 */ double m_double152;          // = 0.0
     /* 160 */ double m_double160;          // = 0.0
     /* 168 */ double m_double168;          // = 0.0
-    /* 176 */ int   m_zero176[3];          // +176, +180, +184
+    /* 176 */ Vec3  m_actionCheckPosition; // checkProgress: where the last action press was armed
     // is 9,999,999.0f - a "no distance yet" sentinel, and a third kind after the
     // DBL_MAX timestamps and -9999.0 magnitudes BotMain uses. Do not normalise them together.
     /* 188 */ float m_sentinel188;         // = 9999999.0f
@@ -225,7 +236,7 @@ private:
     /* 268 */ double m_double268;          // = 0.0
     /* 276 */ bool  m_flag276;             // = false
     /* 277 */ char  m_pad277[3];
-    /* 280 */ int   m_zero280[3];          // +280..+288
+    /* 280 */ Vec3  m_progressPosition;    // checkProgress: where progress was last seen
     // Read as floats against 0.5 by BotMain::afterPlanInterpreted to steer around friends in the
     // line of fire (PE +0x130 / +0x134). [UNRESOLVED] what writes them.
     /* 292 */ float m_float292;

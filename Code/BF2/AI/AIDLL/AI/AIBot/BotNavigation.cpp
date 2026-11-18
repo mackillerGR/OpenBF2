@@ -17,6 +17,7 @@
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../../../../Core/Debug.h"
 #include <cmath>
+#include "../../../../Math/Mat4.h"
 #include "../AIUtils/checkPointer.h"
 #include "../Main/AIDllFrontier.h"
 #include "../AIKnowledge/AIInformationGrid.h"
@@ -60,11 +61,9 @@ BotNavigation::BotNavigation(BotMain* owner)
     // Independent sentinel, initialized to -1.0.
     , m_double300(-1.0)
 {
+    m_actionCheckPosition.x = m_actionCheckPosition.y = m_actionCheckPosition.z = 0.0f;
     for (int i = 0; i < 3; ++i)
-    {
-        m_zero176[i] = 0;
         m_zero256[i] = 0;
-    }
     m_start.x = m_start.y = m_start.z = 0.0f;
     m_goal.x = m_goal.y = m_goal.z = 0.0f;
     m_tracePosition.x = m_tracePosition.y = m_tracePosition.z = 0.0f;
@@ -72,8 +71,7 @@ BotNavigation::BotNavigation(BotMain* owner)
     m_quadTree = 0;
     m_largestAngleDiff = 0.0f;
     m_pathLength = 0.0f;
-    for (int i = 0; i < 3; ++i)
-        m_zero280[i] = 0;
+    m_progressPosition.x = m_progressPosition.y = m_progressPosition.z = 0.0f;
     m_float292 = 0.0f;
     m_float296 = 0.0f;
     m_searchStart.x = m_searchStart.y = m_searchStart.z = 0.0f;
@@ -1072,6 +1070,131 @@ void BotNavigation::updateNavPoints()
         m_flag194 = true;
 }
 
+bool BotNavigation::hasIllegalPath()
+{
+    for (unsigned int i = 0; i < m_points.size(); ++i)
+    {
+        const Polygon* const polygon = m_quadTree->getPolygon(m_points[i].m_polygon);
+        if (!polygon || !polygon->m_material)
+            return true;
+    }
+    return false;
+}
+
+// The equipment is not null-checked. Controls count as moving when the largest of throttle,
+// sprint and yaw (bound inputs only) exceeds 0.1 in magnitude.
+bool BotNavigation::checkProgress()
+{
+    const unsigned int count = static_cast<unsigned int>(m_points.size());
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - m_double168 > 1.0)
+    {
+        io::PlayerInput* const input = m_bot->playerInput();
+        if ((input->mappingFlags & (1ULL << io::PIAction)) != 0)
+            input->inputs[io::PIAction] = 0.0f;
+    }
+    if (count == 0 || m_state != 2)
+        return true;
+
+    const io::PlayerInput* const input = m_bot->playerInput();
+    const unsigned long long mapped = input->mappingFlags;
+    float control = (mapped & (1ULL << io::PISprint)) != 0 ? input->inputs[io::PISprint] : 0.0f;
+    const float throttle = (mapped & (1ULL << io::PIThrottle)) != 0 ? input->inputs[io::PIThrottle] : 0.0f;
+    if (!(throttle < control))
+        control = throttle;
+    const float yaw = (mapped & (1ULL << io::PIYaw)) != 0 ? input->inputs[io::PIYaw] : 0.0f;
+    if (control < yaw)
+        control = yaw;
+
+    const double idleLimit = m_flag236 ? 0.1 : 0.5;
+    if (std::fabs(control) > 0.1f)
+    {
+        m_double152 = now;
+    }
+    else if (now - m_double152 > idleLimit)
+    {
+        m_double144 = now;
+        m_flag192 = false;
+        return true;
+    }
+
+    const float radius = m_flag236 ? 2.0f : 4.0f;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    const Vec3& position = equipment->getPosition();
+    const float dx = position.x - m_progressPosition.x;
+    const float dy = position.y - m_progressPosition.y;
+    const float dz = position.z - m_progressPosition.z;
+    if (radius * radius < dx * dx + dy * dy + dz * dz)
+    {
+        m_progressPosition = position;
+        m_double144 = now;
+        m_flag192 = false;
+        return true;
+    }
+
+    const double stuckLimit = m_flag236 ? 10.0 : 20.0;
+    const double elapsed = now - m_double144;
+    if (m_flag236 && elapsed > 2.0 && now - m_double168 > 3.0)
+    {
+        const Vec3& here = equipment->getPosition();
+        const float ax = here.x - m_actionCheckPosition.x;
+        const float ay = here.y - m_actionCheckPosition.y;
+        const float az = here.z - m_actionCheckPosition.z;
+        if (ax * ax + ay * ay + az * az < 0.001f)
+            m_double168 = -666.0;
+        m_actionCheckPosition = equipment->getPosition();
+    }
+    return elapsed < stuckLimit;
+}
+
+// The second trace aims at the first target less four times the right vector, and reuses
+// the first hit's storage.
+void BotNavigation::updateSpaceLeftAndRight()
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment || !equipment->getMobile() || m_state != 2)
+        return;
+    const IPIMobile::ValidPos& valid = equipment->getMobile()->getLastValidPosition();
+    if (valid.polygon == static_cast<unsigned int>(-1))
+        return;
+
+    Vec3 hit;
+    hit.x = hit.y = hit.z = 0.0f;
+    const Mat4& transform = equipment->getTransformation();
+    const float rx = transform.m[0];
+    const float ry = transform.m[1];
+    const float rz = transform.m[2];
+    Vec3 to;
+    to.x = (rx + rx) + valid.position.x;
+    to.y = (ry + ry) + valid.position.y;
+    to.z = (rz + rz) + valid.position.z;
+    unsigned int polygon;
+    if (m_pathOwner->trace(this, false, to, hit, polygon, m_equipmentType, -1, 0.0f, 5, 0))
+    {
+        m_float296 = 2.0f;
+    }
+    else
+    {
+        const float dx = valid.position.x - hit.x;
+        const float dy = valid.position.y - hit.y;
+        const float dz = valid.position.z - hit.z;
+        m_float296 = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    to.x = to.x - (rx + rx + rx + rx);
+    to.y = to.y - (ry + ry + ry + ry);
+    to.z = to.z - (rz + rz + rz + rz);
+    if (m_pathOwner->trace(this, false, to, hit, polygon, m_equipmentType, -1, 0.0f, 5, 0))
+    {
+        m_float292 = 2.0f;
+        return;
+    }
+    const float dx = valid.position.x - hit.x;
+    const float dy = valid.position.y - hit.y;
+    const float dz = valid.position.z - hit.z;
+    m_float292 = std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 // Neither the equipment nor its mobile part is null-checked.
 bool BotNavigation::stillOnPath()
 {
@@ -1215,20 +1338,20 @@ void BotNavigation::updateDistanceLeft()
 // Paused game time does not accumulate lack of progress.
 void BotNavigation::clearProgress()
 {
-    m_zero176[0] = 0;                      // +176
+    m_actionCheckPosition.x = 0.0f;
 
     // the one non-zero store. See the block above.
     m_double144 =
         static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
 
     m_double168 = 0.0;
-    m_zero176[1] = 0;                      // +180
-    m_zero176[2] = 0;                      // +184
+    m_actionCheckPosition.y = 0.0f;
+    m_actionCheckPosition.z = 0.0f;
     m_double152 = 0.0;
     m_flag192 = false;
-    m_zero280[0] = 0;                      // +280
-    m_zero280[1] = 0;                      // +284
-    m_zero280[2] = 0;                      // +288
+    m_progressPosition.x = 0.0f;
+    m_progressPosition.y = 0.0f;
+    m_progressPosition.z = 0.0f;
 }
 
 namespace {
@@ -1272,7 +1395,17 @@ bool BotNavigation::isActive()
 
 void BotNavigation::updateOccationally()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::updateOccationally");
+    updateNavPoints();
+    updateDistanceLeft();
+    if (m_state == 2)
+    {
+        if (hasIllegalPath())
+            reset();
+        else if (!checkProgress())
+            m_flag192 = true;
+    }
+    if (m_flag236)
+        updateSpaceLeftAndRight();
 }
 
 // Always returns true, leaving BotManager's final pathfinding sweep gated by isSearchActive.
