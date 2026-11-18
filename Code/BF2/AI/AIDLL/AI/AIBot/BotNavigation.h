@@ -37,12 +37,19 @@ public:
     ~BotNavigation();                           // [FRONTIER]
 
     // [FRONTIER] Navigation methods below remain incomplete unless implemented explicitly.
-    void update(bool& a, bool* b);
+    // Drives the cluster search, then the polygon search, one step per call. `finished` is
+    // cleared and set when a step completes or stays in progress; `busy`, when given, is set
+    // when no search resource was free. False without a path owner, in state 4 or when a
+    // search fails. PE 10176520.
+    bool update(bool& finished, bool* busy);
     void updateOccationally();                  // dice's spelling - "Occationally"
     // Advances along the path and hands out the horizontal position to steer for. `arrived`
     // is set on reaching the last point, `waiting` while a search or a firing stop holds the
     // bot. False when no point can be given. PE 10175360.
     bool updatePath(Vec2& target, bool& arrived, bool& waiting, float distance);
+    // On path state 2, skips the cursor ahead past points the equipment can reach directly;
+    // when none can be skipped and the current point cannot be traced to either, marks the bot
+    // as off its path (+194). PE 101733E0.
     void updateNavPoints();
     void updateObstacles();
     void updateLastPoint(Information* info);
@@ -57,9 +64,17 @@ public:
     // straight line and marks the search as new. False when either end is off the mesh, the
     // equipment is over 100 from its last valid position or on another island. PE 10175BD0.
     bool initPathfinding(unsigned int island, unsigned int polygon, const Vec3& to, float a, float b);
-    void doPolygonSearch(bool& a, bool* b);
-    void doClusterSearch(bool& a, bool* b);
+    // One step of the polygon search towards the next cluster portal (or the goal). On success
+    // the polygon path becomes points and the cluster cursor advances. PE 10175FC0.
+    bool doPolygonSearch(bool& finished, bool* busy);
+    // One step of the cluster search; on success the polygon search starts. A failed search
+    // resets navigation. PE 10175260.
+    bool doClusterSearch(bool& finished, bool* busy);
+    // Appends the polygon path's nodes as points (replacing the last point when the cursor is
+    // on the path) and empties the polygon path. PE 10175740.
     void calculatePoints();
+    // Pulls each point along its edge onto the straight line between its neighbours, twice,
+    // keeping a margin from the edge ends; then once more without the margin. PE 101735B0.
     void optimizePoints();
     // Within 200 of the goal, traces a straight line to it; a clear line becomes a one-point
     // path and state 2. PE 10174F10; no value is returned there.
@@ -169,10 +184,9 @@ private:
     /* 121 */ char  m_pad121[3];
     /* 124 */ ClusterNodePath* m_clusterPath;   // new(0x1C) - the coarse path
     /* 128 */ unsigned int m_int128;       // = -1; cluster search resource
-    // `allocate(20)` with 0 / 0 / self / self is an `_Rb_tree` header at 16 + sizeof(value_type)
-    // so the value type is four bytes - a set of pointers or handles. Which is [UNRESOLVED];
-    // `void*` holds the width and claims nothing.
-    /* 132 */ std::set<void*> m_set132;
+    // The clusters the polygon search may enter: its start, the next three on the cluster path
+    // and the end polygon's. Handed to IAIPathfinding::setAllowedClusters.
+    /* 132 */ std::set<unsigned short> m_allowedClusters;
     /* 144 */ double m_double144;          // = 0.0
     /* 152 */ double m_double152;          // = 0.0
     /* 160 */ double m_double160;          // = 0.0
@@ -217,8 +231,14 @@ private:
     // `reset`'s first statement clears the byte here.
     /* 316 */ bool  m_flag316;             // reset: false
     /* 317 */ char  m_pad317[3];
-    /* 320 */ int   m_zero320[6];          // +320..+340
-    /* 344 */ char  m_gap344[12];          // +344..+355 - the ctor never reaches them [UNRESOLVED]
+    // The current polygon search's ends: the last point (or the start) and the next portal
+    // (or the goal).
+    /* 320 */ Vec3  m_searchStart;
+    /* 332 */ Vec3  m_searchGoal;
+    /* 344 */ unsigned int m_searchStartPolygon;   // not constructed
+    /* 348 */ unsigned int m_searchGoalPolygon;    // not constructed
+    /* 352 */ bool  m_searchReachesGoal;           // not constructed
+    /* 353 */ char  m_pad353[3];
 };
 
 } // namespace ai

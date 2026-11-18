@@ -76,8 +76,8 @@ BotNavigation::BotNavigation(BotMain* owner)
         m_zero280[i] = 0;
     m_float292 = 0.0f;
     m_float296 = 0.0f;
-    for (int i = 0; i < 6; ++i)
-        m_zero320[i] = 0;
+    m_searchStart.x = m_searchStart.y = m_searchStart.z = 0.0f;
+    m_searchGoal.x = m_searchGoal.y = m_searchGoal.z = 0.0f;
 
     // the dead resize - see the block above. Written as what it is rather than dropped.
     m_points.resize(0);
@@ -253,6 +253,32 @@ float flatAngle(const Vec2& from, const Vec2& to)
     }
     return angle;
 }
+
+// Where the line through p1 and p2 meets the line through a and b, as the parameter along
+// p1->p2 and the parameter along a->b. False for parallel lines. PE 1014B030.
+bool intersectLines(const Vec2& p1, const Vec2& p2, const Vec2& a, const Vec2& b, float& along,
+                    float& alongEdge)
+{
+    const float denominator = (b.y - a.y) * (p2.x - p1.x) - (p2.y - p1.y) * (b.x - a.x);
+    if (denominator == 0.0f)
+        return false;
+    const float inverse = 1.0f / denominator;
+    along = ((p1.y - a.y) * (b.x - a.x) - (p1.x - a.x) * (b.y - a.y)) * inverse;
+    alongEdge = ((p1.y - a.y) * (p2.x - p1.x) - (p2.y - p1.y) * (p1.x - a.x)) * inverse;
+    return true;
+}
+
+// Moves a point to a fraction of the way along its edge.
+void placeOnEdge(BotNavigation::NavigationPoint& point, float fraction)
+{
+    point.m_position.x = (point.m_vec12.x - point.m_vec0.x) * fraction + point.m_vec0.x;
+    point.m_position.y = (point.m_vec12.y - point.m_vec0.y) * fraction + point.m_vec0.y;
+    point.m_position.z = (point.m_vec12.z - point.m_vec0.z) * fraction + point.m_vec0.z;
+}
+
+// The trace clearance used by everything but ground vehicles in updateNavPoints. Zero-
+// initialised and never written in the retail image. [UNRESOLVED] name.
+float s_navPointClearance = 0.0f;
 
 // Zero-initialised and never written in the retail image, so the stuck restart it selects
 // is unreachable there. [UNRESOLVED] name.
@@ -686,6 +712,350 @@ bool BotNavigation::getLargestAngleDiff(float& out)
 
     m_largestAngleDiff = out;
     return true;
+}
+
+bool BotNavigation::update(bool& finished, bool* busy)
+{
+    if (!m_pathOwner)
+        return false;
+    m_flag316 = false;
+    if (m_state == 4)
+        return false;
+
+    finished = false;
+    if (busy)
+        *busy = false;
+
+    if (m_flag195)
+    {
+        m_points.resize(0);
+        m_int116 = 0;
+        m_flag68 = true;
+        m_flag195 = false;
+    }
+
+    if (m_flag120)
+        return doClusterSearch(finished, busy);
+    if (m_flag68)
+        return doPolygonSearch(finished, busy);
+    return true;
+}
+
+bool BotNavigation::doClusterSearch(bool& finished, bool* busy)
+{
+    if (m_int128 == static_cast<unsigned int>(-1)
+        && !m_pathOwner->acquireClusterResource(m_int128, m_bot->getBotId()))
+    {
+        if (busy)
+            *busy = true;
+        return false;
+    }
+
+    m_state = m_pathOwner->clusterSearch(m_int128, m_vehicleNumber, m_startIsland, m_startPolygon, m_start,
+                                         m_goalPolygon, m_goal, m_equipmentType, m_clusterPath);
+    if (m_state == 1)
+    {
+        finished = true;
+        return true;
+    }
+
+    m_pathOwner->releaseClusterResource(m_int128, m_bot->getBotId());
+    m_int128 = static_cast<unsigned int>(-1);
+    if (m_state == 2)
+    {
+        m_flag120 = false;
+        m_state = 0;
+        m_flag68 = true;
+        return true;
+    }
+    if (m_state == 3 || m_state == 4)
+    {
+        reset();
+        return false;
+    }
+    finished = true;
+    return true;
+}
+
+// The cluster list handed to the search holds the cursor's cluster and the next two; one
+// past the end goes in as 0xFFFF.
+bool BotNavigation::doPolygonSearch(bool& finished, bool* busy)
+{
+    if (m_int76 == static_cast<unsigned int>(-1))
+    {
+        if (!m_pathOwner->acquireResource(m_int76, m_bot->getBotId()))
+        {
+            if (busy)
+                *busy = true;
+            return false;
+        }
+
+        if (m_vehicleNumber != m_pathOwner->getTraceMapIndex())
+            m_pathOwner->setUsePathTopologySmoothing(m_int76, true);
+
+        if (m_points.size() != 0)
+        {
+            const NavigationPoint& last = m_points[m_points.size() - 1];
+            m_searchStart = last.m_position;
+            m_searchStartPolygon = last.m_polygon;
+        }
+        else
+        {
+            m_searchStart = m_start;
+            m_searchStartPolygon = m_startPolygon;
+        }
+
+        m_allowedClusters.clear();
+        m_allowedClusters.insert(m_quadTree->getPolygon(m_searchStartPolygon)->m_cluster);
+
+        m_searchReachesGoal = false;
+        if (!m_clusterPath->getPortal(m_searchGoal, m_searchGoalPolygon,
+                                      static_cast<unsigned int>(m_clusterPath->m_i0 + 2)))
+        {
+            m_searchGoal = m_goal;
+            m_searchGoalPolygon = m_goalPolygon;
+            m_searchReachesGoal = true;
+        }
+
+        for (int i = 0; i <= 2; ++i)
+        {
+            if (static_cast<unsigned int>(m_clusterPath->m_i0 + i) > m_clusterPath->m_nodes.size())
+                break;
+            m_allowedClusters.insert(m_clusterPath->getCluster(i));
+        }
+        m_allowedClusters.insert(m_quadTree->getPolygon(m_searchGoalPolygon)->m_cluster);
+        m_pathOwner->setAllowedClusters(m_int76, &m_allowedClusters);
+    }
+
+    m_state = m_pathOwner->localSearch(m_int76, m_vehicleNumber, m_startIsland, m_searchStartPolygon,
+                                       m_searchStart, m_searchGoalPolygon, m_searchGoal, m_equipmentType,
+                                       m_polygonPath);
+    if (m_state == 1)
+    {
+        finished = true;
+        return true;
+    }
+
+    m_pathOwner->releaseResource(m_int76, m_bot->getBotId());
+    m_int76 = static_cast<unsigned int>(-1);
+    if (m_state == 2)
+    {
+        calculatePoints();
+        if (m_searchReachesGoal)
+        {
+            const unsigned int index = static_cast<unsigned int>(m_points.size());
+            m_points.resize(index + 1);
+            m_points[index].m_position = m_goal;
+            m_points[index].m_polygon = m_goalPolygon;
+            m_clusterPath->m_nodes.resize(0);
+            m_clusterPath->m_i0 = 0;
+        }
+
+        m_flag192 = false;
+        m_quadTree = static_cast<QuadTree*>(m_pathOwner->getQuadTree(m_vehicleNumber, m_polygonPath->m_island));
+        optimizePoints();
+        updateNavPoints();
+        updateNavPoints();
+        ++m_clusterPath->m_i0;
+        m_flag68 = false;
+        return true;
+    }
+    if (m_state == 3 || m_state == 4)
+        return false;
+    finished = true;
+    return true;
+}
+
+// Each node's point takes the node's position and polygon, and the edge between the
+// polygon it came from (or the previous node's, when it records none) and its own. A node
+// with no previous polygon takes its own position for both edge ends. Retail follows this
+// with a loop over the points that has no effect.
+void BotNavigation::calculatePoints()
+{
+    QTPath* const path = m_polygonPath;
+    path->m_i0 = 0;
+    const unsigned int island = path->m_island;
+    const unsigned int count = static_cast<unsigned int>(path->m_nodes.size());
+
+    unsigned int first = static_cast<unsigned int>(m_points.size());
+    if (static_cast<unsigned int>(m_int116) < first)
+        --first;
+    else
+        first = 0;
+
+    const unsigned int total = count + first;
+    const unsigned int cursor = static_cast<unsigned int>(path->m_i0);
+    const unsigned int size = total >= cursor ? total - cursor : 0;
+
+    unsigned int from = static_cast<unsigned int>(-1);
+    unsigned int polygon = static_cast<unsigned int>(-1);
+    if (path->m_i0 < static_cast<int>(path->m_nodes.size()))
+    {
+        from = path->m_nodes[path->m_i0].second;
+        polygon = path->m_nodes[path->m_i0].first;
+    }
+
+    m_points.resize(size);
+
+    for (unsigned int i = first; static_cast<unsigned int>(path->m_i0) < count; ++i)
+    {
+        NavigationPoint& point = m_points[i];
+        const unsigned int node = static_cast<unsigned int>(path->m_i0);
+        point.m_position = path->m_nodes[node].third;
+        point.m_polygon = path->m_nodes[node].first;
+        if (from != static_cast<unsigned int>(-1))
+        {
+            m_pathOwner->getEdge(point.m_vec0, point.m_vec12, m_vehicleNumber, from, polygon, island);
+        }
+        else
+        {
+            point.m_vec0 = path->m_nodes[node].third;
+            point.m_vec12 = path->m_nodes[node].third;
+        }
+
+        ++path->m_i0;
+        const int next = path->m_i0;
+        if (next < static_cast<int>(path->m_nodes.size())
+            && path->m_nodes[next].second != static_cast<unsigned int>(-1))
+            from = path->m_nodes[next].second;
+        else
+            from = polygon;
+        polygon = next < static_cast<int>(path->m_nodes.size()) ? path->m_nodes[next].first
+                                                                : static_cast<unsigned int>(-1);
+    }
+
+    path->m_nodes.resize(0);
+    path->m_i0 = 0;
+    path->m_cost = 0.0f;
+}
+
+// The equipment is not null-checked. The margin is 0.8 of the equipment's smallest radius
+// (at least 1), and at most half the edge.
+void BotNavigation::optimizePoints()
+{
+    if (m_points.size() == 0)
+        return;
+
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    Vec2 previous = flatOf(info->getPosition());
+
+    for (int pass = 2; pass != 0; --pass)
+    {
+        for (unsigned int i = 0; i < m_points.size() - 1; ++i)
+        {
+            const Vec3& position = info->getPosition();
+            const NavigationPoint& here = m_points[i];
+            const float dx = position.x - here.m_position.x;
+            const float dy = position.y - here.m_position.y;
+            const float dz = position.z - here.m_position.z;
+            if (!(dx * dx + dy * dy + dz * dz < 25.0f))
+            {
+                const Vec2 next = flatOf(m_points[i + 1].m_position);
+                const Vec2 edgeStart = flatOf(here.m_vec0);
+                const Vec2 edgeEnd = flatOf(here.m_vec12);
+                float along;
+                float fraction;
+                if (intersectLines(previous, next, edgeStart, edgeEnd, along, fraction))
+                {
+                    const float ex = edgeEnd.x - edgeStart.x;
+                    const float ey = edgeEnd.y - edgeStart.y;
+                    const float length = std::sqrt(ex * ex + ey * ey);
+                    const float distance = length * fraction;
+
+                    float margin = m_smallestRadius * 0.8f;
+                    if (!(1.0f < margin))
+                        margin = 1.0f;
+                    const float half = length * 0.5f;
+                    const float clamp = margin < half ? margin : half;
+
+                    if (distance < half)
+                    {
+                        if (distance < clamp)
+                            fraction = clamp / length;
+                    }
+                    else if (distance > length - clamp)
+                    {
+                        fraction = 1.0f - clamp / length;
+                    }
+
+                    placeOnEdge(m_points[i], 1.0f < fraction ? 1.0f : fraction);
+                }
+            }
+            previous = flatOf(m_points[i].m_position);
+        }
+    }
+
+    previous = flatOf(info->getPosition());
+    for (unsigned int i = 0; i < m_points.size() - 1; ++i)
+    {
+        const Vec2 next = flatOf(m_points[i + 1].m_position);
+        const Vec2 edgeStart = flatOf(m_points[i].m_vec0);
+        const Vec2 edgeEnd = flatOf(m_points[i].m_vec12);
+        float along;
+        float fraction;
+        if (intersectLines(previous, next, edgeStart, edgeEnd, along, fraction) && !(fraction < 0.0f)
+            && fraction <= 1.0f)
+            placeOnEdge(m_points[i], fraction);
+        previous = flatOf(m_points[i].m_position);
+    }
+}
+
+// Ground vehicles (object type bit 21) look one point ahead within 10, tracing at most 8
+// polygons with 0.5 clearance; anything else up to four points ahead within 20, 30 polygons
+// with s_navPointClearance. A skipped point leaves m_int240 to the stuck restart.
+void BotNavigation::updateNavPoints()
+{
+    Information* const info = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!info)
+        return;
+    IPIMobile* const mobile = info->getMobile();
+    if (!mobile || m_state != 2)
+        return;
+    if (mobile->getLastValidPosition().polygon == static_cast<unsigned int>(-1))
+        return;
+
+    Vec3 hit;
+    hit.x = hit.y = hit.z = 0.0f;
+    const Vec3& position = info->getPosition();
+    const bool ground = m_flag236;
+    const float range = ground ? 100.0f : 400.0f;
+    const int maxPolygons = ground ? 8 : 30;
+    const int lookAhead = ground ? 1 : 4;
+    const float clearance = ground ? 0.5f : s_navPointClearance;
+    bool advanced = false;
+
+    if (m_int240 == 0)
+    {
+        const Vec3& point = m_points[m_int116].m_position;
+        const float dx = position.x - point.x;
+        const float dy = position.y - point.y;
+        const float dz = position.z - point.z;
+        if (dx * dx + dy * dy + dz * dz < range)
+        {
+            for (int k = 0; k < lookAhead; ++k)
+            {
+                if (static_cast<unsigned int>(m_int116) >= m_points.size() - 1)
+                    break;
+                // Retail reuses the range's stack slot for this out-parameter; the range is
+                // not read again.
+                unsigned int polygon;
+                if (!m_pathOwner->trace(this, false, m_points[m_int116 + 1].m_position, hit, polygon,
+                                        m_equipmentType, maxPolygons, clearance, 5, 0))
+                    break;
+                ++m_int116;
+                advanced = true;
+                if (k + 1 >= lookAhead)
+                    return;
+            }
+            if (advanced)
+                return;
+        }
+    }
+
+    unsigned int polygon;
+    if (!m_pathOwner->trace(this, false, m_points[m_int116].m_position, hit, polygon, m_equipmentType, -1,
+                            0.0f, 0, 0))
+        m_flag194 = true;
 }
 
 // Neither the equipment nor its mobile part is null-checked.
