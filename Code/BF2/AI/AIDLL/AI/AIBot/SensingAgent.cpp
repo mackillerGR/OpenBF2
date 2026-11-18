@@ -657,6 +657,14 @@ void SensingAgent::checkPlanValidity(const FocusChoice& focus, bool force)
         deletePlan();
 }
 
+void SensingAgent::setPlanTarget(float weight, const Vec3& direction, bool flag)
+{
+    m_planTargetDirection = direction;
+    m_planTarget60 = m_bot->getCurrentEquipment();
+    m_planTargetWeight = weight;
+    m_flag120 = flag;
+}
+
 // PE 101B0050. The focus buffers keep their capacity.
 void SensingAgent::clearFocus()
 {

@@ -95,6 +95,11 @@ public:
     // constructor, initPathfinding's other exits and reset. +316: set by initPathfinding
     // cleared by update and reset.
     bool isSearchActive() const { return m_flag193; }
+    // The goal of the current path request. [INFERRED] accessor name.
+    const Vec3& getGoal() const { return m_goal; }
+    // The distance left along the path, as updatePath and updateDistanceLeft keep it.
+    // [INFERRED] accessor name.
+    float getDistanceLeft() const { return m_sentinel188; }
     bool isSearchNew() const { return m_flag316; }
     bool isActive();
     // returns true, unconditionally, in both images.

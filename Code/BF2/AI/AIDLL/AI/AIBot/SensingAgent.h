@@ -57,6 +57,11 @@ public:
     const Vec3& getFocusPoint() const { return m_focusPoint; }
     unsigned int getFocusObject() const { return m_focusObject; }
     // The two focus writes PE 1019B3C0 makes inline. [CHOSEN, not recovered] accessors.
+    // Points the look plan's target along a direction from the current equipment with a weight.
+    // PE 101AED80; [INFERRED] name.
+    void setPlanTarget(float weight, const Vec3& direction, bool flag);
+    // The object overload does nothing. PE 101AE220; [INFERRED] name.
+    void setPlanTarget(float, unsigned int, bool) {}
     void setFocusPoint(const Vec3& point) { m_focusPoint = point; }
     void setFocusObject(unsigned int object)
     {

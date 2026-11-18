@@ -285,6 +285,73 @@ public:
     /* +0xC0 */ int m_intC0;               // left unset [UNRESOLVED]
 };
 
+// Follows a path from the bot's navigation to a position until it is within the range band
+// or the stop condition holds. Type 7. PE vtable 10283250 (pose selector at +0x18: 10283210).
+// The class name follows the debug output "MoveToFinding(" with the tree's BAP prefix
+// [INFERRED].
+class BAPMoveToFinding : public BAPAMove
+{
+public:
+    // PE 101A76B0. Reads the bot's current equipment and drops it, as shipped.
+    BAPMoveToFinding(Bot* bot, const Vec3& target, float float60, float float64, BAPCondition* until,
+                     unsigned long long inputMask, int id, float maxRange, float minRange);
+    virtual ~BAPMoveToFinding();                                       // PE 101A77D0
+
+    // Never driven directly: unfinished and failed. PE 101A74F0.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);
+    virtual void printDebug(std::ostream& out);                        // PE 101A7620
+    // Requests the path when the target or the navigation's goal changed, follows it, and close
+    // to the target looks for a free spot around it. PE 101A7800.
+    virtual bool getSteering(Vec2& point, bool& arrived, bool& failed, int arg);
+    // Finished by the stop condition or by being within range; then the navigation's progress
+    // is cleared. PE 101A75D0.
+    virtual bool isFinished(Bot* bot);
+    virtual bool getPathPoint(Vec2& point);                            // PE 101A7510
+    virtual bool getPathTurn(float& turn);                             // PE 101A7530
+    // The navigation's distance left along the path. PE 101A7550.
+    virtual float slot14();
+    virtual bool slot18();                                             // PE 101A74E0: true
+    // Whether the squared distance lies between the minimum and maximum squared. PE 101A7590.
+    virtual bool isWithinRange();
+    // Whether the navigation is waiting for a path search. PE 101A7570.
+    virtual bool slot20();
+
+    /* +0xC8 */ int m_zeroC8[8];           // = 0 [UNRESOLVED]
+    /* +0xE8 */ bool m_flagE8;             // = false [UNRESOLVED]
+    /* +0xE9 */ bool m_flagE9;             // = false [UNRESOLVED]
+    /* +0xEC */ int m_intEC;               // = 1 [UNRESOLVED]
+    /* +0xF0 */ Bot* m_bot;
+    /* +0xF4 */ float m_maxRange;
+    /* +0xF8 */ float m_minRange;
+    /* +0xFC */ float m_maxRangeSq;
+    /* +0x100 */ float m_minRangeSq;
+    /* +0x104 */ Vec2 m_freeSpot;          // = 0; a walkable point around the target
+    /* +0x10C */ bool m_arrived;           // = false
+    /* +0x10D */ bool m_pathRequested;     // = false
+};
+
+// Hands the bot's sensing agent a look target: a direction from the equipment, or an object.
+// Type 35. PE vtable 102831D0. The class name follows the statement type's name
+// "SetSensingAgentFocus" with the tree's BAP prefix [INFERRED].
+class BAPSetSensingAgentFocus : public BotScript
+{
+public:
+    // PE 101A7460: the direction form.
+    BAPSetSensingAgentFocus(float weight, const Vec3& direction, int id, bool flag);
+    virtual ~BAPSetSensingAgentFocus();                                // PE 101A7420
+
+    // Finishes at once with both flags set. PE 101A7340.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);
+    virtual BAPStatementType getType();                                // PE 101A7410
+    virtual bool isComposite();                                        // PE 101A73B0: true
+
+    /* +0x18 */ float m_weight;
+    /* +0x1C */ bool m_flag;
+    /* +0x20 */ unsigned int m_object;     // not set by the direction form
+    /* +0x24 */ Vec3 m_direction;          // = 0, then the argument
+    /* +0x30 */ bool m_useObject;          // = false
+};
+
 // Moves the equipment to a position; the per-vehicle MoveTo entries drive it. Type 7. The
 // constructor caches the equipment's altitude along its speed and the axes of its
 // transformation. PE vtable 10282EB8. [INFERRED] name and field meanings.
@@ -449,6 +516,19 @@ public:
 
     /* +0x20 */ Vec3 m_position;
     /* +0x2C */ Bot* m_bot;
+};
+
+// A wrapper that tags its child as the MoveTo behaviour (wrapper name index 2) and remembers
+// the target position. PE vtable 10282FE8. [INFERRED] name.
+class BAPMoveToWrapper : public BAPWrapper
+{
+public:
+    // PE 101A5D90.
+    BAPMoveToWrapper(const Vec3& position, BotScript* child, int id);
+    virtual ~BAPMoveToWrapper();                                       // PE 101A5DD0
+    virtual int getWrapperIndex();                                     // PE 101A5D80
+
+    /* +0x20 */ Vec3 m_position;
 };
 
 // Steers the soldier's movement relative to where it looks. Type 36. PE vtable 10282B10.

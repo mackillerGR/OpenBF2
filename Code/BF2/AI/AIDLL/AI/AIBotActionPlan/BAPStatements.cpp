@@ -1,3 +1,7 @@
+#include "../AIBot/BotNavigation.h"
+#include "../AIBot/SquadManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../Main/IAIPathfinding.h"
 #include "BAPStatements.h"
 
 #include "BAPConditions.h"
@@ -425,6 +429,229 @@ void BAPAMove::setFocus(Bot* bot, bool focus, const Vec3& position, unsigned int
     else
         bot->getSensingAgent()->setFocusObject(object);
 }
+
+// ---- BAPMoveToFinding ----------------------------------------------------------------------
+
+namespace {
+
+// Component-wise equality within FLT_EPSILON. PE 100D2910.
+bool isSamePosition3(const Vec3& a, const Vec3& b)
+{
+    return std::fabs(a.x - b.x) <= 1.1920929e-07f && std::fabs(a.y - b.y) <= 1.1920929e-07f
+        && std::fabs(a.z - b.z) <= 1.1920929e-07f;
+}
+
+// Whether two flat points differ by more than FLT_EPSILON in summed absolute components.
+// PE 1019B040.
+bool differs(const Vec2& a, const Vec2& b)
+{
+    return !(std::fabs(a.y - b.y) + std::fabs(a.x - b.x) <= 1.1920929e-07f);
+}
+
+} // anonymous namespace
+
+BAPMoveToFinding::BAPMoveToFinding(Bot* bot, const Vec3& target, float float60, float float64,
+                                   BAPCondition* until, unsigned long long inputMask, int id, float maxRange,
+                                   float minRange)
+    : BAPAMove(bot), m_flagE8(false), m_flagE9(false), m_intEC(1), m_bot(bot), m_maxRange(maxRange),
+      m_minRange(minRange), m_maxRangeSq(maxRange * maxRange), m_minRangeSq(minRange * minRange),
+      m_arrived(false), m_pathRequested(false)
+{
+    for (int i = 0; i < 8; ++i)
+        m_zeroC8[i] = 0;
+    m_freeSpot.x = m_freeSpot.y = 0.0f;
+    bot->getCurrentEquipment();
+    m_id = id;
+    m_target = target;
+    m_float64 = float64;
+    m_float60 = float60;
+    m_until = until;
+    if (until)
+        until->m_owner = this;
+    m_int70 = 0;
+    m_pathRequested = false;
+    m_flag6C = true;
+    m_inputMask = inputMask;
+    m_freeSpot.x = m_freeSpot.y = 0.0f;
+}
+
+BAPMoveToFinding::~BAPMoveToFinding()
+{
+}
+
+bool BAPMoveToFinding::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] Debug output only.
+// [RETIRE-WHEN: bap-debug-print] Recover the body and validate the plan debugger.
+void BAPMoveToFinding::printDebug(std::ostream&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPMoveToFinding::printDebug");
+}
+
+bool BAPMoveToFinding::isFinished(Bot* bot)
+{
+    if (!(m_until && m_until->evaluate(bot)) && !isWithinRange())
+        return false;
+    bot->getBotNavigation()->clearProgress();
+    return true;
+}
+
+bool BAPMoveToFinding::getPathPoint(Vec2& point)
+{
+    return m_bot->getBotNavigation()->getSecondPoint(point);
+}
+
+bool BAPMoveToFinding::getPathTurn(float& turn)
+{
+    return m_bot->getBotNavigation()->getLargestAngleDiff(turn);
+}
+
+float BAPMoveToFinding::slot14() { return m_bot->getBotNavigation()->getDistanceLeft(); }
+bool BAPMoveToFinding::slot18() { return true; }
+
+bool BAPMoveToFinding::isWithinRange()
+{
+    const float distanceSq = getDistanceSq(m_bot);
+    return distanceSq <= m_maxRangeSq && !(distanceSq < m_minRangeSq);
+}
+
+bool BAPMoveToFinding::slot20() { return m_bot->getBotNavigation()->isPathSearchPending(); }
+
+// The equipment is not null-checked. When close to the target the free spot is searched only
+// while it is already set; an unset (zero) spot is steered to as it is, as shipped. A ground
+// position inside an artillery zone the equipment is not already in fails the move.
+bool BAPMoveToFinding::getSteering(Vec2& point, bool& arrived, bool& failed, int)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (static_cast<BotMain*>(m_bot)->getShouldWaitForRepairs()
+        || (equipment->getPhysical()->isInAir() && !equipment->getPhysical()->isInWater()))
+    {
+        arrived = false;
+        failed = true;
+        return true;
+    }
+
+    BotNavigation* navigation = m_bot->getBotNavigation();
+    if (!m_pathRequested || !isSamePosition3(m_target, navigation->getGoal())
+        || !m_bot->getBotNavigation()->isSearchActive())
+    {
+        m_pathRequested = true;
+        m_flag6C = m_bot->getBotNavigation()->initPathfinding(m_target, 0.0f, m_maxRange);
+    }
+
+    bool steering = false;
+    if (m_flag6C && m_bot->getBotNavigation()->updatePath(m_steerPoint, m_arrived, failed, 0.0f))
+    {
+        point = m_steerPoint;
+        arrived = m_arrived;
+        steering = true;
+    }
+
+    bool useFreeSpot = false;
+    if (getDistance(m_bot) < m_minRange + 1.0f && m_minRange > 1.0f)
+    {
+        Vec2 zero;
+        zero.x = zero.y = 0.0f;
+        useFreeSpot = true;
+        if (differs(m_freeSpot, zero))
+        {
+            IPIMobile* const mobile = equipment->getMobile();
+            IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+            const int equipmentType = equipment->getUnit()->getEquipmentType();
+            bool found = false;
+            for (float angle = 0.0f; !found && angle < 6.2831855f; angle += 0.5f)
+            {
+                const float radius = m_minRange + 1.0f;
+                Vec3 candidate;
+                candidate.x = radius * std::sin(angle) + m_target.x;
+                candidate.y = radius * 0.0f + m_target.y;
+                candidate.z = radius * std::cos(angle) + m_target.z;
+                found = pathfinding->isValidPosition(mobile->getVehicleNumber(), equipmentType, candidate, true);
+                if (found)
+                {
+                    m_freeSpot.x = candidate.x;
+                    m_freeSpot.y = candidate.z;
+                }
+            }
+            if (!found)
+                return false;
+        }
+        point = m_freeSpot;
+    }
+    else if (!failed && isFinished(m_bot))
+    {
+        m_flag6C = true;
+        arrived = true;
+        m_arrived = true;
+        point = m_steerPoint;
+        steering = true;
+    }
+
+    if (!failed)
+    {
+        (void)useFreeSpot;
+        const Vec3& position = equipment->getPosition();
+        Vec3 ground;
+        ground.x = point.x;
+        ground.y = position.y;
+        ground.z = point.y;
+        SquadManager* const squads = SquadManager::m_instance;
+        double elapsed;
+        int zoneSide;
+        bool flee = false;
+        if (!((equipment->getObjectTypeFlags() >> 4) & 1))
+        {
+            if (squads->isInArtilleryDangerZone(ground, m_bot->getSide(), elapsed, zoneSide)
+                && !squads->isInArtilleryDangerZone(equipment->getPosition(), m_bot->getSide(), elapsed, zoneSide))
+            {
+                failed = true;
+                flee = true;
+            }
+        }
+        if (!flee && ((equipment->getObjectTypeFlags() >> 21) & 1)
+            && squads->isInArtilleryDangerZone(equipment->getPosition(), m_bot->getSide(), elapsed, zoneSide))
+        {
+            SquadMember* const member = m_bot->getSquadMember();
+            if (member && member->isFleeingArtillery())
+                setFocus(m_bot, true, ground, static_cast<unsigned int>(-1));
+        }
+    }
+
+    if (!steering)
+        m_pathRequested = false;
+    return steering;
+}
+
+// ---- BAPSetSensingAgentFocus --------------------------------------------------------------
+
+BAPSetSensingAgentFocus::BAPSetSensingAgentFocus(float weight, const Vec3& direction, int id, bool flag)
+    : m_weight(weight), m_flag(flag), m_direction(direction), m_useObject(false)
+{
+    m_id = id;
+}
+
+BAPSetSensingAgentFocus::~BAPSetSensingAgentFocus()
+{
+}
+
+bool BAPSetSensingAgentFocus::execute(Bot* bot, bool& finished, bool& failed)
+{
+    if (m_useObject)
+        bot->getSensingAgent()->setPlanTarget(m_weight, m_object, m_flag);
+    else
+        bot->getSensingAgent()->setPlanTarget(m_weight, m_direction, m_flag);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPSetSensingAgentFocus::getType() { return BAPSTSetSensingAgentFocus; }
+bool BAPSetSensingAgentFocus::isComposite() { return true; }
 
 // ---- BAPMoveTo -----------------------------------------------------------------------------
 
@@ -883,6 +1110,22 @@ BAPInfoWrapper::~BAPInfoWrapper()
 }
 
 int BAPInfoWrapper::getWrapperIndex() { return 4; }
+
+// The child is claimed without a null check, as shipped.
+BAPMoveToWrapper::BAPMoveToWrapper(const Vec3& position, BotScript* child, int id)
+    : BAPWrapper(child, id)
+    , m_position(position)
+{
+    m_child->m_owner = this;
+}
+
+BAPMoveToWrapper::~BAPMoveToWrapper()
+{
+    if (m_child)
+        delete m_child;
+}
+
+int BAPMoveToWrapper::getWrapperIndex() { return 2; }
 
 // ---- BAPMergeSoldierInputs ----------------------------------------------------------------
 
