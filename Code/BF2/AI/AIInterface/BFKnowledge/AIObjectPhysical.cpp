@@ -26,6 +26,7 @@
 #include "../../../Physics/ICollisionMesh.h"
 #include "../../../Physics/IPhysicsNode.h"
 #include "../../../Physics/IResponsePhysics.h"
+#include "../../../Physics/SoldierResponse.h"
 #include "../../../Physics/PhysicsUtil.h"                    // hfe::resetPhysics
 #include "../../../Scene/Object/ObjectTypes/Game/IPlayerControlObject.h"
 
@@ -217,12 +218,17 @@ bool AIObjectPhysical::isTouchingTerrain(Vec3& out) const
     return responsePhysics(m_object->getObject())->getIsIntersectingTerrain(out);   // +0x7C
 }
 
-// false while the physics node sleeps; a soldier answers the negation of a raw
-// byte at +0xFA of its response physics (the soldier physics' ground flag - no class for it in this
-// tree); anything else asks the node's getIsInAir (+0x1B0).
+// Client PE 0x825410. False while the physics node sleeps; a soldier answers the negation of its
+// response physics' ground-contact byte; anything else asks the node. The engine object is
+// fetched twice, as shipped.
 bool AIObjectPhysical::isInAir() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIObjectPhysical::isInAir (soldier response physics +0xFA)");
+    void* const soldier = m_object->getObject()->queryInterface(world::IID_ISoldier);
+    if (m_physicsNode->getIsSleeping())                                             // +0x11C
+        return false;
+    if (soldier)
+        return !static_cast<world::SoldierResponsePhysics*>(responsePhysics(m_object->getObject()))->m_byteFA;
+    return m_physicsNode->getIsInAir();                                             // +0x1B0
 }
 
 // strictly above zero (`setnbe` after fucomip - unordered is false).

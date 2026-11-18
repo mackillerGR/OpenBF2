@@ -42,7 +42,7 @@ public:
     virtual float getSubSpheres2d(std::vector<Vec2>& out) const;    // +0x48, [FRONTIER]
     virtual int getStrType() const;                             // +0x4C
     virtual bool isTouchingTerrain(Vec3& out) const;            // +0x50
-    virtual bool isInAir() const;                               // +0x54, [FRONTIER]
+    virtual bool isInAir() const;                               // +0x54
     virtual bool isInWater() const;                             // +0x58
     virtual int getMaterial() const;                            // +0x5C
     virtual float getManDownTimeLeft() const;                   // +0x60
