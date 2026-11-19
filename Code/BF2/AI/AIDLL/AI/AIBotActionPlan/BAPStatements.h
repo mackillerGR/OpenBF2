@@ -954,6 +954,29 @@ private:
     /* +0xAC */ float m_groundHeight;
 };
 
+// The root of a fire plan: marks the bot as firing at the target while it lives and owns its
+// child. Destruction clears the bot's firing, repair, artillery-simulation and flag state and
+// tells a target bot it is no longer an engineer's target. Wrapper name index 0. PE vtable
+// 102839F8. [INFERRED] names.
+class BAPFireWrapper : public BAPWrapper
+{
+public:
+    // PE 101AD320. The child is claimed without a null check, as shipped.
+    BAPFireWrapper(Bot* bot, unsigned int target, bool flag2C, bool flag2D, int weapon, int int28,
+                   BotScript* child, int id);
+    virtual ~BAPFireWrapper();                                         // PE 101AD3B0
+    virtual int getWrapperIndex();                                     // PE 101AD3A0: 0
+
+    /* +0x20 */ unsigned int m_target;
+    /* +0x24 */ int m_weapon;               // [UNRESOLVED] no audited reader
+    /* +0x28 */ int m_int28;                // [UNRESOLVED]
+    /* +0x2C */ bool m_flag2C;              // [UNRESOLVED]
+    /* +0x2D */ bool m_flag2D;              // [UNRESOLVED]
+    /* +0x30 */ int m_int30;                // = -1 [UNRESOLVED]
+    /* +0x34 */ Bot* m_bot;
+    /* +0x38 */ bool m_useStaticAttack;     // the bot's setting at construction
+};
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

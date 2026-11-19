@@ -2587,6 +2587,42 @@ bool BAPAimingWrapper::execute(Bot* bot, bool& finished, bool& failed)
 BAPStatementType BAPAimingWrapper::getType() { return BAPSTAimingWrapper; }
 bool BAPAimingWrapper::isComposite() { return true; }
 
+// ---- BAPFireWrapper -------------------------------------------------------------------------
+
+BAPFireWrapper::BAPFireWrapper(Bot* bot, unsigned int target, bool flag2C, bool flag2D,
+                               int weapon, int int28, BotScript* child, int id)
+    : BAPWrapper(child, id), m_target(target), m_weapon(weapon), m_int28(int28), m_flag2C(flag2C),
+      m_flag2D(flag2D), m_int30(-1), m_bot(bot)
+{
+    m_child->m_owner = this;
+    bot->setIsFiring(true);
+    bot->setFiringTarget(target);
+    m_useStaticAttack = static_cast<BotMain*>(bot)->getUseStaticAttack();
+}
+
+BAPFireWrapper::~BAPFireWrapper()
+{
+    if (m_child)
+        delete m_child;
+    BotMain* const bot = static_cast<BotMain*>(m_bot);
+    bot->setIsFiring(false);
+    bot->setBridgeRepairTarget(static_cast<unsigned int>(-1));
+    bot->setBotIsSimulatingArtillery(false);
+    bot->setRepairTarget(static_cast<unsigned int>(-1));
+    bot->setIsGoingForFlag(false);
+    bot->setFiringTarget(static_cast<unsigned int>(-1));
+    if (m_target != static_cast<unsigned int>(-1)) {
+        Information* const target = informationManager->getInformation(m_target);
+        if (target) {
+            Bot* const targetBot = IBotManager::instance->getBotFromPlayerId(target->getPlayerId());
+            if (targetBot)
+                static_cast<BotMain*>(targetBot)->setIsEngineerTarget(false);
+        }
+    }
+}
+
+int BAPFireWrapper::getWrapperIndex() { return 0; }
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice
