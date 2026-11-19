@@ -3,6 +3,15 @@
 #include "CommunicationHub.h"
 
 #include "AIDllFrontier.h"
+#include "CommonSingletonServer.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../AIStrategicEntity/AIStrategicArea.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"                 // IAIPlayer::getPlayer
+#include "../../../AIInterface/BFKnowledge/BFGame.h"                   // IAIGame::enemySpottedByAI
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // reset: one record per area
 
 namespace dice {
@@ -60,9 +69,74 @@ void CommunicationHub::reset()
 // [FRONTIER] The message methods stop until their strategic-object dependencies are implemented.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
-void CommunicationHub::enemySpottedByAI(IAIPlayer*, IAIObject*, int)
+// PE 100837E0. Passes a bot's first sighting of a primary enemy to the game, at most once a minute
+// per strategic area and side: an armour (4) or air (5) contact counts within 100 m of an area and
+// may also go out through the shared once-a-minute slot; anything else counts within 30 m. Inside
+// the minute an area's record only upgrades from strength 0 or 1 to 2. One report per call.
+// The information is not null-checked before isPrimary, as shipped.
+void CommunicationHub::enemySpottedByAI(IAIPlayer* player, IAIObject* object, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::enemySpottedByAI");
+    Information* const information =
+        informationManager->getInformation(object->getInformation(side));
+    if (!information->isPrimary())
+        return;
+    IPIPhysical* const physical = information->getPhysical();
+    if (!physical)
+        return;
+    const int strength = physical->getStrengthType();
+    const int sideIndex = side - 1;
+    const std::map<std::string, AIStrategicArea*>& areas =
+        AIStrategicObjectManager::m_instance->getStrategicAreas();
+    float radiusSq;
+    if (strength == 5 || strength == 4)
+        radiusSq = 10000.0f;
+    else
+        radiusSq = 900.0f;
+    const double now =
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    int index = 0;
+    for (std::map<std::string, AIStrategicArea*>::const_iterator it = areas.begin();
+         it != areas.end(); ++it, ++index)
+    {
+        const Vec3& position = object->getPosition();
+        Vec2 position2d;
+        position2d.x = position.x;
+        position2d.y = position.z;
+        // [INFERRED] the PE calls a non-virtual accessor of the side-1 position (PE 100DEB80);
+        // AIStrategicArea does not override getPosition, so this reads the same member.
+        const Vec2& areaPosition = it->second->getPosition(1);
+        const float dx = position2d.x - areaPosition.x;
+        const float dy = position2d.y - areaPosition.y;
+        if (!(dy * dy + dx * dx < radiusSq))
+            continue;
+        if (strength == 5 || strength == 4)
+        {
+            if (now - m_time44 > 60.0)
+            {
+                m_time44 = now;
+                static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+                    ->enemySpottedByAI(player->getPlayer(), object->getObject());
+                return;
+            }
+        }
+        std::pair<CombatStrengthType, double>& record = m_combatStrength[sideIndex][index];
+        if (now - record.second > 60.0)
+        {
+            record.first = static_cast<CombatStrengthType>(strength);
+        }
+        else if ((record.first == 0 || record.first == 1) && strength == 2)
+        {
+            record.first = static_cast<CombatStrengthType>(2);
+        }
+        else
+        {
+            continue;
+        }
+        record.second = now;
+        static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)
+            ->enemySpottedByAI(player->getPlayer(), object->getObject());
+        return;
+    }
 }
 
 void CommunicationHub::enemySpottedByHuman(IAIObject*, unsigned char) const

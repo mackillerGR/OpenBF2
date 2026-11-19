@@ -314,13 +314,13 @@ void CommunicationAgent::sendRadioMessage(const CAPrioMessage& message)
     }
 }
 
-// PE 10146300: hands the bot's player, the contact's object and the bot's side to the courier
-// call PE 100837E0, whose body is not recovered.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: ai-contact-report]
-// Recover PE 100837E0 and validate a bot reporting a first sighting.
-void CommunicationAgent::reportContact(Information*)
+// PE 10146300: hands the bot's player, the contact's object and the bot's side to the hub. The
+// side is read first, as shipped.
+void CommunicationAgent::reportContact(Information* information)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationAgent::reportContact (PE 100837E0)");
+    IAIObject* const object = information->getAIObject();
+    const int side = m_bot->getSide();
+    m_hub->enemySpottedByAI(m_bot->getPlayer(), object, side);
 }
 
 } // namespace ai
