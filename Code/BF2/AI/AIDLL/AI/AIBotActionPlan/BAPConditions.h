@@ -228,6 +228,27 @@ private:
     /* +0x18 */ float m_lastSq;
 };
 
+// Kind 12: whether the squared distance of the bot's current equipment to a fixed position lies within [min, max] (min
+// starts at 0), measured in the horizontal plane when `flat`. PE vtable 1028422C. [INFERRED]
+// name. The retail debug print (PE 101B59E0) is not reproduced; the base print applies.
+class BAPConPositionDistance : public BAPCondition
+{
+public:
+    // PE 101B5AA0.
+    BAPConPositionDistance(const Vec3& position, float distance, bool flat);
+    virtual bool evaluate(Bot* bot);                     // PE 101B5B70
+    virtual BAPConditionType getType();                  // PE 101B59D0: 12
+    virtual ~BAPConPositionDistance();
+
+private:
+    /* +0x08 */ float m_minSq;
+    /* +0x0C */ float m_maxSq;
+    /* +0x10 */ bool  m_flat;
+    // The squared distance of the last evaluation.
+    /* +0x14 */ float m_lastSq;
+    /* +0x18 */ Vec3  m_position;
+};
+
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
 // the result; a copy made with share() has no inner condition and answers the stored value. The
 // last holder frees the shared value. PE vtable 10283E58. [INFERRED] names. The retail debug

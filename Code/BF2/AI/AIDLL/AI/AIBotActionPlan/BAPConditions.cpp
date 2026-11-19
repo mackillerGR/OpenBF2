@@ -472,6 +472,48 @@ void BAPConObjectDistance::printDebug(std::ostream& out)
 
 BAPConObjectDistance::~BAPConObjectDistance() {}   // PE 101AC9A0
 
+// ---- BAPConPositionDistance -----------------------------------------------------------------
+
+BAPConPositionDistance::BAPConPositionDistance(const Vec3& position, float distance, bool flat)
+{
+    m_maxSq = distance;
+    m_flat = flat;
+    m_minSq = 0.0f;
+    m_lastSq = 0.0f;
+    m_position = position;
+    m_maxSq = distance * m_maxSq;
+}
+
+// The bot's current equipment information is not null-checked, as shipped.
+bool BAPConPositionDistance::evaluate(Bot* bot)
+{
+    Information* const own = informationManager->getInformation(bot->getCurrentEquipment());
+    float distanceSq;
+    if (m_flat)
+    {
+        const Vec3& a = own->getPosition();
+        const Vec3& b = own->getPosition();
+        const float dx = m_position.x - b.x;
+        const float dz = m_position.z - a.z;
+        distanceSq = dz * dz + dx * dx;
+    }
+    else
+    {
+        const Vec3& at = own->getPosition();
+        const float dx = m_position.x - at.x;
+        const float dy = m_position.y - at.y;
+        const float dz = m_position.z - at.z;
+        distanceSq = dz * dz + dy * dy + dx * dx;
+    }
+    m_lastSq = distanceSq;
+    if (distanceSq < m_minSq)
+        return false;
+    return distanceSq <= m_maxSq;
+}
+
+BAPConditionType BAPConPositionDistance::getType() { return static_cast<BAPConditionType>(12); }
+BAPConPositionDistance::~BAPConPositionDistance() {}
+
 // ---- BAPConShared ---------------------------------------------------------------------------
 
 BAPConShared::BAPConShared(BAPCondition* inner)
