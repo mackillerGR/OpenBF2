@@ -228,6 +228,34 @@ private:
     /* +0x18 */ float m_lastSq;
 };
 
+// Kind 38: a value shared between copies. The original evaluates its inner condition and stores
+// the result; a copy made with share() has no inner condition and answers the stored value. The
+// last holder frees the shared value. PE vtable 10283E58. [INFERRED] names. The retail debug
+// print (PE 101B2DD0) is not reproduced; the base print applies.
+class BAPConShared : public BAPCondition
+{
+public:
+    // The inner condition is not null-checked, as shipped. PE 101B2CC0.
+    explicit BAPConShared(BAPCondition* inner);
+    virtual bool evaluate(Bot* bot);                     // PE 101B2D80
+    virtual BAPConditionType getType();                  // PE 101B2DC0: 38
+    virtual ~BAPConShared();                             // PE 101B2E30
+
+    // A copy reading the same value. PE 101B2E80.
+    BAPConShared* share();
+
+private:
+    struct Value
+    {
+        bool m_value;
+        int  m_holders;
+    };
+    explicit BAPConShared(Value* value);
+
+    /* +0x08 */ Value* m_value;
+    /* +0x0C */ BAPCondition* m_inner;
+};
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

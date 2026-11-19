@@ -1,4 +1,5 @@
 #include "BAPConditions.h"
+#include "../AIUtils/checkPointer.h"
 
 #include <cmath>
 #include <ostream>
@@ -470,6 +471,46 @@ void BAPConObjectDistance::printDebug(std::ostream& out)
 }
 
 BAPConObjectDistance::~BAPConObjectDistance() {}   // PE 101AC9A0
+
+// ---- BAPConShared ---------------------------------------------------------------------------
+
+BAPConShared::BAPConShared(BAPCondition* inner)
+{
+    Value* const value = new Value;
+    value->m_value = false;
+    value->m_holders = 1;
+    m_value = value;
+    m_inner = inner;
+    inner->m_owner = this;
+}
+
+BAPConShared::BAPConShared(Value* value)
+    : m_value(value), m_inner(0)
+{
+    ++value->m_holders;
+}
+
+bool BAPConShared::evaluate(Bot* bot)
+{
+    if (!m_inner)
+        return m_value->m_value;
+    m_value->m_value = m_inner->evaluate(bot);
+    return m_value->m_value;
+}
+
+BAPConditionType BAPConShared::getType() { return static_cast<BAPConditionType>(38); }
+
+BAPConShared::~BAPConShared()
+{
+    delete m_inner;
+    if (--m_value->m_holders == 0)
+        delete m_value;
+}
+
+BAPConShared* BAPConShared::share()
+{
+    return checkPointer(new BAPConShared(m_value));
+}
 
 } // namespace ai
 } // namespace hfe
