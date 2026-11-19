@@ -101,7 +101,7 @@ public:
     virtual void setViewDistance(float distance);                   // [FRONTIER]
     virtual int getSide();
     virtual void setSide(int side);                                 // [FRONTIER]
-    virtual int getNumShotsFired(IWeapon* weapon);                  // [FRONTIER]
+    virtual int getNumShotsFired(IWeapon* weapon);                  // always 0
     virtual void removePlayerFromGame();                            // [FRONTIER]
     virtual void setName(const std::string& name);                  // [FRONTIER]
     virtual int getScore();                                         // [FRONTIER]

@@ -23,6 +23,7 @@ namespace ai {
 
 class BotBehaviour;
 class AIStrategicObject;
+class IPIControlInfo;
 
 // Avoid-collision family. PE vtable 10282A98, constructor 10198DD0.
 class AvoidCollisionPlanGenerator : public PlanGenerator
@@ -285,8 +286,14 @@ public:
                                  bool flagB);
     virtual int getFireType();                                        // PE 10105F70
 private:
+    // Builds the fire plan from the bot's stored target state. PE 10108090.
+    BotScript* buildScript(Bot* bot, IPIControlInfo* control);
+
     /* +0x28 */ FireInfanteryTarget* m_targetState;
     /* +0x2C */ FireInfanteryAim*    m_aim;
+    // Set by generate unless the bot already runs this generator's plan at a skill of at least
+    // 0.3; the script builder then adds a random hold before firing. [INFERRED] name.
+    /* +0x30 */ bool                 m_holdFire;
 };
 
 class BBPFire3d : public FirePlanGenerator

@@ -287,10 +287,11 @@ void AIPlayer::setSide(int side)
     m_player->setTeam(side, false);
 }
 
+// Always 0: the client's AIPlayer vtable (PE 0x948C10, slot +0x70) points at a shared
+// `xor eax, eax; ret 4` (PE 0x4553E0), so the shot count is never tracked.
 int AIPlayer::getNumShotsFired(IWeapon*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::getNumShotsFired"
-                    " - seven bytes, so it returns a constant and ignores the weapon");
+    return 0;
 }
 
 void AIPlayer::removePlayerFromGame()
