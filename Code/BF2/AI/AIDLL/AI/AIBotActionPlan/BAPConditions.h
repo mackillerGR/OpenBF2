@@ -391,6 +391,26 @@ private:
     /* +0x0D */ bool m_flagD;                             // the second argument [UNRESOLVED]
 };
 
+// Kind 41: a magazine test on the weapon in a plan value against an int plan value. With
+// `changed`: without magazines, whether the int value is non-zero; otherwise whether the first
+// magazine's shot count differs from it. Without `changed`: true without magazines, otherwise
+// whether the first magazine holds at most that many shots. A negative count answers false. The
+// weapon's magazine queries repeat as shipped. PE vtable 10284030. [INFERRED] names.
+class BAPConMagazine : public BAPCondition
+{
+public:
+    // PE 101B46F0.
+    BAPConMagazine(BotScriptValue<WeaponInfo*>* weapon, BotScriptValue<int>* shots, bool changed);
+    virtual bool evaluate(Bot* bot);                     // PE 101B4780
+    virtual BAPConditionType getType();                  // PE 101B4730: 41
+    virtual ~BAPConMagazine();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+    /* +0x0C */ bool m_changed;
+    /* +0x10 */ BotScriptValue<int>* m_shots;
+};
+
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
 // the result; a copy made with share() has no inner condition and answers the stored value. The
 // last holder frees the shared value. PE vtable 10283E58. [INFERRED] names. The retail debug

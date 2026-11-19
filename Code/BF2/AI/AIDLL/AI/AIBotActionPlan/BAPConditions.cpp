@@ -812,6 +812,36 @@ bool BAPConCanFireAt::friendInLineOfFire(Bot* bot, Information* own, Information
 BAPConditionType BAPConCanFireAt::getType() { return static_cast<BAPConditionType>(26); }
 BAPConCanFireAt::~BAPConCanFireAt() {}
 
+// ---- BAPConMagazine -------------------------------------------------------------------------
+
+BAPConMagazine::BAPConMagazine(BotScriptValue<WeaponInfo*>* weapon, BotScriptValue<int>* shots,
+                               bool changed)
+    : m_weapon(weapon), m_changed(changed), m_shots(shots)
+{
+}
+
+bool BAPConMagazine::evaluate(Bot*)
+{
+    if (m_changed)
+    {
+        if (m_weapon->m_value->getNumberOfMags() == 0)
+            return m_shots->m_value != 0;
+        if (m_weapon->m_value->getNumberOfMags() < 0)
+            return false;
+        return m_weapon->m_value->getShotsInMag(0) != m_shots->m_value;
+    }
+    if (m_weapon->m_value->getNumberOfMags() < 0)
+        return false;
+    if (m_weapon->m_value->getNumberOfMags() == 0)
+        return true;
+    if (m_weapon->m_value->getShotsInMag(0) < 0)
+        return false;
+    return m_weapon->m_value->getShotsInMag(0) <= m_shots->m_value;
+}
+
+BAPConditionType BAPConMagazine::getType() { return static_cast<BAPConditionType>(41); }
+BAPConMagazine::~BAPConMagazine() {}
+
 // ---- BAPConShared ---------------------------------------------------------------------------
 
 BAPConShared::BAPConShared(BAPCondition* inner)
