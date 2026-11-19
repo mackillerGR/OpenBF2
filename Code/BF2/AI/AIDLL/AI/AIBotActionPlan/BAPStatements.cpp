@@ -17,6 +17,7 @@
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "LookController.h"
 #include "../AIBot/SensingAgent.h"
+#include "../AIBot/BotSenses.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIControlInfo.h"
@@ -943,6 +944,121 @@ bool BAPUpdateVehicle::execute(Bot* bot, bool& finished, bool& failed)
 unsigned long long BAPUpdateVehicle::getInputMask() { return 0; }
 BAPStatementType BAPUpdateVehicle::getType() { return BAPSTUpdateVehicle; }
 bool BAPUpdateVehicle::isComposite() { return true; }
+
+// ---- BAPPlanEnd ---------------------------------------------------------------------------
+
+BAPPlanEnd::BAPPlanEnd(int id, int mode, BAPCondition* condition)
+    : m_condition(condition), m_mode(mode)
+{
+    m_id = id;
+    if (condition)
+        condition->m_owner = this;
+}
+
+BAPPlanEnd::~BAPPlanEnd()
+{
+    delete m_condition;
+}
+
+bool BAPPlanEnd::execute(Bot* bot, bool& finished, bool& failed)
+{
+    switch (m_mode)
+    {
+    case 0:
+        if (m_condition)
+        {
+            if (m_condition->evaluate(bot))
+            {
+                failed = true;
+                finished = false;
+            }
+            else
+            {
+                failed = false;
+                finished = true;
+            }
+        }
+        else
+        {
+            failed = true;
+            finished = false;
+        }
+        break;
+    case 1:
+        if (m_condition)
+        {
+            failed = m_condition->evaluate(bot);
+            finished = true;
+        }
+        else
+        {
+            failed = true;
+            finished = false;
+        }
+        break;
+    case 2:
+        if (m_condition)
+        {
+            failed = !m_condition->evaluate(bot);
+            finished = true;
+        }
+        else
+        {
+            failed = false;
+            finished = false;
+        }
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+
+unsigned long long BAPPlanEnd::getInputMask() { return 0; }
+BAPStatementType BAPPlanEnd::getType() { return BAPSTPlanEnd; }
+bool BAPPlanEnd::isComposite() { return true; }
+
+// ---- BAPForgetTarget ------------------------------------------------------------------------
+
+BAPForgetTarget::BAPForgetTarget(unsigned int target) : m_target(target) {}
+BAPForgetTarget::~BAPForgetTarget() {}
+
+bool BAPForgetTarget::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->getSensingAgent()->getSenses()->forgetObject(m_target);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPForgetTarget::getType() { return BAPSTForgetTarget; }
+bool BAPForgetTarget::isComposite() { return true; }
+
+// ---- BAPEvaluateCondition -------------------------------------------------------------------
+
+BAPEvaluateCondition::BAPEvaluateCondition(BAPCondition* condition, int id)
+    : m_condition(condition)
+{
+    m_id = id;
+    condition->m_owner = this;
+}
+
+BAPEvaluateCondition::~BAPEvaluateCondition()
+{
+    delete m_condition;
+}
+
+bool BAPEvaluateCondition::execute(Bot* bot, bool& finished, bool& failed)
+{
+    m_result = m_condition->evaluate(bot);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+unsigned long long BAPEvaluateCondition::getInputMask() { return 0; }
+BAPStatementType BAPEvaluateCondition::getType() { return BAPSTEvaluateCondition; }
+bool BAPEvaluateCondition::isComposite() { return true; }
 
 // ---- BAPUseFlareOnMissileLock --------------------------------------------------------------
 

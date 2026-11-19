@@ -125,6 +125,57 @@ public:
     /* +0x18 */ bool m_lock;
 };
 
+// Ends the plan. Mode 0 finishes when the condition is false and fails while it holds (or without
+// one); mode 1 finishes with the condition's value as the failure (fails without one); mode 2
+// finishes with the negated value (without one it neither finishes nor fails). Other modes write
+// nothing. Owns its condition. Type 2. PE vtable 102840B0. [INFERRED] names.
+class BAPPlanEnd : public BotScript
+{
+public:
+    BAPPlanEnd(int id, int mode, BAPCondition* condition);            // PE 101B4AC0
+    virtual ~BAPPlanEnd();                                             // PE 101B4C30
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B4B40
+    virtual unsigned long long getInputMask();                         // PE 101B4C10: none
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101B4C20: true
+
+    /* +0x18 */ BAPCondition* m_condition;
+    /* +0x20 */ int m_mode;
+};
+
+// Makes the bot's senses forget an object. Type 39. PE vtable 102840F0. [INFERRED] name.
+class BAPForgetTarget : public BotScript
+{
+public:
+    explicit BAPForgetTarget(unsigned int target);                     // PE 101B4C80
+    virtual ~BAPForgetTarget();                                        // PE 101B4D20
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B4CD0
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101B4D10: true
+
+    /* +0x18 */ unsigned int m_target;
+};
+
+// Evaluates its condition once and keeps the value. Owns its condition. Type 43. PE vtable
+// 102841A0. The retail debug print (PE 101B53D0) is not reproduced; the base print applies.
+// [INFERRED] name.
+class BAPEvaluateCondition : public BotScript
+{
+public:
+    BAPEvaluateCondition(BAPCondition* condition, int id);            // PE 101B5300
+    virtual ~BAPEvaluateCondition();                                   // PE 101B5450
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B5380
+    virtual unsigned long long getInputMask();                         // PE 101B53B0: none
+    virtual BAPStatementType getType();
+    virtual bool isComposite();                                        // PE 101B53C0: true
+
+    /* +0x18 */ BAPCondition* m_condition;
+    /* +0x1C */ bool m_result;                                         // not initialised
+};
+
 // Asks the bot to re-read its equipment. Type 27. PE vtable 10283858. [INFERRED] name.
 class BAPUpdateVehicle : public BotScript
 {

@@ -94,6 +94,11 @@ public:
     // Hearing, incoming fire and seen-record upkeep within the slice. The first step gets a
     // tenth of it. Reached through BotMain::updateSensing. PE 101BFA10; [INFERRED] name.
     void updateSensing(const double& slice);
+    // Drops the seen record of the object's primary information as the bot's side knows it: the
+    // timed list node and map entry go, a contact the record added is removed, and the record is
+    // deleted once no sense holds it. The primary information is not null-checked before the
+    // contact is removed, as shipped. PE 101BC850; [INFERRED] name.
+    void forgetObject(unsigned int handle);
 
     // attested: an 11-byte body that returns `this + 112`.
     const std::map<unsigned int, SensedObject*>& getSensedObjects() const { return m_sensedObjects; }

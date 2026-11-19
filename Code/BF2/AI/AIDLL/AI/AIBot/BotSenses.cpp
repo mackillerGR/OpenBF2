@@ -734,6 +734,35 @@ void BotSenses::updateSeen(const double& remaining)
 }
 
 // PE 101E1510. The sense point, part, first-sensed and last-seen times are left unset.
+void BotSenses::forgetObject(unsigned int handle)
+{
+    Information* const info = informationManager->getInformation(handle);
+    if (!info)
+        return;
+    unsigned int primary = info->getPrimaryObject(m_bot->getSide());
+    Information* const primaryInfo = informationManager->getInformation(primary);
+    const std::map<unsigned int, TimedList::iterator>::iterator found = m_map44.find(primary);
+    if (found == m_map44.end())
+        return;
+    SensedObject* const object = found->second->second;
+    if (m_cursor60->second == object)
+        m_cursor60 = m_list56.end();
+    if (found->second != m_list56.end())
+        m_list56.erase(found->second);
+    m_map44.erase(found);
+    if (object->m_contactAdded)
+    {
+        primaryInfo->removeContact();
+        object->m_contactAdded = false;
+    }
+    object->m_senseFlags &= ~2u;
+    if (!(object->m_senseFlags & 3u))
+    {
+        m_sensedObjects.erase(object->m_handle);
+        delete object;
+    }
+}
+
 bool BotSenses::isAttacking(unsigned int handle, double& time) const
 {
     const std::map<unsigned int, FireObject*>::const_iterator found = m_map100.find(handle);
