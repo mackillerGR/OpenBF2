@@ -36,6 +36,11 @@ public:
     bool solve(double time, float effort, bool lob, Vec3& direction, Vec3& work,
                double* impactTime);
 
+    // Where a projectile fired along `forward` (at the set speed, plus the shooter's velocity) is
+    // `time` seconds later, relative to the muzzle. False beyond 100 seconds. PE 101DFF70;
+    // [INFERRED] name.
+    bool projectilePosition(const Vec3& forward, float time, Vec3& out) const;
+
 private:
     // The target position relative to the shooter at `time`. PE 101DFEC0.
     void predict(double time, Vec3& out) const;

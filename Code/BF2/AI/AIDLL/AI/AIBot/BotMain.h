@@ -456,6 +456,8 @@ public:
 public:
     // Asks the next update to re-read the bot's equipment. PE 1017EDD0; [INFERRED] name.
     void requestEquipmentUpdate() { m_gap88[0] = 1; }
+    // The aim-correction state (PE +0xC8); the aim statements read it inline. [INFERRED] accessor.
+    FireCorrectionData* getFireCorrection() const { return m_fireCorrection; }
 
 private:
     // [INFERRED] friendship: addUnspawnedBot directly replaces +28 in both images.

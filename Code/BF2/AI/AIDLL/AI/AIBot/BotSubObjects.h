@@ -21,6 +21,8 @@ public:
     // offset at +44 is zeroed and the target's engine object (null for an unknown handle) is
     // cached. PE 101DAB40; [INFERRED] name.
     void setTarget(unsigned int handle);
+    // The aim offset at +44; the aim statements read and clear it inline. [INFERRED] accessor.
+    Vec3& getTargetOffset() { return m_targetOffset; }
 
 private:
     // [INFERRED] planExecution copies a finished bot projectile's points in inline.

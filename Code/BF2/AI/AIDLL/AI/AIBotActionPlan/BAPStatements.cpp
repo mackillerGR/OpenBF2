@@ -15,6 +15,8 @@
 #include "../Main/AIDllFrontier.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/BFPhysics.h"
+#include "../AIBot/BotSubObjects.h"
 #include "LookController.h"
 #include "../AIBot/SensingAgent.h"
 #include "../AIBot/BotSenses.h"
@@ -1738,6 +1740,346 @@ BAPALookAtObject::~BAPALookAtObject()
 Vec3 BAPALookAtObject::getTarget(bool&)
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BAPALookAtObject::getTarget");
+}
+
+// ---- BAPAimAt -------------------------------------------------------------------------------
+
+namespace {
+
+// PE 1009B6F0: the point transformed by the matrix, rows as basis vectors plus the translation.
+void transformPoint(const Mat4& matrix, const Vec3& in, Vec3& out)
+{
+    const float* const m = matrix.m;
+    const float z = in.x * m[2] + in.z * m[10] + in.y * m[6] + m[14];
+    const float y = in.x * m[1] + in.z * m[9] + in.y * m[5] + m[13];
+    const float x = in.z * m[8] + in.y * m[4] + in.x * m[0] + m[12];
+    out.x = x;
+    out.y = y;
+    out.z = z;
+}
+
+// The plan statements store the identity inline.
+void setIdentity(Mat4& m)
+{
+    for (int i = 0; i < 16; ++i)
+        m.m[i] = 0.0f;
+    m.m[0] = m.m[5] = m.m[10] = m.m[15] = 1.0f;
+}
+
+// PE 10283F68. [UNRESOLVED] what reads the field it initialises.
+const double kAimUnsetTime = -5000000000.0;
+
+float worldGravity()
+{
+    return static_cast<const IAIPhysics*>(CommonSingletonServer::m_iaiPhysics)->getGravity();
+}
+
+const IBFTimer* aimTimer()
+{
+    return static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+}
+
+} // anonymous namespace
+
+BAPAimAt::BAPAimAt(BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction)
+    : m_valid(valid), m_direction(direction)
+{
+    m_offset.x = m_offset.y = m_offset.z = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+        m_unresolved24[i].x = m_unresolved24[i].y = m_unresolved24[i].z = 0.0f;
+        m_unresolved54[i].x = m_unresolved54[i].y = m_unresolved54[i].z = 0.0f;
+    }
+    for (int i = 0; i < 12; ++i)
+        m_unresolved120[i] = 0;
+    m_unresolved150[2] = 0;
+}
+
+BAPAimAt::~BAPAimAt() {}
+
+bool BAPAimAt::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPAimAt::getType() { return BAPSTAimAt; }
+bool BAPAimAt::isComposite() { return false; }
+
+Vec3& BAPAimAt::clearFireOffset(Bot* bot)
+{
+    Vec3& offset = static_cast<BotMain*>(bot)->getFireCorrection()->getTargetOffset();
+    offset.x = 0.0f;
+    offset.y = 0.0f;
+    offset.z = 0.0f;
+    return offset;
+}
+
+// ---- BAPAimAtObject -------------------------------------------------------------------------
+
+BAPAimAtObject::BAPAimAtObject(Bot* bot, unsigned int target, const Vec3& offset,
+                               BAPCondition* condition, unsigned long long inputMask, int id,
+                               bool usePosition, BotScriptValue<bool>* valid,
+                               BotScriptValue<Vec3>* direction)
+    : BAPAimAt(valid, direction), m_bot(bot), m_target(target), m_impactTime(0.0),
+      m_solved(false), m_usePosition(usePosition)
+{
+    m_aimDirection.x = m_aimDirection.y = m_aimDirection.z = 0.0f;
+    m_aimPoint.x = m_aimPoint.y = m_aimPoint.z = 0.0f;
+    setIdentity(m_frame);
+
+    // The shipped constructor resolves the primary objects of the bot's equipment and of the
+    // target and discards them; neither lookup is checked.
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment->isPrimary())
+        equipment->getPrimaryObject(bot->getSide());
+    Information* const aimed = informationManager->getInformation(target);
+    if (!aimed->isPrimary())
+        aimed->getPrimaryObject(bot->getSide());
+
+    m_offset = offset;
+    m_condition = condition;
+    condition->m_owner = this;
+    m_double0A0 = kAimUnsetTime;
+    m_inputMask = inputMask;
+    m_unresolved150[0] = 0;
+    m_unresolved150[2] = 0;
+    m_id = id;
+}
+
+BAPAimAtObject::~BAPAimAtObject()
+{
+    if (m_condition)
+        delete m_condition;
+}
+
+bool BAPAimAtObject::tracksObject() { return true; }
+
+bool BAPAimAtObject::computeAim(const Mat4& frame, const Vec3& ownVelocity, Vec3& direction,
+                                float effort, float drag, float speed, float gravityModifier,
+                                bool lob, Bot* bot)
+{
+    if (m_valid && m_direction) {
+        direction = m_direction->m_value;
+        m_aimDirection = direction;
+        m_solved = m_valid->m_value;
+        return m_valid->m_value;
+    }
+
+    Vec3 aim = {0.0f, 0.0f, 0.0f};
+    Vec3& fireOffset = clearFireOffset(bot);
+    const IBFTimer* const timer = aimTimer();
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    m_bot->getCurrentEquipment();   // the result is unused, as shipped
+    m_frame = frame;
+    m_solver.setDrag(drag);
+    m_solver.setSpeed(speed);
+    m_solver.setGravity(worldGravity() * gravityModifier);
+
+    // The bot's sensed point on the target, or its position when allowed.
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(m_bot->getSensedObjectFromHandle(m_target));
+    Vec3 point = {0.0f, 0.0f, 0.0f};
+    if (!sensed) {
+        if (!m_usePosition)
+            return false;
+        point = target->getPosition();
+    } else {
+        transformPoint(target->getAIObject()->getTransformation(), sensed->m_senseNormal, point);
+    }
+
+    const float* const origin = m_frame.m + 12;
+    aim.x = point.x - origin[0] + m_offset.x;
+    aim.y = point.y - origin[1] + m_offset.y;
+    aim.z = point.z - origin[2] + m_offset.z;
+    aim.x += fireOffset.x;
+    aim.y += fireOffset.y;
+    aim.z += fireOffset.z;
+
+    Vec3 targetVelocity = {0.0f, 0.0f, 0.0f};
+    IPIMobile* mobile = target->getMobile();
+    if (!mobile && !target->isPrimary()) {
+        Information* const primary =
+            informationManager->getInformation(target->getPrimaryObject(m_bot->getSide()));
+        if (primary)
+            mobile = primary->getMobile();
+    }
+    if (mobile)
+        targetVelocity = mobile->getSpeed();
+
+    m_solver.setTarget(aim, targetVelocity, ownVelocity, &m_frame, timer->getGameTime());
+    m_solved = m_solver.solve(timer->getGameTime(), effort, lob, m_aimDirection, m_aimPoint,
+                              &m_impactTime);
+    m_aimPoint.x += origin[0];
+    m_aimPoint.y += origin[1];
+    m_aimPoint.z += origin[2];
+    m_aimPoint.x -= fireOffset.x;
+    m_aimPoint.y -= fireOffset.y;
+    m_aimPoint.z -= fireOffset.z;
+    direction = m_aimDirection;
+    return m_solved;
+}
+
+bool BAPAimAtObject::getRelativePosition(const Vec3& from, Vec3& out)
+{
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    const Vec3& position = target->getPosition();
+    out.x = position.x - from.x;
+    out.y = position.y - from.y;
+    out.z = position.z - from.z;
+    return true;
+}
+
+const Mat4& BAPAimAtObject::getFrame() { return m_frame; }
+bool BAPAimAtObject::isSolved() { return m_solved; }
+
+bool BAPAimAtObject::getAimDirection(Vec3& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_aimDirection;
+    return true;
+}
+
+bool BAPAimAtObject::getAimPoint(Vec3& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_aimPoint;
+    return true;
+}
+
+bool BAPAimAtObject::getImpactTime(double& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_impactTime;
+    return true;
+}
+
+bool BAPAimAtObject::getProjectilePosition(Vec3& out, double time)
+{
+    const Vec3 forward = {m_frame.m[8], m_frame.m[9], m_frame.m[10]};
+    const bool reached = m_solver.projectilePosition(forward, static_cast<float>(time), out);
+    out.x += m_frame.m[12];
+    out.y += m_frame.m[13];
+    out.z += m_frame.m[14];
+    return reached;
+}
+
+// ---- BAPAimAtPosition -----------------------------------------------------------------------
+
+BAPAimAtPosition::BAPAimAtPosition(Bot* bot, BotScriptValue<Vec3>* position, const Vec3& offset,
+                                   BAPCondition* condition, unsigned long long inputMask, int id,
+                                   BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction)
+    : BAPAimAt(valid, direction), m_position(position), m_bot(bot), m_impactTime(0.0),
+      m_solved(false)
+{
+    m_aimDirection.x = m_aimDirection.y = m_aimDirection.z = 0.0f;
+    m_aimPoint.x = m_aimPoint.y = m_aimPoint.z = 0.0f;
+    setIdentity(m_frame);
+    m_offset = offset;
+    m_condition = condition;
+    condition->m_owner = this;
+    m_double0A0 = kAimUnsetTime;
+    m_id = id;
+    m_inputMask = inputMask;
+    m_unresolved150[0] = 0;
+    m_unresolved150[2] = 0;
+}
+
+BAPAimAtPosition::~BAPAimAtPosition()
+{
+    if (m_condition)
+        delete m_condition;
+}
+
+bool BAPAimAtPosition::tracksObject() { return false; }
+
+bool BAPAimAtPosition::computeAim(const Mat4& frame, const Vec3& ownVelocity, Vec3& direction,
+                                  float effort, float drag, float speed, float gravityModifier,
+                                  bool lob, Bot* bot)
+{
+    const IBFTimer* const timer = aimTimer();
+    Vec3 aim = {0.0f, 0.0f, 0.0f};
+    m_bot->getCurrentEquipment();   // the result is unused, as shipped
+    Vec3& fireOffset = clearFireOffset(bot);
+    m_frame = frame;
+    m_solver.setDrag(drag);
+    m_solver.setSpeed(speed);
+    m_solver.setGravity(worldGravity() * gravityModifier);
+
+    const Vec3& position = m_position->m_value;
+    const float* const origin = m_frame.m + 12;
+    aim.x = position.x - origin[0] + m_offset.x;
+    aim.y = position.y - origin[1] + m_offset.y;
+    aim.z = position.z - origin[2] + m_offset.z;
+    aim.x += fireOffset.x;
+    aim.y += fireOffset.y;
+    aim.z += fireOffset.z;
+
+    const Vec3 still = {0.0f, 0.0f, 0.0f};
+    m_solver.setTarget(aim, still, ownVelocity, &frame, timer->getGameTime());
+    m_solved = m_solver.solve(timer->getGameTime(), effort, lob, m_aimDirection, m_aimPoint,
+                              &m_impactTime);
+    m_aimPoint.x += origin[0];
+    m_aimPoint.y += origin[1];
+    m_aimPoint.z += origin[2];
+    m_aimPoint.x -= fireOffset.x;
+    m_aimPoint.y -= fireOffset.y;
+    m_aimPoint.z -= fireOffset.z;
+    direction = m_aimDirection;
+    return m_solved;
+}
+
+bool BAPAimAtPosition::getRelativePosition(const Vec3& from, Vec3& out)
+{
+    const Vec3& position = m_position->m_value;
+    out.x = position.x - from.x;
+    out.y = position.y - from.y;
+    out.z = position.z - from.z;
+    return true;
+}
+
+const Mat4& BAPAimAtPosition::getFrame() { return m_frame; }
+bool BAPAimAtPosition::isSolved() { return m_solved; }
+
+bool BAPAimAtPosition::getAimDirection(Vec3& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_aimDirection;
+    return true;
+}
+
+bool BAPAimAtPosition::getAimPoint(Vec3& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_aimPoint;
+    return true;
+}
+
+bool BAPAimAtPosition::getImpactTime(double& out)
+{
+    if (!m_solved)
+        return false;
+    out = m_impactTime;
+    return true;
+}
+
+bool BAPAimAtPosition::getProjectilePosition(Vec3& out, double time)
+{
+    const Vec3 forward = {m_frame.m[8], m_frame.m[9], m_frame.m[10]};
+    const bool reached = m_solver.projectilePosition(forward, static_cast<float>(time), out);
+    out.x += m_frame.m[12];
+    out.y += m_frame.m[13];
+    out.z += m_frame.m[14];
+    return reached;
 }
 
 } // namespace ai

@@ -20,6 +20,7 @@ class Bot;
 class WeaponInfo;
 class AIStrategicObject;
 class Information;
+class BAPAimAt;
 
 // Condition kinds as the printer spells them ("&&", "!", "true", ...). No enumerator name is
 // attested, so the values stay opaque.
@@ -390,6 +391,43 @@ private:
     /* +0x08 */ unsigned int m_target;
     /* +0x0C */ bool m_flagC;                             // 1 [UNRESOLVED]
     /* +0x0D */ bool m_flagD;                             // the second argument [UNRESOLVED]
+};
+
+// Kind 1: whether a shot now would land within `radius` of the aimed-at point. With an aim
+// statement, it compares where the projectile will be at the aim's impact time with the solved
+// target point; `closestApproach` waits for the miss distance to stop shrinking first. With plan
+// values, it measures how far the muzzle's line misses the plan position, with looser rules
+// close up or for static attacks. A pass stamps the bot's engaged-target time. PE vtable
+// 10283EB4. [INFERRED] names.
+class BAPConFireSolution : public BAPCondition
+{
+public:
+    // PE 101B3040.
+    BAPConFireSolution(unsigned int target, BAPAimAt* aim, float radius, bool closestApproach,
+                       bool tightAbove, bool skipAngle);
+    // PE 101B3110.
+    BAPConFireSolution(unsigned int target, BotScriptValue<bool>* valid,
+                       BotScriptValue<Vec3>* direction, BotScriptValue<Vec3>* position,
+                       float radius, bool closestApproach, bool tightAbove, bool skipAngle);
+    virtual bool evaluate(Bot* bot);                     // PE 101B31B0
+    virtual BAPConditionType getType();                  // PE 101B3020: 1
+    virtual ~BAPConFireSolution();                       // PE 101B30E0
+
+private:
+    void init(float radius, bool closestApproach, bool tightAbove, bool skipAngle);
+
+    /* +0x08 */ unsigned int m_target;
+    /* +0x0C */ float m_radiusSq;                         // at least 0.01
+    /* +0x10 */ float m_radius;                           // at least 0.1
+    /* +0x14 */ BAPAimAt* m_aim;                          // not owned
+    /* +0x18 */ float m_closest;                          // smallest miss seen, squared
+    /* +0x1C */ bool m_closestApproach;
+    /* +0x20 */ BotScriptValue<bool>* m_valid;
+    /* +0x24 */ BotScriptValue<Vec3>* m_direction;
+    /* +0x28 */ BotScriptValue<Vec3>* m_position;         // not set by the aim constructor
+    /* +0x2C */ bool m_tightAbove;                        // narrows the allowance above the line
+    /* +0x2D */ bool m_skipAngle;
+    /* +0x30 */ float m_maxAngle;                         // only set without m_skipAngle
 };
 
 // Kind 32: whether the bot's camera already points along the aim solution for a target. A plan

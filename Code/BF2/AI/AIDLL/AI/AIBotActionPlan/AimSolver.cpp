@@ -17,6 +17,7 @@ const float kMaxPitchStep = 0.017f;                 // PE 10285508
 const float kFixedPredictionTime = 2.8f;            // PE 102AE788
 const float kHitscanLift = 20.0f;
 const float kDragFastSpeed = 200.0f;
+const float kMaxProjectileTime = 100.0f;           // PE 1027E200
 
 // PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
 int normalise(Vec3& value)
@@ -399,6 +400,19 @@ bool AimSolver::solve(double time, float effort, bool lob, Vec3& direction, Vec3
     direction.z = dz * inverse;
     if (impactTime)
         *impactTime = impact;
+    return true;
+}
+
+bool AimSolver::projectilePosition(const Vec3& forward, float time, Vec3& out) const
+{
+    if (!(time <= kMaxProjectileTime))
+        return false;
+    const float speed = m_speed;
+    const float z = speed * forward.z;
+    const float y = speed * forward.y;
+    const float x = speed * forward.x;
+    const Vec3 velocity = {x + m_ownVelocity.x, y + m_ownVelocity.y, z + m_ownVelocity.z};
+    trajectory(velocity, time, out);
     return true;
 }
 

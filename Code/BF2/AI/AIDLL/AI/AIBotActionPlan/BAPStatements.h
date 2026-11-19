@@ -8,7 +8,10 @@
 
 #include <list>
 
+#include "AimSolver.h"
 #include "BotScript.h"
+#include "../AIPlanInterpreter/BAPContext.h"
+#include "../../../../Math/Mat4.h"
 #include "../../../../Math/Vec3.h"
 
 namespace dice {
@@ -667,6 +670,125 @@ public:
     /* +0x3C */ unsigned int m_object;
     /* +0x40 */ int m_arg40;         // [UNRESOLVED]
     /* +0x44 */ int m_arg44;         // [UNRESOLVED]
+};
+
+// Type 6: an aim solution that the fire statements query. Executing it directly fails at once;
+// the derived classes solve for an object or a fixed position. The base takes an optional pair
+// of plan values; only the object aim reads them. PE vtable 10283EE8, ctor 101C87D0.
+// [INFERRED] class and slot names.
+class BAPAimAt : public BotScript
+{
+public:
+    BAPAimAt(BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction);
+    virtual ~BAPAimAt();                                               // PE 101B3680
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101C8660
+    virtual BAPStatementType getType();                                // PE 101B3660: 6
+    virtual bool isComposite();                                        // PE 101B3670: false
+
+    // True when the aim follows an object.
+    virtual bool tracksObject() = 0;
+    // Solves the aim for a muzzle `frame` and the shooter's velocity, writing the direction.
+    // `effort` scales the solver's iterations and `lob` asks for indirect fire.
+    virtual bool computeAim(const Mat4& frame, const Vec3& ownVelocity, Vec3& direction,
+                            float effort, float drag, float speed, float gravityModifier,
+                            bool lob, Bot* bot) = 0;
+    // The aimed-at point relative to `from`; false without a target.
+    virtual bool getRelativePosition(const Vec3& from, Vec3& out) = 0;
+    virtual const Mat4& getFrame() = 0;
+    virtual bool isSolved() = 0;
+    // The last solved direction; false until a solve succeeded.
+    virtual bool getAimDirection(Vec3& out) = 0;
+    // The predicted target point of the last solve, in world space.
+    virtual bool getAimPoint(Vec3& out) = 0;
+    virtual bool getImpactTime(double& out) = 0;
+    // Where a projectile fired along the frame is after `time` seconds, in world space.
+    virtual bool getProjectilePosition(Vec3& out, double time) = 0;
+
+protected:
+    // Clears the bot's aim-correction offset and returns it. PE 101C88D0.
+    Vec3& clearFireOffset(Bot* bot);
+
+    /* +0x18 */ Vec3 m_offset;                    // added to the aimed-at point
+    /* +0x24 */ Vec3 m_unresolved24[4];           // zeroed by the ctor [UNRESOLVED]
+    /* +0x54 */ Vec3 m_unresolved54[4];           // zeroed by the ctor [UNRESOLVED]
+    /* +0x84 */ char m_gap84[0x1C];               // [UNRESOLVED] not initialised
+    /* +0xA0 */ double m_double0A0;               // -5e9 [UNRESOLVED]
+    /* +0xA8 */ BAPCondition* m_condition;        // owned; no audited body evaluates it
+    /* +0xAC */ char m_gapAC[4];
+    /* +0xB0 */ AimSolver m_solver;
+    /* +0x120 */ int m_unresolved120[12];         // zeroed by the ctor [UNRESOLVED]
+    /* +0x150 */ int m_unresolved150[3];          // +0x150 and +0x158 zeroed [UNRESOLVED]
+    /* +0x15C */ BotScriptValue<bool>* m_valid;
+    /* +0x160 */ BotScriptValue<Vec3>* m_direction;
+};
+
+// Aims at an object, at the bot's sensed point on it or, when allowed, at its position.
+// PE vtable 10283F28. [INFERRED] name.
+class BAPAimAtObject : public BAPAimAt
+{
+public:
+    // PE 101B37C0. Owns `condition`.
+    BAPAimAtObject(Bot* bot, unsigned int target, const Vec3& offset, BAPCondition* condition,
+                   unsigned long long inputMask, int id, bool usePosition,
+                   BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction);
+    virtual ~BAPAimAtObject();                                         // PE 101B3990
+
+    virtual bool tracksObject();                                       // PE 101B3710: true
+    virtual bool computeAim(const Mat4& frame, const Vec3& ownVelocity, Vec3& direction,
+                            float effort, float drag, float speed, float gravityModifier,
+                            bool lob, Bot* bot);                       // PE 101B3AF0
+    virtual bool getRelativePosition(const Vec3& from, Vec3& out);     // PE 101B39F0
+    virtual const Mat4& getFrame();                                    // PE 101B3760
+    virtual bool isSolved();                                           // PE 101B3720
+    virtual bool getAimDirection(Vec3& out);                           // PE 101B3A70
+    virtual bool getAimPoint(Vec3& out);                               // PE 101B3AB0
+    virtual bool getImpactTime(double& out);                           // PE 101B3730
+    virtual bool getProjectilePosition(Vec3& out, double time);        // PE 101B3770
+
+private:
+    /* +0x164 */ char m_gap164[4];
+    /* +0x168 */ Bot* m_bot;
+    /* +0x16C */ unsigned int m_target;
+    /* +0x170 */ Vec3 m_aimDirection;
+    /* +0x17C */ Vec3 m_aimPoint;
+    /* +0x188 */ Mat4 m_frame;
+    /* +0x1C8 */ double m_impactTime;
+    /* +0x1D0 */ bool m_solved;
+    /* +0x1D1 */ bool m_usePosition;              // aim at the position when nothing is sensed
+};
+
+// Aims at a position held in a plan value. PE vtable 10283F90. [INFERRED] name.
+class BAPAimAtPosition : public BAPAimAt
+{
+public:
+    // PE 101B3F30. Owns `condition`.
+    BAPAimAtPosition(Bot* bot, BotScriptValue<Vec3>* position, const Vec3& offset,
+                     BAPCondition* condition, unsigned long long inputMask, int id,
+                     BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction);
+    virtual ~BAPAimAtPosition();                                       // PE 101B4050
+
+    virtual bool tracksObject();                                       // PE 101B3E80: false
+    virtual bool computeAim(const Mat4& frame, const Vec3& ownVelocity, Vec3& direction,
+                            float effort, float drag, float speed, float gravityModifier,
+                            bool lob, Bot* bot);                       // PE 101B40B0
+    virtual bool getRelativePosition(const Vec3& from, Vec3& out);     // PE 101B42A0
+    virtual const Mat4& getFrame();                                    // PE 101B3ED0
+    virtual bool isSolved();                                           // PE 101B3E90
+    virtual bool getAimDirection(Vec3& out);                           // PE 101B42F0
+    virtual bool getAimPoint(Vec3& out);                               // PE 101B4330
+    virtual bool getImpactTime(double& out);                           // PE 101B3EA0
+    virtual bool getProjectilePosition(Vec3& out, double time);        // PE 101B3EE0
+
+private:
+    /* +0x164 */ char m_gap164[4];
+    /* +0x168 */ BotScriptValue<Vec3>* m_position;
+    /* +0x16C */ Bot* m_bot;
+    /* +0x170 */ Vec3 m_aimDirection;
+    /* +0x17C */ Vec3 m_aimPoint;
+    /* +0x188 */ Mat4 m_frame;
+    /* +0x1C8 */ double m_impactTime;
+    /* +0x1D0 */ bool m_solved;
 };
 
 } // namespace ai

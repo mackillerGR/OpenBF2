@@ -1,6 +1,7 @@
 #include "BAPConditions.h"
 #include "../AIUtils/checkPointer.h"
 
+#include <cfloat>
 #include <cmath>
 #include <ostream>
 
@@ -10,6 +11,7 @@
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "../../../AIInterface/BFKnowledge/BFPhysics.h"
 #include "../AIKnowledge/IPIControlInfo.h"
+#include "BAPStatements.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../Main/CommonSingletonServer.h"
@@ -1009,6 +1011,187 @@ bool BAPConAimOnTarget::evaluate(Bot* bot)
 
 BAPConditionType BAPConAimOnTarget::getType() { return static_cast<BAPConditionType>(32); }
 BAPConAimOnTarget::~BAPConAimOnTarget() {}
+
+// ---- BAPConFireSolution ---------------------------------------------------------------------
+
+namespace {
+
+const float kMinRadiusSq = 0.01f;           // PE 1027B604
+const float kMinRadius = 0.1f;              // PE 1027B220
+const float kAngleScale = 0.02f;            // PE 10283EB0
+const float kCloseHeight = 5.0f;            // PE 1027B20C
+const float kCloseDistance = 15.0f;         // PE 1027B22C
+const float kVerticalShare = 0.2f;          // PE 1027E4DC
+const float kVerticalTight = 0.1f;          // PE 102AD4F0
+
+// PE 1006EDE0: acos of the value clamped to [-1, 1].
+float clampedAcos(float value)
+{
+    if (value < -1.0f)
+        value = -1.0f;
+    else if (value > 1.0f)
+        value = 1.0f;
+    return std::acos(value);
+}
+
+// PE 100DE7B0.
+float signOf(float value)
+{
+    if (value > 0.0f)
+        return 1.0f;
+    if (value < 0.0f)
+        return -1.0f;
+    return 0.0f;
+}
+
+} // anonymous namespace
+
+void BAPConFireSolution::init(float radius, bool closestApproach, bool tightAbove, bool skipAngle)
+{
+    float radiusSq = radius * radius;
+    if (radiusSq < kMinRadiusSq)
+        radiusSq = kMinRadiusSq;
+    m_radiusSq = radiusSq;
+    m_radius = radius < kMinRadius ? kMinRadius : radius;
+    m_closestApproach = closestApproach;
+    m_tightAbove = tightAbove;
+    m_skipAngle = skipAngle;
+    m_closest = FLT_MAX;
+    if (!skipAngle)
+        m_maxAngle = std::atan2(m_radius * kAngleScale, 1.0f);
+}
+
+BAPConFireSolution::BAPConFireSolution(unsigned int target, BAPAimAt* aim, float radius,
+                                       bool closestApproach, bool tightAbove, bool skipAngle)
+    : m_target(target), m_aim(aim), m_valid(0), m_direction(0)
+{
+    init(radius, closestApproach, tightAbove, skipAngle);
+}
+
+BAPConFireSolution::BAPConFireSolution(unsigned int target, BotScriptValue<bool>* valid,
+                                       BotScriptValue<Vec3>* direction,
+                                       BotScriptValue<Vec3>* position, float radius,
+                                       bool closestApproach, bool tightAbove, bool skipAngle)
+    : m_target(target), m_aim(0), m_valid(valid), m_direction(direction), m_position(position)
+{
+    init(radius, closestApproach, tightAbove, skipAngle);
+}
+
+bool BAPConFireSolution::evaluate(Bot* bot)
+{
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    Information* equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    BotMain* const main = static_cast<BotMain*>(bot);
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+
+    if (m_valid) {
+        if (!m_valid->m_value)
+            return false;
+        // Neither the equipment nor its armament is checked here, as shipped.
+        equipment = informationManager->getInformation(bot->getCurrentEquipment());
+        IPIArmament* const armament = equipment->getArmament();
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+            armament->getWeapon(armament->getActiveWeapon()));
+        if (!weapon)
+            return false;
+
+        const Vec3& position = m_position->m_value;
+        const Vec3& own = equipment->getPosition();
+        const float dx = position.x - own.x;
+        const float dy = position.y - own.y;
+        const float dz = position.z - own.z;
+        const float distance = std::sqrt(dz * dz + dy * dy + dx * dx);
+        bool lenient = false;
+        if (std::fabs(dy) < kCloseHeight && !((target->getObjectTypeFlags() >> 21) & 1)
+            && !((equipment->getObjectTypeFlags() >> 21) & 1) && distance < kCloseDistance)
+            lenient = true;
+        const bool staticAttack =
+            !((equipment->getObjectTypeFlags() >> 21) & 1) && main->getUseStaticAttack();
+        lenient = lenient || staticAttack;
+
+        const Vec3& direction = m_direction->m_value;
+        const float* const forward = weapon->getProjectileOrigin().m + 8;
+        if (!m_skipAngle && !lenient) {
+            const float cosine =
+                forward[2] * direction.z + forward[1] * direction.y + forward[0] * direction.x;
+            if (clampedAcos(cosine) >= m_maxAngle)
+                return false;
+        }
+
+        // How far the muzzle line passes from the position at its distance.
+        const float ex = (forward[0] - direction.x) * distance;
+        const float ey = (forward[1] - direction.y) * distance;
+        const float ez = (forward[2] - direction.z) * distance;
+        const float horizontalSq = ex * ex + ez * ez;
+        const float verticalSq = signOf(ey) * ey * ey;
+        const float share = m_radiusSq * kVerticalShare;
+        const float lower = -(kVerticalTight * share);
+        const float upper = m_tightAbove ? kVerticalTight * share : share;
+        if (horizontalSq > m_radiusSq)
+            return false;
+        if (!lenient) {
+            if (verticalSq > upper)
+                return false;
+            if (verticalSq < lower)
+                return false;
+        }
+        return true;
+    }
+
+    if (!m_aim->isSolved())
+        return false;
+    double impactTime;
+    m_aim->getImpactTime(impactTime);
+    Vec3 direction = {0.0f, 0.0f, 0.0f};
+    m_aim->getAimDirection(direction);
+    // The equipment from the top is not checked, as shipped.
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    if (weapon && weapon->useAimerOnly()) {
+        const float* const forward = m_aim->getFrame().m + 8;
+        if (direction.z * forward[2] + direction.y * forward[1] + direction.x * forward[0] >= 1.0f) {
+            main->setTime276(timer->getGameTime());
+            return true;
+        }
+    }
+
+    Vec3 aimPoint = {0.0f, 0.0f, 0.0f};
+    m_aim->getAimPoint(aimPoint);
+    Vec3 projectile = {0.0f, 0.0f, 0.0f};
+    if (!m_aim->getProjectilePosition(projectile, impactTime - timer->getGameTime()))
+        return false;
+    const float mx = aimPoint.x - projectile.x;
+    const float my = aimPoint.y - projectile.y;
+    const float mz = aimPoint.z - projectile.z;
+    const float missSq = mz * mz + my * my + mx * mx;
+
+    if (!m_closestApproach) {
+        if (missSq >= m_radiusSq)
+            return false;
+        main->setTime276(timer->getGameTime());
+        return true;
+    }
+
+    // Wait until the miss stops shrinking, then judge the closest one.
+    if (m_closest > kMinRadiusSq && missSq < m_closest) {
+        m_closest = missSq;
+        if (missSq > m_radiusSq)
+            return false;
+        main->setTime276(timer->getGameTime());
+        return false;
+    }
+    const bool hit = m_closest <= m_radiusSq;
+    m_closest = FLT_MAX;
+    if (hit)
+        main->setTime276(timer->getGameTime());
+    return hit;
+}
+
+BAPConditionType BAPConFireSolution::getType() { return static_cast<BAPConditionType>(1); }
+BAPConFireSolution::~BAPConFireSolution() {}
 
 } // namespace ai
 } // namespace hfe
