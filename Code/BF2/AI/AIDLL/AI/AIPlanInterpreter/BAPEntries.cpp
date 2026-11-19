@@ -887,6 +887,65 @@ bool EntryInfanteryResetControls::execute(BotScript* script, Bot* bot, bool& fin
 }
 
 
+// ---- Trigger entries ------------------------------------------------------------------------
+
+namespace {
+
+// Whether the soldier is steering: throttle, yaw or sprint held where mapped.
+bool isSteering(const io::PlayerInput* input)
+{
+    if ((input->mappingFlags & (1ULL << io::PIThrottle)) && input->inputs[io::PIThrottle] != 0.0f)
+        return true;
+    if ((input->mappingFlags & (1ULL << io::PIYaw)) && input->inputs[io::PIYaw] != 0.0f)
+        return true;
+    if ((input->mappingFlags & (1ULL << io::PISprint)) && input->inputs[io::PISprint] != 0.0f)
+        return true;
+    return false;
+}
+
+// The active weapon's record, or null without an armament or an active weapon. The equipment
+// is not checked, as shipped.
+WeaponInfo* triggerWeapon(Information* equipment, IPIArmament*& armament)
+{
+    armament = equipment->getArmament();
+    if (!armament || armament->getActiveWeapon() == -1)
+        return 0;
+    return WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+}
+
+bool isSoldier(const Information* information)
+{
+    return (information->getObjectTypeFlags() >> 21) & 1;
+}
+
+// Whether the firing target holds an exposed soldier and is not itself a bot.
+bool targetHasExposedSoldier(Information* target)
+{
+    return target && target->getAIObject()
+        && !IBotManager::instance->getBot(target->getAIObject())
+        && target->getUnit() && target->getUnit()->hasExposedSoldier();
+}
+
+// The skill scale passed with the bot skill: 3 against a non-primary target type the equipment
+// cannot match, 1 otherwise. The isPrimary query is on the equipment, as shipped.
+float skillScale(Information* equipment, Information* target)
+{
+    if ((equipment->getObjectTypeFlags() >> 4) & 1)
+        return 1.0f;
+    if (!((target->getObjectTypeFlags() >> 4) & 1))
+        return 1.0f;
+    if (equipment->isPrimary() || ((equipment->getObjectTypeFlags() >> 7) & 1))
+        return 1.0f;
+    return 3.0f;
+}
+
+const float kSoldierSplashSkill = 0.4f;     // PE 1027FF68
+const float kVehicleSplashSkill = 0.8f;     // PE 1027E208
+const float kDirectFireSkill = 0.5f;        // PE 1027B230
+
+} // anonymous namespace
+
 EntryTrigger::EntryTrigger()
 {
 }
@@ -900,9 +959,112 @@ int EntryTrigger::getTargetId()
     return 11;
 }
 
-bool EntryTrigger::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10134040. Weapon-select inputs finish once the weapon is active; the zoom input waits while
+// steering. Fire inputs first set the weapon's firing pose and the bot skill for the shot, and are
+// held back during a pose change. Then, after the delay: the release condition or a pressed
+// one-shot releases and finishes as failed; otherwise the press condition presses (failed for a
+// one-shot) or the input is released.
+bool EntryTrigger::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTrigger::execute");
+    BAPTrigger* const trigger = static_cast<BAPTrigger*>(script);
+    const int which = trigger->m_input;
+    BotMain* const main = static_cast<BotMain*>(bot);
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* armament;
+    WeaponInfo* const weapon = triggerWeapon(equipment, armament);
+    io::PlayerInput* const input = bot->playerInput();
+    const bool steering = isSteering(input);
+    const bool fire = which == io::PIFire || which == io::PIAltFire;
+    bool allowed = true;
+    if (fire && main->botInPoseTransition())
+        allowed = false;
+
+    if (weapon) {
+        if (which >= io::PIWeaponSelect1 && which <= io::PIWeaponSelect8) {
+            if (weapon->getWeaponActivate() == which) {
+                finished = true;
+                failed = true;
+                return true;
+            }
+            if (trigger->m_pressed) {
+                finished = true;
+                failed = false;
+                return true;
+            }
+        } else if (weapon->getWeaponZoom() == which) {
+            if (steering)
+                return true;
+        } else if (fire) {
+            if (!steering && weapon->getWeaponType() != 4) {
+                int pose = 1;
+                if (isSoldier(equipment)) {
+                    pose = weapon->getFiringPose();
+                    if (armament->getActiveWeapon() == 0
+                        || (bot->getFiringTarget() != static_cast<unsigned int>(-1)
+                            && weapon->getWeaponType() == 3)) {
+                        const Vec3& own = equipment->getPosition();
+                        Information* const target =
+                            informationManager->getInformation(bot->getFiringTarget());
+                        if (target) {
+                            const Vec3& at = target->getPosition();
+                            const float dx = at.x - own.x;
+                            const float dz = at.z - own.z;
+                            if (dz * dz + dx * dx < 1.0f && target->getSoldierPose() == 3)
+                                pose = 2;
+                        }
+                    }
+                }
+                const int current = equipment->getSoldierPose();
+                if (current != 4 && current != pose)
+                    bot->requestSoldierPose(pose, false);
+            }
+
+            Information* const target = informationManager->getInformation(bot->getFiringTarget());
+            float skill = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getBotSkill();
+            const bool exposed = targetHasExposedSoldier(target);
+            if (weapon->getWeaponZoom() != 0x40 && bot->getSpawnKit() == 1)
+                weapon->getMaxRange();   // the result is unused, as shipped
+            if (weapon->getIsThrown()) {
+                skill = 1.0f;
+            } else if (weapon->getExplosionRadius() != 0.0f) {
+                const float factor = isSoldier(equipment) ? kSoldierSplashSkill : kVehicleSplashSkill;
+                skill = 1.0f - (1.0f - skill) * factor;
+            } else if (!exposed) {
+                skill = 1.0f - (1.0f - skill) * kDirectFireSkill;
+            }
+            if (weapon->getWeaponGuidanceType() != 0)
+                skill = 1.0f;
+            if (((equipment->getObjectTypeFlags() >> 4) & 1) || target) {
+                const float scale = ((equipment->getObjectTypeFlags() >> 4) & 1)
+                    ? 1.0f : skillScale(equipment, target);
+                weapon->setBotSkill(skill, bot->getFiringTargetTime(), scale);
+            }
+        }
+    }
+
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!(now >= trigger->m_startTime))
+        return true;
+    if ((trigger->m_release && trigger->m_release->evaluate(bot))
+        || (trigger->m_pressed && trigger->m_flag30)) {
+        input->setInput(static_cast<io::PlayerInputMap>(trigger->m_input), 0.0f);
+        trigger->m_pressed = false;
+        finished = true;
+        failed = true;
+        return true;
+    }
+    if (allowed && trigger->m_until->evaluate(bot)) {
+        input->setInput(static_cast<io::PlayerInputMap>(trigger->m_input), 1.0f);
+        trigger->m_pressed = true;
+        finished = true;
+        failed = !trigger->m_flag30;
+        return true;
+    }
+    input->setInput(static_cast<io::PlayerInputMap>(trigger->m_input), 0.0f);
+    trigger->m_pressed = false;
+    finished = true;
+    failed = false;
+    return true;
 }
 
 
@@ -919,9 +1081,90 @@ int EntryTriggerContinously::getTargetId()
     return 12;
 }
 
-bool EntryTriggerContinously::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10133B80. Fire inputs set the firing pose (not while steering, nor for kit 4's sixth weapon
+// slot on foot) and the bot skill, and are held back during a pose change; without an active
+// weapon the statement fails at once. After the delay: the stop condition finishes as failed;
+// the press condition presses; a pressed input stays held while the hold condition is false;
+// otherwise it is released.
+bool EntryTriggerContinously::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTriggerContinously::execute");
+    BAPTriggerContinously* const trigger = static_cast<BAPTriggerContinously*>(script);
+    BotMain* const main = static_cast<BotMain*>(bot);
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* armament;
+    WeaponInfo* const weapon = triggerWeapon(equipment, armament);
+    const int which = trigger->m_input;
+    const bool fire = which == io::PIFire || which == io::PIAltFire;
+    bool allowed = true;
+    io::PlayerInput* const input = bot->playerInput();
+
+    if (fire) {
+        if (main->botInPoseTransition())
+            allowed = false;
+        if (!weapon) {
+            if (armament) {
+                finished = false;
+                failed = true;
+                return true;
+            }
+        } else {
+            if (!isSteering(input)
+                && !(bot->getSpawnKit() == 4 && isSoldier(equipment)
+                     && armament->getActiveWeapon() == 5)) {
+                const int pose = isSoldier(equipment) ? static_cast<int>(weapon->getFiringPose()) : 1;
+                const int current = equipment->getSoldierPose();
+                if (current != 4 && current != pose)
+                    bot->requestSoldierPose(pose, false);
+            }
+
+            Information* const target = informationManager->getInformation(bot->getFiringTarget());
+            float skill = static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getBotSkill();
+            const bool exposed = targetHasExposedSoldier(target);
+            weapon->getExplosionRadius();   // read twice, as shipped
+            if (weapon->getExplosionRadius() != 0.0f) {
+                const float factor = isSoldier(equipment) ? kSoldierSplashSkill : kVehicleSplashSkill;
+                skill = 1.0f - (1.0f - skill) * factor;
+            } else if (!exposed) {
+                skill = 1.0f - (1.0f - skill) * kDirectFireSkill;
+            }
+            if (weapon->getWeaponGuidanceType() != 0)
+                skill = 1.0f;
+            if (((equipment->getObjectTypeFlags() >> 4) & 1) || target) {
+                const float scale = ((equipment->getObjectTypeFlags() >> 4) & 1)
+                    ? 1.0f : skillScale(equipment, target);
+                weapon->setBotSkill(skill, bot->getFiringTargetTime(), scale);
+            }
+        }
+    }
+
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!(now >= trigger->m_startTime))
+        return true;
+    if (trigger->m_stop && trigger->m_stop->evaluate(bot)) {
+        finished = true;
+        failed = true;
+        return true;
+    }
+    if (allowed) {
+        if (trigger->m_press->evaluate(bot)) {
+            input->setInput(static_cast<io::PlayerInputMap>(which), 1.0f);
+            trigger->m_pressed = true;
+            finished = true;
+            failed = false;
+            return true;
+        }
+        if (trigger->m_hold && trigger->m_pressed && !trigger->m_hold->evaluate(bot)) {
+            input->setInput(static_cast<io::PlayerInputMap>(which), 1.0f);
+            finished = true;
+            failed = false;
+            return true;
+        }
+    }
+    input->setInput(static_cast<io::PlayerInputMap>(which), false);
+    trigger->m_pressed = false;
+    finished = true;
+    failed = false;
+    return true;
 }
 
 

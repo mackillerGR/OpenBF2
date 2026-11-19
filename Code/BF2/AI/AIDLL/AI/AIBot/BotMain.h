@@ -384,7 +384,7 @@ public:
     virtual double getLastCheckMoveToFinishedTime() const;                                        // +0x274
     virtual void setIsGoingForFlag(bool b);                                                       // +0x278
     virtual bool getIsGoingForFlag() const;                                                       // +0x27C
-    virtual bool botInPoseTransition() const;                                                     // +0x280 [FRONTIER]
+    virtual bool botInPoseTransition() const;                                                     // +0x280
     virtual void setUseStaticAttack(bool b);                                                      // +0x284
     virtual bool getUseStaticAttack() const;                                                      // +0x288
     virtual void setTimeOfLastFailedSplashDamageAttack(double t);                                 // +0x28C

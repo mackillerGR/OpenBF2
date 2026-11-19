@@ -2294,9 +2294,11 @@ bool BotMain::getIsGoingForFlag() const
 }
 
 // +0x280
+// PE 1017F6E0: within 0.8 seconds of the last pose toggle.
 bool BotMain::botInPoseTransition() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::botInPoseTransition");
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    return !(now - m_time288 >= 0.8);
 }
 
 // +0x284

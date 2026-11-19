@@ -2188,6 +2188,44 @@ BAPStatementType BAPIdle::getType() { return BAPSTIdle; }
 bool BAPIdle::isComposite() { return true; }
 void BAPIdle::getDebugString(Bot*, std::string& out) { out = "Idling..."; }
 
+// ---- BAPTriggerContinously ------------------------------------------------------------------
+
+BAPTriggerContinously::BAPTriggerContinously(int input, BAPCondition* press, BAPCondition* hold,
+                                             BAPCondition* stop, unsigned long long inputMask,
+                                             int id, double delay)
+    : m_input(input), m_press(press), m_hold(hold), m_stop(stop), m_pressed(false)
+{
+    press->m_owner = this;
+    if (m_hold)
+        m_hold->m_owner = this;
+    if (m_stop)
+        m_stop->m_owner = this;
+    m_id = id;
+    m_inputMask = inputMask;
+    m_startTime =
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + delay;
+}
+
+BAPTriggerContinously::~BAPTriggerContinously()
+{
+    if (m_press)
+        delete m_press;
+    if (m_hold)
+        delete m_hold;
+    if (m_stop)
+        delete m_stop;
+}
+
+bool BAPTriggerContinously::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPTriggerContinously::getType() { return BAPSTTriggerContinously; }
+bool BAPTriggerContinously::isComposite() { return false; }
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

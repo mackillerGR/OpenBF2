@@ -843,6 +843,30 @@ private:
     /* +0x18 */ BAPCondition* m_condition;
 };
 
+// Holds an input while its condition holds, once the delay has passed; the plan interpreter's
+// entry does the pressing. Executing it directly fails at once. Owns its conditions. Type 12.
+// PE vtable 10283420. The retail debug print (PE 101A8840) is not reproduced; the base print
+// applies. [INFERRED] names.
+class BAPTriggerContinously : public BotScript
+{
+public:
+    // PE 101A8720. `press` is required; `hold` and `stop` may be null.
+    BAPTriggerContinously(int input, BAPCondition* press, BAPCondition* hold, BAPCondition* stop,
+                          unsigned long long inputMask, int id, double delay);
+    virtual ~BAPTriggerContinously();                                  // PE 101A89C0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101A8820
+    virtual BAPStatementType getType();                                // PE 101A87B0: 12
+    virtual bool isComposite();                                        // PE 101A87C0: false
+
+    /* +0x18 */ int m_input;
+    /* +0x1C */ BAPCondition* m_press;     // presses while true
+    /* +0x20 */ BAPCondition* m_hold;      // keeps a press while false
+    /* +0x24 */ BAPCondition* m_stop;      // finishes the statement as failed
+    /* +0x28 */ bool m_pressed;            // = false
+    /* +0x30 */ double m_startTime;        // game time at construction plus the delay
+};
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice
