@@ -1242,9 +1242,19 @@ bool BotMain::isOrderedObject(unsigned int handle, BotBehaviour* b)
 }
 
 // +0x07C
+// PE 101806E0. A new target stamps the time, re-aims the fire correction and drops the bot's
+// tracked projectile.
 void BotMain::setFiringTarget(unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setFiringTarget");
+    if (m_firingTarget == handle)
+        return;
+    m_firingTarget = handle;
+    m_firingTargetTime =
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    m_fireCorrection->setTarget(handle);
+    m_fireCorrection->m_flag84 = false;
+    checkPointer(static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler))
+        ->removeBotProjectile(m_botId);
 }
 
 // +0x080

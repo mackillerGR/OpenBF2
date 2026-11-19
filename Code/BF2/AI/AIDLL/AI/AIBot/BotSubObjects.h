@@ -17,6 +17,11 @@ class FireCorrectionData
 public:
     FireCorrectionData();                       // for the class
 
+    // Aims at a new firing target: the target time becomes -1, the three flags are raised, the
+    // offset at +44 is zeroed and the target's engine object (null for an unknown handle) is
+    // cached. PE 101DAB40; [INFERRED] name.
+    void setTarget(unsigned int handle);
+
 private:
     // [INFERRED] planExecution copies a finished bot projectile's points in inline.
     friend class BotMain;
@@ -24,9 +29,14 @@ private:
     /*  0 */ char m_gap0[4];                    // [UNRESOLVED] - not initialised by the ctor
     /*  4 */ bool m_flag4;                      // = true
     /*  5 */ bool m_flag5;                      // = true
-    /*  6 */ char m_pad6[2];
-    /*  8 */ int  m_zero8[15];                  // +8..+64, all zeroed
-    /* 68 */ char m_gap68[16];                  // [UNRESOLVED] - the ctor skips +68..+83
+    /*  6 */ bool m_flag6;                      // setTarget: true [UNRESOLVED] meaning
+    /*  7 */ char m_pad7;
+    /*  8 */ int  m_zero8[9];                   // +8..+40, zeroed by the ctor
+    /* 44 */ Vec3 m_targetOffset;               // zeroed by the ctor and setTarget [INFERRED] name
+    /* 56 */ int  m_zero56[3];                  // zeroed by the ctor
+    /* 68 */ char m_gap68[4];                   // [UNRESOLVED] - the ctor skips +68..+83
+    /* 72 */ double m_targetTime;               // setTarget: -1.0 [INFERRED] name
+    /* 80 */ void* m_targetObject;              // setTarget: the target's engine object [INFERRED]
     /* 84 */ bool m_flag84;                     // = false
     /* 85 */ bool m_flag85;                     // planExecution: true with m_flag84
     /* 86 */ char m_pad86[2];

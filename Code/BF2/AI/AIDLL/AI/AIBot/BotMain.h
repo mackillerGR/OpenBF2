@@ -95,7 +95,7 @@ public:
     virtual bool isTakingOrders() = 0;                                                            // +0x070
     virtual bool isOrderedBehaviour(unsigned char behaviour) = 0;                                 // +0x074
     virtual bool isOrderedObject(unsigned int handle, BotBehaviour* b) = 0;                       // +0x078 [FRONTIER]
-    virtual void setFiringTarget(unsigned int handle) = 0;                                        // +0x07C [FRONTIER]
+    virtual void setFiringTarget(unsigned int handle) = 0;                                        // +0x07C
     virtual unsigned int getFiringTarget() const = 0;                                             // +0x080
     virtual double getFiringTargetTime() const = 0;                                               // +0x084
     virtual SensingAgent* getSensingAgent() = 0;                                                  // +0x088
@@ -255,7 +255,7 @@ public:
     virtual bool isTakingOrders();                                                                // +0x070
     virtual bool isOrderedBehaviour(unsigned char behaviour);                                     // +0x074
     virtual bool isOrderedObject(unsigned int handle, BotBehaviour* b);                           // +0x078 [FRONTIER]
-    virtual void setFiringTarget(unsigned int handle);                                            // +0x07C [FRONTIER]
+    virtual void setFiringTarget(unsigned int handle);                                            // +0x07C
     virtual unsigned int getFiringTarget() const;                                                 // +0x080
     virtual double getFiringTargetTime() const;                                                   // +0x084
     virtual SensingAgent* getSensingAgent();                                                      // +0x088

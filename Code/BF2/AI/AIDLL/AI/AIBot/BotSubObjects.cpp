@@ -2,6 +2,10 @@
 
 #include "BotSubObjects.h"
 
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+
 namespace dice {
 namespace hfe {
 namespace ai {
@@ -14,14 +18,32 @@ FireCorrectionData::FireCorrectionData()
     , m_flag84(false)
 {
     // +0..+3 and +68..+83 are deliberately untouched - see above.
-    for (int i = 0; i < 15; ++i)
+    for (int i = 0; i < 9; ++i)
         m_zero8[i] = 0;
+    m_targetOffset.x = m_targetOffset.y = m_targetOffset.z = 0.0f;
+    for (int i = 0; i < 3; ++i)
+        m_zero56[i] = 0;
     // nine zeroed words, +88..+120
     m_projectilePrePoint.x = m_projectilePrePoint.y = m_projectilePrePoint.z = 0.0f;
     m_projectilePostPoint.x = m_projectilePostPoint.y = m_projectilePostPoint.z = 0.0f;
     m_projectileTargetPoint.x = m_projectileTargetPoint.y = m_projectileTargetPoint.z = 0.0f;
 }
 
+void FireCorrectionData::setTarget(unsigned int handle)
+{
+    m_targetTime = -1.0;
+    m_flag5 = true;
+    m_flag4 = true;
+    m_flag6 = true;
+    Information* const information = informationManager->getInformation(handle);
+    m_targetOffset.x = 0.0f;
+    m_targetOffset.y = 0.0f;
+    m_targetOffset.z = 0.0f;
+    if (information)
+        m_targetObject = information->getAIObject()->getObject();
+    else
+        m_targetObject = nullptr;
+}
 
 } // namespace ai
 } // namespace hfe
