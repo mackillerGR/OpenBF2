@@ -319,6 +319,35 @@ private:
     /* +0x14 */ bool  m_overheated;
 };
 
+// Kind 44: whether the active weapon of the bot's current equipment is the weapon in a plan
+// value and is ready to fire. The equipment information is not null-checked, as shipped. PE
+// vtable 10284328. [INFERRED] name.
+class BAPConWeaponReady : public BAPCondition
+{
+public:
+    explicit BAPConWeaponReady(BotScriptValue<WeaponInfo*>* weapon);  // PE 101B61B0
+    virtual bool evaluate(Bot* bot);                     // PE 101B6220
+    virtual BAPConditionType getType();                  // PE 101B61E0: 44
+    virtual ~BAPConWeaponReady();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+};
+
+// Kind 53: whether the active weapon is the weapon in a plan value and its state is 1. PE vtable
+// 10284358. [INFERRED] name; the meaning of state 1 is [UNRESOLVED].
+class BAPConWeaponStateOne : public BAPCondition
+{
+public:
+    explicit BAPConWeaponStateOne(BotScriptValue<WeaponInfo*>* weapon);  // PE 101B62B0
+    virtual bool evaluate(Bot* bot);                     // PE 101B6320
+    virtual BAPConditionType getType();                  // PE 101B62E0: 53
+    virtual ~BAPConWeaponStateOne();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+};
+
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
 // the result; a copy made with share() has no inner condition and answers the stored value. The
 // last holder frees the shared value. PE vtable 10283E58. [INFERRED] names. The retail debug

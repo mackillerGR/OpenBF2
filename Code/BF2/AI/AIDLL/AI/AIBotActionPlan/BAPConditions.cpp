@@ -604,6 +604,47 @@ bool BAPConWeaponHeat::evaluate(Bot*)
 BAPConditionType BAPConWeaponHeat::getType() { return static_cast<BAPConditionType>(46); }
 BAPConWeaponHeat::~BAPConWeaponHeat() {}
 
+// ---- BAPConWeaponReady / BAPConWeaponStateOne ---------------------------------------------
+
+namespace {
+
+// The active weapon's info for the bot's current equipment; the equipment is not null-checked.
+WeaponInfo* activeWeaponInfo(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    return WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+}
+
+} // anonymous namespace
+
+BAPConWeaponReady::BAPConWeaponReady(BotScriptValue<WeaponInfo*>* weapon) : m_weapon(weapon) {}
+
+bool BAPConWeaponReady::evaluate(Bot* bot)
+{
+    WeaponInfo* const active = activeWeaponInfo(bot);
+    if (m_weapon->m_value != active)
+        return false;
+    return active->isReadyToFire();
+}
+
+BAPConditionType BAPConWeaponReady::getType() { return static_cast<BAPConditionType>(44); }
+BAPConWeaponReady::~BAPConWeaponReady() {}
+
+BAPConWeaponStateOne::BAPConWeaponStateOne(BotScriptValue<WeaponInfo*>* weapon) : m_weapon(weapon) {}
+
+bool BAPConWeaponStateOne::evaluate(Bot* bot)
+{
+    WeaponInfo* const active = activeWeaponInfo(bot);
+    if (m_weapon->m_value != active)
+        return false;
+    return active->getWeaponState() == 1;
+}
+
+BAPConditionType BAPConWeaponStateOne::getType() { return static_cast<BAPConditionType>(53); }
+BAPConWeaponStateOne::~BAPConWeaponStateOne() {}
+
 // ---- BAPConShared ---------------------------------------------------------------------------
 
 BAPConShared::BAPConShared(BAPCondition* inner)
