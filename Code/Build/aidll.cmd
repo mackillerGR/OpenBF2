@@ -183,6 +183,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIBot\BotMemory.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBot\WaypointList.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BotScript.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\AimSolver.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPConditions.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\BAPStatements.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIBotActionPlan\LookController.cpp" ^
