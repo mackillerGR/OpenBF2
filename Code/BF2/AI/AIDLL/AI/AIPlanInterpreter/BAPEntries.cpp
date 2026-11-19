@@ -1,6 +1,10 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BAPEntries operations.
 
 #include "BAPEntries.h"
+#include "../Main/AISettingsInterfaces.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 #include "../Main/AIDllFrontier.h"
 #include "PlanInterpreter.h"
