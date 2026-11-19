@@ -20,6 +20,8 @@
 #include "../../../Game/IGameLogic.h"  // the `gameLogic` global - the fog and view-distance reads
 #include "../../../Core/Ids.h"         // IID_IGameServer
 #include "../../../Core/SettingsRepostitory.h"   // the `settings` global - getLevelPath's two keys
+#include "../../../IO/Network/INetworkable.h"                 // INetworkable::m_networkableId
+#include "../../../Game/Objects/IPlayer.h"                  // getId
 #include "../../../Game/Objects/IObject.h"                  // getAbsolutePosition, getTemplate
 #include "../../../Game/Objects/ControlPointTemplate.h"     // getRadius, getUnableToChangeTeam
 #include "../../../Game/Objects/Game/ControlPoint.h"        // getTeam, getTakeOverCounter
@@ -354,9 +356,26 @@ bool BFGame::getIsPrecaching() const
     return m_isPrecaching;
 }
 
+// Client PE 0x816280. Without a game nothing happens. Otherwise the object is marked spotted for
+// the player (network id 0 when it has no networkable, vehicle type 0x1A, a zero map position)
+// and the spotted message goes to the player's team as a radio message from that player. The
+// player id is read before the message is built, as shipped.
 void BFGame::enemySpottedByAI(world::IPlayer* player, world::IObject* object) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGame::enemySpottedByAI");
+    if (!hfe::game)
+        return;
+    io::INetworkable* const networkable = object->getNetworkable();
+    unsigned short networkId = 0;
+    if (networkable)
+        networkId = static_cast<unsigned short>(networkable->m_networkableId);
+    Vec2 mapPosition;
+    mapPosition.x = 0.0f;
+    mapPosition.y = 0.0f;
+    hfe::game->sendSpottedMessage(player, networkId, mapPosition,
+                                    static_cast<world::VehicleType>(0x1A));
+    const unsigned int playerId = static_cast<unsigned int>(player->getId());
+    const std::string message = hfe::game->getSpottedMessage(networkId);
+    hfe::game->radioMessageFromPlayer(TCTeam, message, playerId, 0u, false, false);
 }
 
 } // namespace ai
