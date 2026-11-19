@@ -249,6 +249,55 @@ private:
     /* +0x18 */ Vec3  m_position;
 };
 
+// Kind 22: whether a known object's health is at or below a threshold. False for an unknown
+// object. PE vtable 10283AE8. [INFERRED] name.
+class BAPConObjectHealthBelow : public BAPCondition
+{
+public:
+    BAPConObjectHealthBelow(unsigned int object, float threshold);   // PE 101AD9A0
+    virtual bool evaluate(Bot* bot);                     // PE 101ADA50
+    virtual BAPConditionType getType();                  // PE 101AD9E0: 22
+    virtual void printDebug(std::ostream& out);          // PE 101AD9F0
+    virtual ~BAPConObjectHealthBelow();
+
+private:
+    /* +0x08 */ unsigned int m_object;
+    /* +0x0C */ float m_threshold;
+};
+
+// Kind 50: whether the bot may fire. PE vtable 10284130. [INFERRED] name.
+class BAPConFireAllowed : public BAPCondition
+{
+public:
+    BAPConFireAllowed();                                 // PE 101B4D60
+    virtual bool evaluate(Bot* bot);                     // PE 101B4D80
+    virtual BAPConditionType getType();                  // PE 101B4DA0: 50
+    virtual ~BAPConFireAllowed();
+};
+
+// Kind 51: whether the bot's input holds sprint (bound and non-zero). PE vtable 10284290.
+// [INFERRED] name.
+class BAPConSprinting : public BAPCondition
+{
+public:
+    BAPConSprinting();                                   // PE 101B5D20
+    virtual bool evaluate(Bot* bot);                     // PE 101B5D80
+    virtual BAPConditionType getType();                  // PE 101B5D40: 51
+    virtual ~BAPConSprinting();
+};
+
+// Kind 52: whether the active weapon of the bot's current equipment is zoomed. False without
+// weapon info; the equipment information is not null-checked, as shipped. PE vtable 102836F8.
+// [INFERRED] name.
+class BAPConWeaponZoomed : public BAPCondition
+{
+public:
+    BAPConWeaponZoomed();                                // PE 101A9D20
+    virtual bool evaluate(Bot* bot);                     // PE 101A9D80
+    virtual BAPConditionType getType();                  // PE 101A9D40: 52
+    virtual ~BAPConWeaponZoomed();
+};
+
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
 // the result; a copy made with share() has no inner condition and answers the stored value. The
 // last holder frees the shared value. PE vtable 10283E58. [INFERRED] names. The retail debug

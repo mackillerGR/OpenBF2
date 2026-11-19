@@ -5,6 +5,8 @@
 #include <ostream>
 
 #include "../AIBot/BotMain.h"
+#include "../../../../IO/Input/PlayerInput.h"
+#include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/Information.h"
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIArmament.h"
@@ -513,6 +515,68 @@ bool BAPConPositionDistance::evaluate(Bot* bot)
 
 BAPConditionType BAPConPositionDistance::getType() { return static_cast<BAPConditionType>(12); }
 BAPConPositionDistance::~BAPConPositionDistance() {}
+
+// ---- BAPConObjectHealthBelow ----------------------------------------------------------------
+
+BAPConObjectHealthBelow::BAPConObjectHealthBelow(unsigned int object, float threshold)
+    : m_object(object), m_threshold(threshold)
+{
+}
+
+bool BAPConObjectHealthBelow::evaluate(Bot*)
+{
+    Information* const info = informationManager->getInformation(m_object);
+    if (!info)
+        return false;
+    return info->getPhysical()->getHealth() <= m_threshold;
+}
+
+BAPConditionType BAPConObjectHealthBelow::getType() { return static_cast<BAPConditionType>(22); }
+
+void BAPConObjectHealthBelow::printDebug(std::ostream& out)
+{
+    out << "ObjectHealth <= " << m_threshold;
+}
+
+BAPConObjectHealthBelow::~BAPConObjectHealthBelow() {}
+
+// ---- BAPConFireAllowed ----------------------------------------------------------------------
+
+BAPConFireAllowed::BAPConFireAllowed() {}
+bool BAPConFireAllowed::evaluate(Bot* bot) { return bot->isFireAllowed(); }
+BAPConditionType BAPConFireAllowed::getType() { return static_cast<BAPConditionType>(50); }
+BAPConFireAllowed::~BAPConFireAllowed() {}
+
+// ---- BAPConSprinting ------------------------------------------------------------------------
+
+BAPConSprinting::BAPConSprinting() {}
+
+bool BAPConSprinting::evaluate(Bot* bot)
+{
+    const io::PlayerInput* const input = bot->playerInput();
+    return (input->mappingFlags & (1ull << io::PISprint)) && input->inputs[io::PISprint] != 0.0f;
+}
+
+BAPConditionType BAPConSprinting::getType() { return static_cast<BAPConditionType>(51); }
+BAPConSprinting::~BAPConSprinting() {}
+
+// ---- BAPConWeaponZoomed ---------------------------------------------------------------------
+
+BAPConWeaponZoomed::BAPConWeaponZoomed() {}
+
+bool BAPConWeaponZoomed::evaluate(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    if (!weapon)
+        return false;
+    return weapon->isZoomed();
+}
+
+BAPConditionType BAPConWeaponZoomed::getType() { return static_cast<BAPConditionType>(52); }
+BAPConWeaponZoomed::~BAPConWeaponZoomed() {}
 
 // ---- BAPConShared ---------------------------------------------------------------------------
 
