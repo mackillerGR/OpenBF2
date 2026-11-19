@@ -972,6 +972,8 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\WeaponInfo.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIArmament.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIArmamentKnown.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIArmamentReal.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPICover.cpp"
@@ -988,7 +990,11 @@ cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\InformationKnown.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\InformationReal.cpp"
 if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\WeaponInfoKnown.cpp"
+if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\WeaponInfoReal.cpp"
+if errorlevel 1 set /a RC+=1
+cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIPhysicalKnown.cpp"
 if errorlevel 1 set /a RC+=1
 cl %FLAGS% "%~dp0..\BF2\AI\AIDLL\AI\AIKnowledge\IPIPhysicalReal.cpp"
 if errorlevel 1 set /a RC+=1

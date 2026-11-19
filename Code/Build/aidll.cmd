@@ -136,6 +136,7 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\Information.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfo.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIArmament.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIArmamentKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIArmamentReal.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPICover.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIMobile.cpp" ^
@@ -144,7 +145,9 @@ set SOURCES=^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIUnit.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\InformationReal.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfoKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\WeaponInfoReal.cpp" ^
+ "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIPhysicalKnown.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\IPIPhysicalReal.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIUtils\VehicleOccupancy.cpp" ^
  "%ROOT%\AI\AIDLL\AI\AIKnowledge\BFInformationEnvironment.cpp" ^
