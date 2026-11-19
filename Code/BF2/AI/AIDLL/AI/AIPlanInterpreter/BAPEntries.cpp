@@ -1,6 +1,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BAPEntries operations.
 
 #include "BAPEntries.h"
+#include "../AIBot/BotSubObjects.h"
 #include "../Main/AISettingsInterfaces.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
@@ -948,6 +949,11 @@ const float kSoldierSplashSkill = 0.4f;     // PE 1027FF68
 const float kVehicleSplashSkill = 0.8f;     // PE 1027E208
 const float kDirectFireSkill = 0.5f;        // PE 1027B230
 
+const float kTurretPi = 3.14159274f;            // PE 10280740 (also the stopped yaw, 40490FDB)
+const float kTurretHalfPi = 1.57079637f;        // PE 10280744
+const float kTurretDegree = 0.0174532924f;      // PE 102AAF70
+const float kTurretDeadZoneDegrees = 0.25f;     // PE 1027B208
+
 } // anonymous namespace
 
 EntryTrigger::EntryTrigger()
@@ -1204,9 +1210,126 @@ int EntryMouseTurretAimAt::getTargetId()
     return 6;
 }
 
-bool EntryMouseTurretAimAt::execute(BotScript *, Bot *, bool&, bool&)
+// ---- Turret aim entry -----------------------------------------------------------------------
+
+namespace {
+
+// PE 1014B650: the signed angle from `a` to `b` (radians, in (-pi, pi]), from the clamped cross
+// product folded by the sign of the dot product.
+float signedAngle(float ax, float ay, float bx, float by)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryMouseTurretAimAt::execute");
+    float cross = ay * bx - ax * by;
+    if (-1.0f > cross)
+        cross = -1.0f;
+    else if (!(1.0f >= cross))
+        cross = 1.0f;
+    if (cross < -1.0f)
+        cross = -1.0f;
+    else if (cross > 1.0f)
+        cross = 1.0f;
+    const float angle = kTurretHalfPi - std::acos(cross);
+    if (!(by * ay + ax * bx < 0.0f))
+        return angle;
+    if (angle > 0.0f)
+        return 1.0f * kTurretPi - angle;
+    if (angle >= 0.0f)
+        return 0.0f * kTurretPi - angle;
+    return -1.0f * kTurretPi - angle;
+}
+
+} // anonymous namespace
+
+// PE 10133190. Holds the sensing-agent override and steers the look along the aim statement's
+// solution for the active weapon (or straight at the target when it has none), recording the
+// pitch errors for the climb bias. The aim's condition stops it as failed; without equipment it
+// finishes without failing.
+bool EntryMouseTurretAimAt::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
+{
+    BAPAimAt* const aim = static_cast<BAPAimAt*>(script);
+    Vec3 ownVelocity = {0.0f, 0.0f, 0.0f};
+    Vec3 direction = {0.0f, 0.0f, 0.0f};
+    bot->getSensingAgent()->setOverride(true);
+    if (aim->m_condition->evaluate(bot)) {
+        finished = true;
+        failed = true;
+        aim->m_previousYaw = kTurretPi;
+        return true;
+    }
+    failed = false;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment) {
+        finished = true;
+        failed = false;
+        aim->m_previousYaw = kTurretPi;
+        return true;
+    }
+
+    // Neither the armament nor the weapon record is checked, as shipped.
+    IPIArmament* const armament = equipment->getArmament();
+    IPIControlInfo* const control = equipment->getControlInfo();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    const Mat4& weaponFrame = weapon->getAbsoluteTransformation();
+    IPIMobile* mobile = equipment->getMobile();
+    if (!mobile && !equipment->isPrimary()) {
+        Information* const primary =
+            informationManager->getInformation(equipment->getPrimaryObject(bot->getSide()));
+        if (primary)
+            mobile = primary->getMobile();
+    }
+    if (mobile)
+        ownVelocity = mobile->getSpeed();
+
+    const Mat4& origin = weapon->getProjectileOrigin();
+    Vec3 previous = {0.0f, 0.0f, 0.0f};
+    const bool hadDirection = aim->getAimDirection(previous);
+    const bool lob = weapon->getIndirect();
+    const float gravityModifier = weapon->getGravityModifier();
+    const float speed = weapon->getExitVelocity();
+    const float drag = weapon->getDrag();
+    if (!aim->computeAim(origin, ownVelocity, direction, 0.5f, drag, speed, gravityModifier, lob,
+                         bot)) {
+        const Vec3 muzzle = {weaponFrame.m[12], weaponFrame.m[13], weaponFrame.m[14]};
+        if (!aim->getRelativePosition(muzzle, direction)) {
+            finished = true;
+            failed = false;
+            aim->m_previousYaw = kTurretPi;
+            return true;
+        }
+        normaliseVector(direction);
+    }
+
+    Vec3 aimPoint = {0.0f, 0.0f, 0.0f};
+    aim->getAimPoint(aimPoint);
+    static_cast<BotMain*>(bot)->getFireCorrection()->recordAim(direction, aimPoint);
+
+    const float deadZone = kTurretDegree * kTurretDeadZoneDegrees;
+    float yawSpeed = 0.0f;
+    float pitchSpeed = 0.0f;
+    if (hadDirection) {
+        const double step =
+            static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getTimeIncrease();
+        const float rate = static_cast<float>(1.0 / step);
+        yawSpeed = signedAngle(previous.x, previous.z, direction.x, direction.z) * rate;
+        pitchSpeed = signedAngle(previous.y, previous.z, direction.y, direction.z) * rate;
+    }
+    finished = true;
+
+    const float previousYaw = aim->m_previousYaw;
+    const float previousPitch = aim->m_pitchHistory[aim->m_pitchIndex];
+    io::PlayerInput* const input = bot->playerInput();
+    float climb = 0.0f;
+    for (int i = 0; i < 10; ++i)
+        climb += aim->m_pitchHistory[i];
+    climb *= 0.1f;   // PE 101C8680
+    float pitchError;
+    float yawError;
+    steerLook(bot, direction, origin, pitchError, previousPitch, yawError, previousYaw, deadZone,
+              control, input, climb, yawSpeed, pitchSpeed);
+    aim->m_pitchIndex = (aim->m_pitchIndex + 1) % 10;
+    aim->m_pitchHistory[aim->m_pitchIndex] = pitchError;
+    aim->m_previousYaw = yawError;
+    return true;
 }
 
 

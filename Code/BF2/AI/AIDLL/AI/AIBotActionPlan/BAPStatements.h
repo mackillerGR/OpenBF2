@@ -706,7 +706,7 @@ public:
     // Where a projectile fired along the frame is after `time` seconds, in world space.
     virtual bool getProjectilePosition(Vec3& out, double time) = 0;
 
-protected:
+public:
     // Clears the bot's aim-correction offset and returns it. PE 101C88D0.
     Vec3& clearFireOffset(Bot* bot);
 
@@ -715,10 +715,15 @@ protected:
     /* +0x54 */ Vec3 m_unresolved54[4];           // zeroed by the ctor [UNRESOLVED]
     /* +0x84 */ char m_gap84[0x1C];               // [UNRESOLVED] not initialised
     /* +0xA0 */ double m_double0A0;               // -5e9 [UNRESOLVED]
-    /* +0xA8 */ BAPCondition* m_condition;        // owned; no audited body evaluates it
+    /* +0xA8 */ BAPCondition* m_condition;        // owned; stops the turret aim entry when true
     /* +0xAC */ char m_gapAC[4];
     /* +0xB0 */ AimSolver m_solver;
-    /* +0x120 */ int m_unresolved120[12];         // zeroed by the ctor [UNRESOLVED]
+public:
+    // Steering state of the turret aim entry: last tick's yaw error (pi after a stop), the last
+    // ten pitch errors and the ring position. [INFERRED] names.
+    /* +0x120 */ float m_previousYaw;
+    /* +0x124 */ float m_pitchHistory[10];
+    /* +0x14C */ int m_pitchIndex;
     /* +0x150 */ int m_unresolved150[3];          // +0x150 and +0x158 zeroed [UNRESOLVED]
     /* +0x15C */ BotScriptValue<bool>* m_valid;
     /* +0x160 */ BotScriptValue<Vec3>* m_direction;

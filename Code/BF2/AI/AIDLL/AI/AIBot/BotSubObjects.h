@@ -23,6 +23,15 @@ public:
     void setTarget(unsigned int handle);
     // The aim offset at +44; the aim statements read and clear it inline. [INFERRED] accessor.
     Vec3& getTargetOffset() { return m_targetOffset; }
+    // Records the last solved aim when recording is on (m_flag6). [INFERRED] name: the turret aim
+    // entry writes the fields inline.
+    void recordAim(const Vec3& direction, const Vec3& point)
+    {
+        if (m_flag6) {
+            m_aimDirection = direction;
+            m_aimPoint = point;
+        }
+    }
 
 private:
     // [INFERRED] planExecution copies a finished bot projectile's points in inline.
@@ -33,9 +42,12 @@ private:
     /*  5 */ bool m_flag5;                      // = true
     /*  6 */ bool m_flag6;                      // setTarget: true [UNRESOLVED] meaning
     /*  7 */ char m_pad7;
-    /*  8 */ int  m_zero8[9];                   // +8..+40, zeroed by the ctor
+    /*  8 */ int  m_zero8[6];                   // +8..+28, zeroed by the ctor
+    // The aim direction and target point of the last solved aim, recorded by the turret aim
+    // entry while m_flag6 is set. Zeroed by the ctor. [INFERRED] names.
+    /* 32 */ Vec3 m_aimDirection;
     /* 44 */ Vec3 m_targetOffset;               // zeroed by the ctor and setTarget [INFERRED] name
-    /* 56 */ int  m_zero56[3];                  // zeroed by the ctor
+    /* 56 */ Vec3 m_aimPoint;
     /* 68 */ char m_gap68[4];                   // [UNRESOLVED] - the ctor skips +68..+83
     /* 72 */ double m_targetTime;               // setTarget: -1.0 [INFERRED] name
     /* 80 */ void* m_targetObject;              // setTarget: the target's engine object [INFERRED]

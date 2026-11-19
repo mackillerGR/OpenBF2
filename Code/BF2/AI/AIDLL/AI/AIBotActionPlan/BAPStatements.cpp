@@ -1792,8 +1792,10 @@ BAPAimAt::BAPAimAt(BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction)
         m_unresolved24[i].x = m_unresolved24[i].y = m_unresolved24[i].z = 0.0f;
         m_unresolved54[i].x = m_unresolved54[i].y = m_unresolved54[i].z = 0.0f;
     }
-    for (int i = 0; i < 12; ++i)
-        m_unresolved120[i] = 0;
+    m_previousYaw = 0.0f;
+    for (int i = 0; i < 10; ++i)
+        m_pitchHistory[i] = 0.0f;
+    m_pitchIndex = 0;
     m_unresolved150[2] = 0;
 }
 
