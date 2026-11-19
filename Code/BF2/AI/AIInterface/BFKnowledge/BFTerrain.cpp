@@ -206,9 +206,13 @@ int BFTerrain::getPrimaryWorldMaxZ() const
     BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::getPrimaryWorldMaxZ");
 }
 
+// The heightmap cluster's two-sided ray test; the hit material is discarded. distance receives
+// the cluster's hit fraction.
 bool BFTerrain::intersectTerrain(const Vec3& from, const Vec3& to, Vec3& hit, float& distance, Vec3& normal) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::intersectTerrain");
+    unsigned char material;
+    return static_cast<world::IHeightmapCluster*>(m_heightmapCluster)
+        ->intersectRayInWorldCoords(from, to, hit, distance, normal, material, true);
 }
 
 bool BFTerrain::getTriangle(const Vec3& position, Vec3& a, Vec3& b, Vec3& c, Vec3& normal, unsigned char& material) const
