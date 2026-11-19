@@ -5,6 +5,13 @@
 #include <ostream>
 
 #include "../AIBot/BotMain.h"
+#include "../../../../Math/Mat4.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../Main/CommonSingletonServer.h"
+#include "../AIBot/BotSenses.h"
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../AIKnowledge/Information.h"
@@ -663,6 +670,147 @@ bool BAPConStrategicStatus::evaluate(Bot*)
 
 BAPConditionType BAPConStrategicStatus::getType() { return static_cast<BAPConditionType>(16); }
 BAPConStrategicStatus::~BAPConStrategicStatus() {}
+
+// ---- BAPConCanFireAt ------------------------------------------------------------------------
+
+namespace {
+
+// Line-of-fire cone: the radius grows from kConeNear to kConeFar over 1/kConeGrowth metres along
+// the line; a friend nearer than kCloseFriend metres also counts when the bot faces it. Module
+// data in the PE (102AD810..818, 10283EB0), never written. [INFERRED] names.
+float kCloseFriend = 5.0f;
+float kConeNear = 0.5f;
+float kConeFar = 1.5f;
+const float kConeGrowth = 0.02f;
+
+// PE 100E9DE0, the Vec2 normaliser (the same file-local copy as SensingAgent.cpp).
+int normalise(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return 0;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return -20001;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    return 0;
+}
+
+} // anonymous namespace
+
+BAPConCanFireAt::BAPConCanFireAt(unsigned int target, bool flag)
+    : m_target(target), m_flagC(true), m_flagD(flag)
+{
+}
+
+bool BAPConCanFireAt::evaluate(Bot* bot)
+{
+    Information* const own = informationManager->getInformation(bot->getCurrentEquipment());
+    Information* const target = informationManager->getInformation(m_target);
+    if (!own || !target)
+        return false;
+    SensedObject* const sensed = static_cast<SensedObject*>(bot->getSensedObjectFromHandle(m_target));
+    bool canFire = sensed ? !((sensed->m_senseFlags >> 3) & 1) : false;
+    IPIArmament* const armament = own->getArmament();
+    if (armament && armament->getWeapon(armament->getActiveWeapon()) != -1)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+            armament->getWeapon(armament->getActiveWeapon()));
+        if (weapon && sensed && !weapon->getFiresThroughTransparent())
+            canFire = canFire && (sensed->m_senseFlags & 0x48u) != 0;
+    }
+    if (canFire && ((own->getObjectTypeFlags() >> 21) & 1))
+        canFire = !friendInLineOfFire(bot, own, target);
+    return canFire;
+}
+
+bool BAPConCanFireAt::friendInLineOfFire(Bot* bot, Information* own, Information* target)
+{
+    IPIArmament* const armament = own->getArmament();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    const Mat4& origin = weapon->getProjectileOrigin();
+    const Vec3& muzzle = *reinterpret_cast<const Vec3*>(&origin.m[12]);
+    const Vec3& targetPosition = target->getPosition();
+    Vec3 direction;
+    direction.x = targetPosition.x - muzzle.x;
+    direction.y = targetPosition.y - muzzle.y;
+    direction.z = targetPosition.z - muzzle.z;
+    const float length = std::sqrt(direction.x * direction.x + direction.y * direction.y +
+                                   direction.z * direction.z);
+    if (length > 1e-4f)
+    {
+        const float inverse = 1.0f / length;
+        direction.x *= inverse;
+        direction.y *= inverse;
+        direction.z *= inverse;
+    }
+    const std::vector<IAIPlayer*>& players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getAllPlayers();
+    bool found = false;
+    for (unsigned int i = 0; !players.empty() && i < players.size(); ++i)
+    {
+        IAIPlayer* const player = players[i];
+        if (!player || player->getSide() != bot->getSide())
+            continue;
+        IAIObject* const vehicle = player->getCurrentVehicle();
+        if (!vehicle)
+            continue;
+        Information* const info =
+            informationManager->getInformation(vehicle->getInformation(bot->getSide()));
+        if (info == own || info == target || !info)
+            continue;
+        if (!((info->getObjectTypeFlags() >> 21) & 1))
+            continue;
+        const Vec3& position = info->getPosition();
+        Vec3 relative;
+        relative.x = position.x - muzzle.x;
+        relative.y = position.y - muzzle.y;
+        relative.z = position.z - muzzle.z;
+        const float along = relative.z * direction.z + relative.y * direction.y +
+                            relative.x * direction.x;
+        if (along > length)
+            continue;
+        Vec3 offset;
+        offset.x = direction.x * along - relative.x;
+        offset.y = direction.y * along - relative.y;
+        offset.z = direction.z * along - relative.z;
+        const float offsetSq = offset.x * offset.x + offset.y * offset.y + offset.z * offset.z;
+        float radius = (kConeFar - kConeNear) * (along * kConeGrowth) + kConeNear;
+        if (weapon->getWeaponZoom() != 0x40 && bot->getSpawnKit() == 1 &&
+            weapon->getMaxRange() > 100.0f)
+            radius = kConeNear;
+        if (!(offsetSq < radius * radius))
+            continue;
+        found = true;
+        if (!(along < kCloseFriend))
+            continue;
+        Vec2 line;
+        line.x = direction.x;
+        line.y = direction.z;
+        normalise(line);
+        const Vec3 facing = own->getFaceing();
+        Vec2 facing2d;
+        facing2d.x = facing.x;
+        facing2d.y = facing.z;
+        if (facing2d.y * line.y + facing2d.x * line.x > 0.9f)
+        {
+            static_cast<BotMain*>(bot)->setFriendsInLineOfFireTime(
+                static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+            return true;
+        }
+    }
+    static_cast<BotMain*>(bot)->setFriendsInLineOfFireTime(0.0);
+    return found;
+}
+
+BAPConditionType BAPConCanFireAt::getType() { return static_cast<BAPConditionType>(26); }
+BAPConCanFireAt::~BAPConCanFireAt() {}
 
 // ---- BAPConShared ---------------------------------------------------------------------------
 

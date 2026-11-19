@@ -18,6 +18,7 @@ namespace ai {
 class Bot;
 class WeaponInfo;
 class AIStrategicObject;
+class Information;
 
 // Condition kinds as the printer spells them ("&&", "!", "true", ...). No enumerator name is
 // attested, so the values stay opaque.
@@ -364,6 +365,30 @@ private:
     /* +0x08 */ AIStrategicObject* m_object;
     /* +0x0C */ int  m_side;
     /* +0x10 */ bool m_invert;
+};
+
+// Kind 26: whether the bot may fire at a sensed target: the target is sensed without the +8
+// sense flag; unless the active weapon fires through transparent surfaces the target must also
+// carry one of the 0x48 sense flags; and for a bot whose equipment has type flag bit 21, no
+// friend may stand in the line of fire. PE vtable 102841E0. [INFERRED] names. The retail debug
+// print (PE 101B5520) is not reproduced; the base print applies.
+class BAPConCanFireAt : public BAPCondition
+{
+public:
+    // The second flag is stored but no audited body reads either flag. PE 101B54A0.
+    BAPConCanFireAt(unsigned int target, bool flag);
+    virtual bool evaluate(Bot* bot);                     // PE 101B5870
+    virtual BAPConditionType getType();                  // PE 101B5510: 26
+    virtual ~BAPConCanFireAt();
+
+private:
+    // Whether a friend of the bot stands in the cone from the active weapon's muzzle to the
+    // target; records the time on the bot (0 when none). PE 101B5550.
+    bool friendInLineOfFire(Bot* bot, Information* own, Information* target);
+
+    /* +0x08 */ unsigned int m_target;
+    /* +0x0C */ bool m_flagC;                             // 1 [UNRESOLVED]
+    /* +0x0D */ bool m_flagD;                             // the second argument [UNRESOLVED]
 };
 
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
