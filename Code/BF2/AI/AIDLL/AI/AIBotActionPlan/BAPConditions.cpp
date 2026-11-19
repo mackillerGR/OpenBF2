@@ -578,6 +578,32 @@ bool BAPConWeaponZoomed::evaluate(Bot* bot)
 BAPConditionType BAPConWeaponZoomed::getType() { return static_cast<BAPConditionType>(52); }
 BAPConWeaponZoomed::~BAPConWeaponZoomed() {}
 
+// ---- BAPConWeaponHeat -----------------------------------------------------------------------
+
+BAPConWeaponHeat::BAPConWeaponHeat(BotScriptValue<WeaponInfo*>* weapon, float high, float low)
+    : m_weapon(weapon), m_high(high), m_low(low), m_overheated(false)
+{
+}
+
+bool BAPConWeaponHeat::evaluate(Bot*)
+{
+    const float heat = m_weapon->m_value->getHeat();
+    if (m_overheated)
+    {
+        if (!(heat <= m_low))
+            return false;
+        m_overheated = false;
+        return true;
+    }
+    if (heat < m_high)
+        return true;
+    m_overheated = true;
+    return false;
+}
+
+BAPConditionType BAPConWeaponHeat::getType() { return static_cast<BAPConditionType>(46); }
+BAPConWeaponHeat::~BAPConWeaponHeat() {}
+
 // ---- BAPConShared ---------------------------------------------------------------------------
 
 BAPConShared::BAPConShared(BAPCondition* inner)

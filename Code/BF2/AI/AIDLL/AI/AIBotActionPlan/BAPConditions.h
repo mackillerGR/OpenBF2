@@ -9,12 +9,14 @@
 #include <list>
 
 #include "../../../../Math/Vec3.h"
+#include "../AIPlanInterpreter/BAPContext.h"
 
 namespace dice {
 namespace hfe {
 namespace ai {
 
 class Bot;
+class WeaponInfo;
 
 // Condition kinds as the printer spells them ("&&", "!", "true", ...). No enumerator name is
 // attested, so the values stay opaque.
@@ -296,6 +298,25 @@ public:
     virtual bool evaluate(Bot* bot);                     // PE 101A9D80
     virtual BAPConditionType getType();                  // PE 101A9D40: 52
     virtual ~BAPConWeaponZoomed();
+};
+
+// Kind 46: heat hysteresis on the weapon held in a plan value. True while the heat stays below
+// `high`; once it reaches `high` it answers false until the heat falls to `low` or below. PE
+// vtable 10283E6C. [INFERRED] name.
+class BAPConWeaponHeat : public BAPCondition
+{
+public:
+    // PE 101B2EF0.
+    BAPConWeaponHeat(BotScriptValue<WeaponInfo*>* weapon, float high, float low);
+    virtual bool evaluate(Bot* bot);                     // PE 101B2F70
+    virtual BAPConditionType getType();                  // PE 101B2F30: 46
+    virtual ~BAPConWeaponHeat();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+    /* +0x0C */ float m_high;
+    /* +0x10 */ float m_low;
+    /* +0x14 */ bool  m_overheated;
 };
 
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
