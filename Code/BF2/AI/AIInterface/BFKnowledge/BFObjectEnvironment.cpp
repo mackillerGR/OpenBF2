@@ -23,6 +23,8 @@
 #include "../../../Game/Objects/GameLogicComp/ArmorGLCompTemplate.h"   // getCanBeDestroyed
 #include "BFTimer.h"                                                   // IBFTimer::getGameTime
 #include "IAIObject.h"
+#include "../../../Game/Objects/Game/Soldier.h"                      // getCameras
+#include "../../../Game/Objects/ICameraObject.h"
 #include "IAIObjectPlugIn.h"
 
 namespace dice {
@@ -276,14 +278,44 @@ void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, 
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickRandomSensePosition");
 }
 
-bool BFObjectEnvironment::pickSoldierRandomSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int& part)
+namespace {
+
+// The shared body of the two soldier sense queries (one folded function in the PE, Client
+// 0x81A5C0): a soldier's sense position is its first camera's absolute position, and the normal
+// slot receives that camera's relative position. The camera object is not null-checked.
+bool soldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickSoldierRandomSensePosition");
+    if (!object->getObject())
+        return false;
+    if (!object->isOfType(ITSoldier))
+        return false;
+    world::IObject* const engineObject = object->getObject();
+    // [CHOSEN] const_cast: the tree declares the template pointer const, queryImplementation not.
+    if (!const_cast<world::IObjectTemplate*>(engineObject->getTemplate())
+             ->queryImplementation(world::CID_SoldierTemplate))
+        return false;
+    std::map<int, world::ICameraObject*>* const cameras =
+        static_cast<world::Soldier*>(engineObject)->getCameras();
+    world::ICameraObject* const camera = cameras->begin()->second;
+    world::IObject* const cameraObject =
+        camera ? static_cast<world::IObject*>(camera->queryInterface(world::IID_IObject)) : nullptr;
+    position = cameraObject->getAbsolutePosition();
+    normal = cameraObject->getRelativePosition();
+    return true;
 }
 
-bool BFObjectEnvironment::getSoldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int part)
+} // anonymous namespace
+
+// Ignores part: every part answers the soldier's camera position.
+bool BFObjectEnvironment::pickSoldierRandomSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int& /*part*/)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getSoldierSensePosition");
+    return soldierSensePosition(position, normal, object);
+}
+
+// The same folded body as pickSoldierRandomSensePosition. [INFERRED] identical source bodies.
+bool BFObjectEnvironment::getSoldierSensePosition(Vec3& position, Vec3& normal, IAIObject* object, unsigned int /*part*/)
+{
+    return soldierSensePosition(position, normal, object);
 }
 
 int BFObjectEnvironment::getHeightAndNormalForObject(IAIObject* object, const Vec3& position, float& height, Vec3& normal, float& slope)
