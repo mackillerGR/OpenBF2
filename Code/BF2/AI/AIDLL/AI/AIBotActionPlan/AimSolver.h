@@ -23,6 +23,10 @@ public:
     void setDrag(float drag);
     void setGravity(float gravity) { m_gravity = gravity; }
     void setSpeed(float speed) { m_speed = speed; }
+    // Thrown weapons predict over a fixed time; the aiming wrapper sets both flags each tick.
+    // [INFERRED] names.
+    void setFixedTime(bool fixed) { m_fixedTime = fixed; }
+    void setNoCorrection(bool off) { m_noCorrection = off; }
 
     // Records the target: relative position, target velocity, shooter velocity, the time they hold
     // for, and an optional frame whose rotation turns the up vector. PE 101DF960; always true.
@@ -40,6 +44,10 @@ public:
     // `time` seconds later, relative to the muzzle. False beyond 100 seconds. PE 101DFF70;
     // [INFERRED] name.
     bool projectilePosition(const Vec3& forward, float time, Vec3& out) const;
+    // The high-arc direction to the target without drag, for the artillery simulation; `work`
+    // receives the relative target. False when the speed cannot reach it. PE 101DFD40;
+    // [INFERRED] name.
+    bool lobDirection(Vec3& direction, Vec3& work) const;
 
 private:
     // The target position relative to the shooter at `time`. PE 101DFEC0.
@@ -63,8 +71,8 @@ private:
     /* +0x58 */ double m_halfFlightTime;       // not initialised by the constructor
     /* +0x60 */ float  m_pitch;                // 666 until a solve has run
     /* +0x64 */ float  m_pitchStep;
-    /* +0x68 */ bool   m_fixedTime;            // [UNRESOLVED] no audited writer sets it
-    /* +0x69 */ bool   m_noCorrection;         // [UNRESOLVED] no audited writer sets it
+    /* +0x68 */ bool   m_fixedTime;            // the aiming wrapper: the weapon is thrown
+    /* +0x69 */ bool   m_noCorrection;         // the aiming wrapper: a reported splash target
 };
 
 } // namespace ai

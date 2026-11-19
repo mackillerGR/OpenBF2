@@ -17,6 +17,7 @@
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "../../../AIInterface/BFKnowledge/BFPhysics.h"
 #include "../AIBot/BotSubObjects.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
 #include "../AIKnowledge/WeaponInfo.h"
 #include "../AIKnowledge/IPIArmament.h"
@@ -2227,6 +2228,364 @@ bool BAPTriggerContinously::execute(Bot*, bool& finished, bool& failed)
 
 BAPStatementType BAPTriggerContinously::getType() { return BAPSTTriggerContinously; }
 bool BAPTriggerContinously::isComposite() { return false; }
+
+// ---- BAPLookAtWrapper -----------------------------------------------------------------------
+
+namespace {
+
+const float kLeadMuzzleSpeed = 20.0f;       // PE 1027E550: assumed speed without a projectile
+const float kLeadMaxTime = 2.5f;            // PE 1027B224
+const float kLeadSoldierLift = 0.05f;       // PE 1027B218: per metre of distance
+
+// PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
+int normaliseVector(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return 0;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f)) {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        value.z = 0.0f;
+        return -20001;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+    return 0;
+}
+
+} // anonymous namespace
+
+BAPLookAtWrapper::BAPLookAtWrapper(unsigned int target, BotScriptValue<Vec3>* position,
+                                   bool succeed, bool lead, BotScriptValue<Vec3>* direction,
+                                   BotScriptValue<bool>* found)
+    : m_target(target), m_position(position), m_direction(direction), m_found(found),
+      m_succeed(succeed), m_lead(lead)
+{
+    m_fixedPosition.x = m_fixedPosition.y = m_fixedPosition.z = 0.0f;
+}
+
+BAPLookAtWrapper::~BAPLookAtWrapper() {}
+
+bool BAPLookAtWrapper::execute(Bot* bot, bool& finished, bool& failed)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (m_target == static_cast<unsigned int>(-1)) {
+        finished = true;
+        failed = !m_succeed;
+        m_position->m_value = m_fixedPosition;
+        return true;
+    }
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target) {
+        finished = false;
+        failed = true;
+        return true;
+    }
+    finished = true;
+    failed = !m_succeed;
+    if (m_found)
+        m_found->m_value = true;
+
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(bot->getSensedObjectFromHandle(m_target));
+    if (!sensed)
+        return true;
+    Vec3 point = {0.0f, 0.0f, 0.0f};
+    transformPoint(target->getTransformation(), sensed->m_senseNormal, point);
+
+    // The equipment is not checked on either path, as shipped.
+    if (!m_lead) {
+        m_position->m_value = point;
+        if (m_direction) {
+            const Vec3& own = equipment->getPosition();
+            Vec3 toward = {point.x - own.x, point.y - own.y, point.z - own.z};
+            normaliseVector(toward);
+            m_direction->m_value = toward;
+        }
+        return true;
+    }
+
+    IPIMobile* const targetMobile = target->getMobile();
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    const float* const muzzle = weapon->getProjectileOrigin().m + 12;
+    Vec3 projectileSpeed = {0.0f, 0.0f, 0.0f};
+    const bool hasSpeed = armament->getProjectileSpeed(projectileSpeed);
+    Vec3 projectilePosition = {0.0f, 0.0f, 0.0f};
+    armament->getProjectilePosition(projectilePosition);
+
+    // Measured from the projectile when one is in flight, otherwise from the muzzle.
+    const float speedLength = std::sqrt(projectileSpeed.z * projectileSpeed.z +
+                                        projectileSpeed.y * projectileSpeed.y +
+                                        projectileSpeed.x * projectileSpeed.x);
+    Vec3 from;
+    if (speedLength == 0.0f || !hasSpeed) {
+        from.x = muzzle[0];
+        from.y = muzzle[1];
+        from.z = muzzle[2];
+    } else {
+        from = projectilePosition;
+    }
+    Vec3 relative = {point.x - from.x, point.y - from.y, point.z - from.z};
+
+    const float* const forward = equipment->getControlInfo()->getCameraTransformation().m + 8;
+    float targetX = 0.0f;
+    float targetY = 0.0f;
+    float targetZ = 0.0f;
+    if (targetMobile) {
+        const Vec3& velocity = targetMobile->getSpeed();
+        targetX = velocity.x;
+        targetY = velocity.y;
+        targetZ = velocity.z;
+    }
+    if (speedLength == 0.0f) {
+        projectileSpeed.x = forward[0] * kLeadMuzzleSpeed;
+        projectileSpeed.y = forward[1] * kLeadMuzzleSpeed;
+        projectileSpeed.z = forward[2] * kLeadMuzzleSpeed;
+    }
+
+    // Lead horizontally by the target's velocity over the closing time, when short enough.
+    const float rx = projectileSpeed.x - targetX;
+    const float ry = projectileSpeed.y - targetY;
+    const float rz = projectileSpeed.z - targetZ;
+    const float distance = std::sqrt(relative.z * relative.z + relative.y * relative.y +
+                                     relative.x * relative.x);
+    const float time = distance / std::sqrt(rz * rz + ry * ry + rx * rx);
+    if (!(time >= kLeadMaxTime)) {
+        relative.x += targetX * time;
+        relative.y += 0.0f;
+        relative.z += targetZ * time;
+    }
+
+    const float* const camera = equipment->getControlInfo()->getCameraTransformation().m + 12;
+    if ((equipment->getObjectTypeFlags() >> 21) & 1)
+        relative.y = distance * kLeadSoldierLift + relative.y;
+    const Vec3 aimed = {relative.x + camera[0], relative.y + camera[1], relative.z + camera[2]};
+    m_position->m_value = aimed;
+    if (m_direction) {
+        const Vec3& own = equipment->getPosition();
+        Vec3 toward = {m_position->m_value.x - own.x, m_position->m_value.y - own.y,
+                       m_position->m_value.z - own.z};
+        normaliseVector(toward);
+        m_direction->m_value = toward;
+    }
+    return true;
+}
+
+BAPStatementType BAPLookAtWrapper::getType() { return BAPSTLookAtWrapper; }
+bool BAPLookAtWrapper::isComposite() { return true; }
+
+// ---- BAPAimingWrapper -----------------------------------------------------------------------
+
+namespace {
+
+const float kShortRange = 10.0f;            // PE 1027B228
+const float kHighAbove = 30.0f;             // PE 1027EAE0
+const float kSteepAbove = 0.6f;             // PE 1027F83C
+const float kGroundDrop = 2.0f;             // PE 1027BECC
+const float kPointTolerance = 1.1920929e-07f; // PE 1027C5A0
+const double kRecentSighting = 5.0;         // PE 1027E4D0
+const double kLeadDelay = 1.0;              // PE 1027C6E0
+const double kLeadStretch = 0.05;           // PE 102ADA10
+const double kGrenadeRecent = 8.0;          // PE 102843A8
+const double kLeadCapRecent = 0.5;          // PE 1027BF18
+const double kLeadCapLate = 2.0;            // PE 1027BDE0
+
+// PE 100D2910: equal within the tolerance in every component.
+bool nearlyEqual(const Vec3& a, const Vec3& b, float tolerance)
+{
+    return std::fabs(a.x - b.x) <= tolerance && std::fabs(a.y - b.y) <= tolerance
+        && std::fabs(a.z - b.z) <= tolerance;
+}
+
+} // anonymous namespace
+
+BAPAimingWrapper::BAPAimingWrapper(BotScriptValue<Vec3>* direction, BotScriptValue<bool>* valid,
+                                   BotScriptValue<Vec3>* position, unsigned int equipment,
+                                   unsigned int target, bool succeed)
+    : m_direction(direction), m_position(position), m_valid(valid), m_equipment(equipment),
+      m_target(target), m_succeed(succeed), m_groundHeight(0.0f)
+{
+    m_groundPoint.x = m_groundPoint.y = m_groundPoint.z = 0.0f;
+}
+
+BAPAimingWrapper::~BAPAimingWrapper() {}
+
+bool BAPAimingWrapper::groundHeight(Bot*, const Vec3& point, float& height)
+{
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    if (nearlyEqual(m_groundPoint, point, kPointTolerance)) {
+        height = m_groundHeight;
+        return true;
+    }
+    std::vector<IAIObject*> ignore;
+    ignore.push_back(target->getAIObject());
+    IgnoreListPredicate filter(ignore);
+    const Vec3 below = {point.x, point.y - kGroundDrop, point.z};
+    Vec3 hit = {0.0f, 0.0f, 0.0f};
+    if (!static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)
+             ->collideLineWithWorld(point, below, &filter, &hit))
+        return false;
+    height = hit.y;
+    m_groundPoint = point;
+    m_groundHeight = height;
+    return true;
+}
+
+bool BAPAimingWrapper::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->getSensingAgent()->setOverride(true);
+    Information* const own = informationManager->getInformation(m_equipment);
+    if (!own || !own->getControlInfo() || !own->getArmament()) {
+        finished = false;
+        failed = true;
+        return true;
+    }
+    IPIArmament* const armament = own->getArmament();
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    Information* const target = weapon ? informationManager->getInformation(m_target) : 0;
+    if (!weapon || !target) {
+        finished = false;
+        failed = true;
+        return true;
+    }
+    // Neither primary-object lookup is checked, as shipped.
+    IPIMobile* const targetMobile =
+        informationManager->getInformation(target->getPrimaryObject(bot->getSide()))->getMobile();
+    IPIMobile* const ownMobile =
+        informationManager->getInformation(own->getPrimaryObject(bot->getSide()))->getMobile();
+
+    m_solver.setDrag(weapon->getDrag());
+    m_solver.setSpeed(weapon->getExitVelocity());
+    const float gravity = static_cast<const IAIPhysics*>(CommonSingletonServer::m_iaiPhysics)->getGravity();
+    m_solver.setGravity(weapon->getGravityModifier() * gravity);
+    m_solver.setFixedTime(weapon->getIsThrown());
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    const double now = timer->getGameTime();
+
+    const bool ownSoldier = (own->getObjectTypeFlags() >> 21) & 1;
+    const bool targetSoldier = (target->getObjectTypeFlags() >> 21) & 1;
+    float heightBias = 0.0f;
+    if (ownSoldier && targetSoldier) {
+        if (weapon->getMaxRange() < kShortRange)
+            heightBias = -0.2f;
+        else if (target->getSoldierPose() == 1)
+            heightBias = -0.3f;
+    }
+
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(bot->getSensedObjectFromHandle(m_target));
+    if (!sensed)
+        return true;
+    Vec3 aimPoint = {0.0f, 0.0f, 0.0f};
+    transformPoint(target->getTransformation(), sensed->m_senseNormal, aimPoint);
+    const double sensedTime = timer->getGameTime();
+    const Vec3& ownPosition = own->getPosition();
+    Vec3 relative = {aimPoint.x - ownPosition.x, aimPoint.y - ownPosition.y,
+                     aimPoint.z - ownPosition.z};
+    const float rise = relative.y;
+    const float length = std::sqrt(relative.z * relative.z + relative.y * relative.y +
+                                   relative.x * relative.x);
+    if (length != 0.0f) {
+        const float inverse = 1.0f / length;
+        relative.x *= inverse;
+        relative.y *= inverse;
+        relative.z *= inverse;
+    }
+
+    // Splash, unguided, and (for the second) not thrown.
+    bool splash = false;
+    bool lobbable = false;
+    if (weapon->getExplosionRadius() != 0.0f && weapon->getWeaponGuidanceType() == 0) {
+        splash = true;
+        lobbable = !weapon->getIsThrown();
+    }
+    const bool vehicleOnSoldier = !ownSoldier && targetSoldier && lobbable;
+    const bool high = bot->getSpawnKit() != 1 && !weapon->getIsThrown() && rise > kHighAbove;
+    const unsigned int flags = sensed->m_senseFlags;
+    const bool reported = (flags & 2) && ((flags & 8) || high || vehicleOnSoldier) && splash;
+    const bool failedSince =
+        static_cast<BotMain*>(bot)->getTimeOfLastFailedStaticSkyAttack() > sensed->m_positionTime;
+    const bool simulate = reported && !failedSince && !vehicleOnSoldier
+        && (!lobbable || rise > kShortRange || relative.y > kSteepAbove);
+    m_solver.setNoCorrection(reported && !simulate);
+
+    if (simulate) {
+        if (targetMobile) {
+            if ((flags & 2) && sensedTime - sensed->m_lastUpdate < kRecentSighting)
+                aimPoint = sensed->m_position;
+            else
+                aimPoint = sensed->m_lastPosition;
+            double elapsed = now - sensed->m_positionTime;
+            if (elapsed > kLeadDelay) {
+                elapsed = (elapsed - kLeadDelay) * kLeadStretch + kLeadDelay;
+                const double cap = sensedTime - bot->getTimeOfGrenadeThrown(0) < kGrenadeRecent
+                    ? kLeadCapRecent : kLeadCapLate;
+                elapsed = elapsed >= cap ? cap : elapsed;
+            }
+            const Vec3& velocity = targetMobile->getSpeed();
+            const float scale = static_cast<float>(elapsed);
+            aimPoint.x += velocity.x * scale;
+            aimPoint.y += velocity.y * scale;
+            aimPoint.z += velocity.z * scale;
+        } else {
+            transformPoint(target->getTransformation(), sensed->m_senseNormal, aimPoint);
+        }
+    } else if (reported) {
+        aimPoint = sensed->m_lastPosition;
+        float ground;
+        if (groundHeight(bot, aimPoint, ground))
+            aimPoint.y = ground;
+    } else {
+        if ((flags & 2) && !(flags & 8))
+            transformPoint(target->getTransformation(), sensed->m_senseNormal, aimPoint);
+        aimPoint.y += heightBias;
+    }
+
+    if (splash && !weapon->getIsThrown() && !reported && targetSoldier)
+        aimPoint.y = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+                         ->getHeight(aimPoint.x, aimPoint.z);
+    if (m_position)
+        m_position->m_value = aimPoint;
+
+    const Mat4& origin = weapon->getProjectileOrigin();
+    const Vec3 toTarget = {aimPoint.x - origin.m[12], aimPoint.y - origin.m[13],
+                           aimPoint.z - origin.m[14]};
+    Vec3 targetVelocity = {0.0f, 0.0f, 0.0f};
+    Vec3 ownVelocity = {0.0f, 0.0f, 0.0f};
+    if (ownMobile)
+        ownVelocity = ownMobile->getSpeed();
+    if (targetMobile && !reported)
+        targetVelocity = targetMobile->getSpeed();
+    m_solver.setTarget(toTarget, targetVelocity, ownVelocity, &origin, now);
+
+    Vec3 direction = {0.0f, 0.0f, 0.0f};
+    Vec3 work = {0.0f, 0.0f, 0.0f};
+    BotMain* const main = static_cast<BotMain*>(bot);
+    bool valid;
+    if (simulate) {
+        main->setBotWantsToSimulateArtillery(true);
+        valid = m_solver.lobDirection(direction, work);
+    } else {
+        main->setBotWantsToSimulateArtillery(false);
+        valid = m_solver.solve(now, 0.5f, weapon->getIndirect(), direction, work, 0);
+    }
+    failed = !m_succeed;
+    finished = true;
+    m_direction->m_value = direction;
+    m_valid->m_value = valid;
+    return true;
+}
+
+BAPStatementType BAPAimingWrapper::getType() { return BAPSTAimingWrapper; }
+bool BAPAimingWrapper::isComposite() { return true; }
 
 } // namespace ai
 } // namespace hfe

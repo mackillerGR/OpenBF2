@@ -9,6 +9,8 @@
 #include <list>
 
 #include "AimSolver.h"
+#include "../../../AIInterface/BFKnowledge/AIAdapterTypes.h"
+#include <vector>
 #include "BotScript.h"
 #include "../AIPlanInterpreter/BAPContext.h"
 #include "../../../../Math/Mat4.h"
@@ -870,6 +872,86 @@ public:
     /* +0x24 */ BAPCondition* m_stop;      // finishes the statement as failed
     /* +0x28 */ bool m_pressed;            // = false
     /* +0x30 */ double m_startTime;        // game time at construction plus the delay
+};
+
+// Points plan values at an object: writes the bot's sensed point on it (or, with `lead`, a point
+// ahead of it by the projectile's flight time, measured from the camera) to a position value,
+// the direction from the equipment to it, and raises a flag value. With no object (-1) it copies
+// its fixed position. Finished, failed unless `succeed`; an unknown object fails unfinished.
+// Type 19. PE vtable 10284160. [INFERRED] names.
+class BAPLookAtWrapper : public BotScript
+{
+public:
+    // PE 101B4E10.
+    BAPLookAtWrapper(unsigned int target, BotScriptValue<Vec3>* position, bool succeed, bool lead,
+                     BotScriptValue<Vec3>* direction, BotScriptValue<bool>* found);
+    virtual ~BAPLookAtWrapper();                                       // PE 101B4E70
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B4F30
+    virtual BAPStatementType getType();                                // PE 101B4DE0: 19
+    virtual bool isComposite();                                        // PE 101B4DF0: true
+
+    /* +0x18 */ unsigned int m_target;
+    /* +0x1C */ BotScriptValue<Vec3>* m_position;
+    /* +0x20 */ BotScriptValue<Vec3>* m_direction;   // may be null
+    /* +0x24 */ BotScriptValue<bool>* m_found;       // may be null
+    /* +0x28 */ Vec3 m_fixedPosition;                // zero; no audited writer
+    /* +0x34 */ bool m_succeed;
+    /* +0x35 */ bool m_lead;
+};
+
+// Accepts every object not in its list; the line checks of the fire statements and conditions
+// use it to skip the target. PE vtable 102855B0, ctor 101E1480, predicate 101E14A0.
+// [INFERRED] name.
+class IgnoreListPredicate : public AIObjectPredicate
+{
+public:
+    explicit IgnoreListPredicate(const std::vector<IAIObject*>& ignore) : m_ignore(&ignore) {}
+    virtual bool predicate(IAIObject* object)
+    {
+        for (unsigned int i = 0; i < m_ignore->size(); ++i)
+            if (object == (*m_ignore)[i])
+                return false;
+        return true;
+    }
+
+private:
+    const std::vector<IAIObject*>* m_ignore;
+};
+
+// Solves the aim at an object for a plan, writing the direction and whether it is valid to plan
+// values, and the aimed-at point to a third. It aims at the bot's sensed point, lowered a little
+// for soldiers; splash weapons against reported targets aim at the last known position on the
+// ground, and qualifying ones switch to the artillery simulation's high arc. Finished, failed
+// unless `succeed`; it fails unfinished without equipment, control, armament, weapon or target,
+// and does nothing without a sensed record. Type 16. PE vtable 10284388. [INFERRED] names.
+class BAPAimingWrapper : public BotScript
+{
+public:
+    // PE 101B6420.
+    BAPAimingWrapper(BotScriptValue<Vec3>* direction, BotScriptValue<bool>* valid,
+                     BotScriptValue<Vec3>* position, unsigned int equipment, unsigned int target,
+                     bool succeed);
+    virtual ~BAPAimingWrapper();                                       // PE 101B64B0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B6630
+    virtual BAPStatementType getType();                                // PE 101B63E0: 16
+    virtual bool isComposite();                                        // PE 101B63F0: true
+
+private:
+    // The ground height under `point` by a two-metre drop line that skips the target, cached for
+    // the last point. PE 101B64F0.
+    bool groundHeight(Bot* bot, const Vec3& point, float& height);
+
+    /* +0x18 */ AimSolver m_solver;
+    /* +0x88 */ BotScriptValue<Vec3>* m_direction;
+    /* +0x8C */ BotScriptValue<Vec3>* m_position;       // may be null
+    /* +0x90 */ BotScriptValue<bool>* m_valid;
+    /* +0x94 */ unsigned int m_equipment;
+    /* +0x98 */ unsigned int m_target;
+    /* +0x9C */ bool m_succeed;
+    /* +0xA0 */ Vec3 m_groundPoint;                     // cache of groundHeight
+    /* +0xAC */ float m_groundHeight;
 };
 
 } // namespace ai

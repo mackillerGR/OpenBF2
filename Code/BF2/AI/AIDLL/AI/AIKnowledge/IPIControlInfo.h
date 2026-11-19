@@ -41,6 +41,8 @@ public:
     bool validateCameraDirection(const Vec3& direction) const;
     // The camera's base position. PE 1019CBB0.
     void getCameraBasePos(Vec3& out) const;
+    // The camera's transformation. PE 1019CB10.
+    const Mat4& getCameraTransformation() const;
     // Whether the camera may turn toward the position. PE 1019CC30.
     bool validateCameraDirectionByPos(const Vec3& position) const;
 };
@@ -48,6 +50,11 @@ public:
 inline bool IPIControlInfo::validateCameraDirection(const Vec3& direction) const
 {
     return m_information->getAIObject()->getControlInfo()->validateCameraDirection(direction);
+}
+
+inline const Mat4& IPIControlInfo::getCameraTransformation() const
+{
+    return m_information->getAIObject()->getControlInfo()->getCameraTransformation();
 }
 
 inline void IPIControlInfo::getCameraBasePos(Vec3& out) const

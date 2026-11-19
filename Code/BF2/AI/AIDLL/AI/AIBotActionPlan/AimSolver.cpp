@@ -18,6 +18,7 @@ const float kFixedPredictionTime = 2.8f;            // PE 102AE788
 const float kHitscanLift = 20.0f;
 const float kDragFastSpeed = 200.0f;
 const float kMaxProjectileTime = 100.0f;           // PE 1027E200
+const float kLobFour = 4.0f;                        // PE 1027B210
 
 // PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
 int normalise(Vec3& value)
@@ -413,6 +414,27 @@ bool AimSolver::projectilePosition(const Vec3& forward, float time, Vec3& out) c
     const float x = speed * forward.x;
     const Vec3 velocity = {x + m_ownVelocity.x, y + m_ownVelocity.y, z + m_ownVelocity.z};
     trajectory(velocity, time, out);
+    return true;
+}
+
+bool AimSolver::lobDirection(Vec3& direction, Vec3& work) const
+{
+    work = m_relative;
+    const float speed = m_speed;
+    const float horizontal = std::sqrt(m_relative.z * m_relative.z + m_relative.x * m_relative.x);
+    const float k = -m_gravity * horizontal * horizontal / (speed * speed + speed * speed);
+    const float discriminant = horizontal * horizontal - (k + m_relative.y) * k * kLobFour;
+    if (!(discriminant >= 0.0f))
+        return false;
+    const float root = std::sqrt(discriminant);
+    const float inverse = 1.0f / (k + k);
+    const float high = std::atan2((root + horizontal) * inverse, 1.0f);
+    const float low = std::atan2((horizontal - root) * inverse, 1.0f);
+    const float angle = high < low ? low : high;
+    const float scale = std::cos(angle) / horizontal;
+    direction.x = scale * m_relative.x;
+    direction.y = std::sin(angle);
+    direction.z = scale * m_relative.z;
     return true;
 }
 
