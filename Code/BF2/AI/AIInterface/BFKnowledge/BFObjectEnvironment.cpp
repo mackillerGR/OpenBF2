@@ -23,12 +23,20 @@
 #include "../../../Game/Objects/GameLogicComp/ArmorGLCompTemplate.h"   // getCanBeDestroyed
 #include "BFTimer.h"                                                   // IBFTimer::getGameTime
 #include "IAIObject.h"
+#include "BFTerrain.h"                                                  // IAITerrain::intersectTerrain
+#include "../../../Scene/Object/ObjectManager.h"                       // objectManager->intersectLine
+#include "../../../Scene/Object/ObjectPredicator.h"
+#include "../../../Physics/MaterialManager.h"
+#include "../../../Physics/Material.h"
 #include "../../../Game/Objects/Game/Soldier.h"                      // getCameras
 #include "../../../Game/Objects/ICameraObject.h"
 #include "IAIObjectPlugIn.h"
 
 namespace dice {
 namespace hfe {
+namespace world {
+extern IBase* materialManager;                      // Core/Globals.cpp
+}
 
 extern ClassManager* classManager;
 
@@ -253,14 +261,140 @@ int BFObjectEnvironment::getNextPlayerId(int id) const
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getNextPlayerId");
 }
 
-bool BFObjectEnvironment::collideLineWithWorld(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit)
+namespace {
+
+// The AI object an engine object stands for (Client PE 0x8182A0): its own AI component, or for a
+// ladder, parachute, zipline or grappling-hook container without one, the occupant's. The class id
+// is re-read for each test, as shipped. [INFERRED] name.
+IAIObject* aiObjectForCollision(world::IObject* object)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::collideLineWithWorld");
+    IAIObject* aiObject = static_cast<IAIObject*>(object->getAIComponent());
+    if (aiObject)
+        return aiObject;
+    if (object->getTemplate()->getClassID() == world::CID_LadderContainerTemplate)
+    {
+        world::IObject* const occupying =
+            static_cast<world::PlayerControlObject*>(object)->getOccupingObject();
+        if (occupying)
+            aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    if (object->getTemplate()->getClassID() == world::CID_ParachuteTemplate)
+    {
+        world::IPlayerControlObject* const control = static_cast<world::IPlayerControlObject*>(
+            object->queryInterface(world::IID_IPlayerControlObject));
+        world::IObject* const occupying = control->getOccupingObject();
+        if (occupying)
+            aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    if (object->getTemplate()->getClassID() == world::CID_ZiplineContainerTemplate)
+    {
+        world::IObject* const occupying =
+            static_cast<world::PlayerControlObject*>(object)->getOccupingObject();
+        if (occupying)
+            aiObject = static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    if (object->getTemplate()->getClassID() == world::CID_GrapplingHookRopeContainerTemplate)
+    {
+        world::IObject* const occupying =
+            static_cast<world::PlayerControlObject*>(object)->getOccupingObject();
+        if (occupying)
+            return static_cast<IAIObject*>(occupying->getAIComponent());
+    }
+    return aiObject;
 }
 
+// Adapts an AIObjectPredicate to the object manager's line test (Client vtable 0x947BC4). An
+// engine object without an AI object answers m_noAIObjectResult; see-through surfaces are skipped.
+// [INFERRED] names.
+class AIObjectCollisionPredicator : public world::ObjectPredicator
+{
+public:
+    explicit AIObjectCollisionPredicator(AIObjectPredicate* filter)
+        : m_filter(filter), m_noAIObjectResult(true)
+    {
+    }
+
+    virtual bool predicate(world::IObject* object)
+    {
+        IAIObject* const aiObject = aiObjectForCollision(object);
+        if (!aiObject)
+            return m_noAIObjectResult;
+        if (m_filter)
+            return m_filter->predicate(aiObject);
+        return true;
+    }
+
+    virtual unsigned int getFlags() const
+    {
+        return 0x1000000u;
+    }
+
+    virtual bool performCulling(world::IObject*)
+    {
+        return true;
+    }
+
+    // The body ProjectileVsTargetPredicator::predicateSurface also has (Client PE 0x4EBD70).
+    virtual bool predicateSurface(int surface)
+    {
+        world::Material* const material = static_cast<world::MaterialManager*>(world::materialManager)
+            ->getMaterialPtr(static_cast<unsigned int>(surface));
+        return !material->getIsSeeThrough();
+    }
+
+private:
+    AIObjectPredicate* m_filter;
+    bool m_noAIObjectResult;
+};
+
+} // anonymous namespace
+
+// Terrain first; a miss asks collideLineWithObjects, whose answer is reduced to a bool.
+bool BFObjectEnvironment::collideLineWithWorld(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit)
+{
+    Vec3 terrainHit;
+    terrainHit.x = 0.0f;
+    terrainHit.y = 0.0f;
+    terrainHit.z = 0.0f;
+    Vec3 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    normal.z = 0.0f;
+    float distance;
+    if (static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+            ->intersectTerrain(from, to, terrainHit, distance, normal))
+        return true;
+    return collideLineWithObjects(from, to, ignore, a, b, c, hit) != 0;
+}
+
+// Objects first, through the object manager with the filter adapted (none without a filter);
+// a miss tests the terrain. The hit point goes to hit, or to a local when hit is null.
 bool BFObjectEnvironment::collideLineWithWorld(const Vec3& from, const Vec3& to, AIObjectPredicate* filter, Vec3* hit)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::collideLineWithWorld");
+    Vec3 localHit;
+    localHit.x = 0.0f;
+    localHit.y = 0.0f;
+    localHit.z = 0.0f;
+    Vec3 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    normal.z = 0.0f;
+    if (!hit)
+        hit = &localHit;
+    Vec3 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = to.z - from.z;
+    AIObjectCollisionPredicator predicator(filter);
+    world::IObject* hitObject;
+    int hitPart;
+    if (world::objectManager->intersectLine(hitObject, *hit, normal, hitPart, from, direction,
+                                            filter ? &predicator : nullptr,
+                                            true, false, false, true, 0u))
+        return true;
+    float distance;
+    return static_cast<const IAITerrain*>(CommonSingletonServer::m_iaiTerrain)
+        ->intersectTerrain(from, to, *hit, distance, normal);
 }
 
 bool BFObjectEnvironment::getMaxHeight(const Vec3& from, const Vec3& to, AIObjectPredicate* filter, float& height)
