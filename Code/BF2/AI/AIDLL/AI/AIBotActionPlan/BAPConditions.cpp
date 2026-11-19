@@ -15,6 +15,7 @@
 #include "../AIKnowledge/ObjectOccupancy.h"
 #include "../AIKnowledge/WeaponInfo.h"
 #include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../Main/AIDllFrontier.h"
 
 namespace dice {
@@ -644,6 +645,24 @@ bool BAPConWeaponStateOne::evaluate(Bot* bot)
 
 BAPConditionType BAPConWeaponStateOne::getType() { return static_cast<BAPConditionType>(53); }
 BAPConWeaponStateOne::~BAPConWeaponStateOne() {}
+
+// ---- BAPConStrategicStatus ------------------------------------------------------------------
+
+BAPConStrategicStatus::BAPConStrategicStatus(AIStrategicObject* object, int side, bool invert)
+    : m_object(object), m_side(side), m_invert(invert)
+{
+}
+
+bool BAPConStrategicStatus::evaluate(Bot*)
+{
+    const int status = m_object->getStatus(m_side);
+    if (m_invert)
+        return status == 0;
+    return status != 0;
+}
+
+BAPConditionType BAPConStrategicStatus::getType() { return static_cast<BAPConditionType>(16); }
+BAPConStrategicStatus::~BAPConStrategicStatus() {}
 
 // ---- BAPConShared ---------------------------------------------------------------------------
 

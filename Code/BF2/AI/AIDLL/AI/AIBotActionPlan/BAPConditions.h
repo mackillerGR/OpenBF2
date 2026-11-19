@@ -17,6 +17,7 @@ namespace ai {
 
 class Bot;
 class WeaponInfo;
+class AIStrategicObject;
 
 // Condition kinds as the printer spells them ("&&", "!", "true", ...). No enumerator name is
 // attested, so the values stay opaque.
@@ -346,6 +347,23 @@ public:
 
 private:
     /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+};
+
+// Kind 16: whether a strategic object's status for a side is non-zero, or zero with `invert`.
+// PE vtable 10284260. [INFERRED] name.
+class BAPConStrategicStatus : public BAPCondition
+{
+public:
+    // PE 101B5C70.
+    BAPConStrategicStatus(AIStrategicObject* object, int side, bool invert);
+    virtual bool evaluate(Bot* bot);                     // PE 101B5CA0
+    virtual BAPConditionType getType();                  // PE 101B5CE0: 16
+    virtual ~BAPConStrategicStatus();
+
+private:
+    /* +0x08 */ AIStrategicObject* m_object;
+    /* +0x0C */ int  m_side;
+    /* +0x10 */ bool m_invert;
 };
 
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores
