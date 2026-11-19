@@ -571,9 +571,156 @@ void BFObjectEnvironment::damageSeverelyDamagedVehicles()
     }
 }
 
+namespace {
+
+// The line predicator of collideLineWithObjects (Client vtable 0x947C14). Rejects objects whose AI
+// object is in the ignore list and remembers the last accepted one; when skipSeeThrough is set, a
+// see-through surface is passed and records the closest squared distance from the line start to
+// that object. [INFERRED] names.
+class IgnoreListLinePredicator : public world::ObjectPredicator
+{
+public:
+    IgnoreListLinePredicator(const std::vector<IAIObject*>* ignore, bool skipSeeThrough, const Vec3& from)
+        : m_ignore(ignore), m_skipSeeThrough(skipSeeThrough), m_lastObject(nullptr),
+          m_closestSeeThroughSq(3.40282347e+38f), m_from(from)
+    {
+    }
+
+    virtual bool predicate(world::IObject* object)
+    {
+        IAIObject* const aiObject = aiObjectForCollision(object);
+        if (aiObject)
+        {
+            for (std::vector<IAIObject*>::const_iterator it = m_ignore->begin(); it != m_ignore->end(); ++it)
+                if (aiObject == *it)
+                    return false;
+        }
+        m_lastObject = object;
+        return true;
+    }
+
+    virtual unsigned int getFlags() const
+    {
+        return 0x1000000u;
+    }
+
+    virtual bool performCulling(world::IObject*)
+    {
+        return true;
+    }
+
+    virtual bool predicateSurface(int surface)
+    {
+        world::Material* const material = static_cast<world::MaterialManager*>(world::materialManager)
+            ->getMaterialPtr(static_cast<unsigned int>(surface));
+        if (!m_skipSeeThrough || !material->getIsSeeThrough())
+            return true;
+        const Vec3& position = m_lastObject->getAbsolutePosition();
+        const float dx = position.x - m_from.x;
+        const float dy = position.y - m_from.y;
+        const float dz = position.z - m_from.z;
+        const float distanceSq = dz * dz + dx * dx + dy * dy;
+        if (distanceSq < m_closestSeeThroughSq)
+            m_closestSeeThroughSq = distanceSq;
+        return false;
+    }
+
+    float closestSeeThroughSq() const
+    {
+        return m_closestSeeThroughSq;
+    }
+
+private:
+    const std::vector<IAIObject*>* m_ignore;
+    bool m_skipSeeThrough;
+    world::IObject* m_lastObject;           // not initialised in the PE; read only after predicate
+    float m_closestSeeThroughSq;
+    Vec3 m_from;
+};
+
+// The sphere-pass predicator (Client vtable 0x947BE4): rejects objects whose AI object is the
+// primary object of an ignore-list entry; null entries are skipped. [INFERRED] name.
+class IgnoreListSpherePredicator : public world::ObjectPredicator
+{
+public:
+    IgnoreListSpherePredicator(const std::vector<IAIObject*>* ignore, bool skipSeeThrough)
+        : m_ignore(ignore), m_skipSeeThrough(skipSeeThrough)
+    {
+    }
+
+    virtual bool predicate(world::IObject* object)
+    {
+        IAIObject* const aiObject = aiObjectForCollision(object);
+        if (aiObject)
+        {
+            for (std::vector<IAIObject*>::const_iterator it = m_ignore->begin(); it != m_ignore->end(); ++it)
+                if (*it && aiObject == (*it)->getPrimaryObject())
+                    return false;
+        }
+        return true;
+    }
+
+    virtual unsigned int getFlags() const
+    {
+        return 0x1000000u;
+    }
+
+    virtual bool performCulling(world::IObject*)
+    {
+        return true;
+    }
+
+    virtual bool predicateSurface(int)
+    {
+        return true;
+    }
+
+private:
+    const std::vector<IAIObject*>* m_ignore;
+    bool m_skipSeeThrough;                  // stored, never read
+};
+
+} // anonymous namespace
+
+// Client PE 0x818A70. Without useSpheres a line test; with it the object manager's sphere test of
+// the given radius. hit reports whether a skipped see-through surface lay closer than the hit
+// point (with no hit, the zero hit point is measured, as shipped). Returns the test's result.
 int BFObjectEnvironment::collideLineWithObjects(const Vec3& from, const Vec3& to, const std::vector<IAIObject*>& ignore, bool a, float b, bool c, bool& hit)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::collideLineWithObjects");
+    IgnoreListLinePredicator predicator(&ignore, c, from);
+    Vec3 hitPoint;
+    hitPoint.x = 0.0f;
+    hitPoint.y = 0.0f;
+    hitPoint.z = 0.0f;
+    Vec3 normal;
+    normal.x = 0.0f;
+    normal.y = 0.0f;
+    normal.z = 0.0f;
+    world::IObject* hitObject;
+    int hitPart;
+    Vec3 direction;
+    direction.x = to.x - from.x;
+    direction.y = to.y - from.y;
+    direction.z = to.z - from.z;
+    bool result;
+    if (!a)
+    {
+        result = world::objectManager->intersectLine(hitObject, hitPoint, normal, hitPart, from,
+                                                     direction, &predicator,
+                                                     true, false, false, true, 0u);
+    }
+    else
+    {
+        IgnoreListSpherePredicator spherePredicator(&ignore, c);
+        result = world::objectManager->intersectLineWithSpheres(hitObject, hitPoint, normal, hitPart,
+                                                                from, direction, &spherePredicator,
+                                                                &predicator, b);
+    }
+    const float dx = hitPoint.x - from.x;
+    const float dy = hitPoint.y - from.y;
+    const float dz = hitPoint.z - from.z;
+    hit = predicator.closestSeeThroughSq() < dz * dz + dy * dy + dx * dx;
+    return result;
 }
 
 } // namespace ai
