@@ -216,6 +216,8 @@ class BAPConObjectDistance : public BAPCondition
 public:
     // PE 101AC7F0.
     BAPConObjectDistance(unsigned int object, float distance, bool estimate, bool flat, bool outside);
+    // Within [minimum, maximum]. PE 101AC830.
+    BAPConObjectDistance(unsigned int object, float minimum, float maximum, bool estimate, bool flat);
     virtual bool evaluate(Bot* bot);                     // PE 101AC9D0
     virtual BAPConditionType getType();
     virtual void printDebug(std::ostream& out);          // PE 101AC890
@@ -391,6 +393,25 @@ private:
     /* +0x08 */ unsigned int m_target;
     /* +0x0C */ bool m_flagC;                             // 1 [UNRESOLVED]
     /* +0x0D */ bool m_flagD;                             // the second argument [UNRESOLVED]
+};
+
+// Kind 39: true once `duration` seconds have passed since the first evaluation after it last
+// answered true; the next evaluation starts a new wait. PE vtable 10282E88. [INFERRED] names.
+class BAPConTimer : public BAPCondition
+{
+public:
+    // `expired` starts the timer already past its deadline (-1); `running` (or `expired`) marks
+    // it started. `flag` is stored but no audited body reads it. PE 1019C5B0.
+    BAPConTimer(double duration, bool flag, bool running, bool expired);
+    virtual bool evaluate(Bot* bot);                     // PE 1019C630
+    virtual BAPConditionType getType();                  // PE 1019C670: 39
+    virtual ~BAPConTimer();                              // PE 1019C680
+
+private:
+    /* +0x08 */ double m_deadline;
+    /* +0x10 */ double m_duration;
+    /* +0x18 */ bool m_started;
+    /* +0x19 */ bool m_flag;                              // [UNRESOLVED]
 };
 
 // Kind 1: whether a shot now would land within `radius` of the aimed-at point. With an aim

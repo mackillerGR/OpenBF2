@@ -404,6 +404,13 @@ BAPConObjectDistance::BAPConObjectDistance(unsigned int object, float distance, 
 {
 }
 
+BAPConObjectDistance::BAPConObjectDistance(unsigned int object, float minimum, float maximum,
+                                           bool estimate, bool flat)
+    : m_object(object), m_minSq(minimum * minimum), m_maxSq(maximum * maximum), m_estimate(estimate),
+      m_flat(flat), m_outside(false), m_lastSq(0.0f)
+{
+}
+
 // The equipment is not null-checked, as shipped.
 bool BAPConObjectDistance::evaluate(Bot* bot)
 {
@@ -1192,6 +1199,34 @@ bool BAPConFireSolution::evaluate(Bot* bot)
 
 BAPConditionType BAPConFireSolution::getType() { return static_cast<BAPConditionType>(1); }
 BAPConFireSolution::~BAPConFireSolution() {}
+
+// ---- BAPConTimer ----------------------------------------------------------------------------
+
+BAPConTimer::BAPConTimer(double duration, bool flag, bool running, bool expired)
+{
+    m_deadline = expired
+        ? -1.0
+        : static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime() + duration;
+    m_duration = duration;
+    m_started = running || expired;
+    m_flag = flag;
+}
+
+bool BAPConTimer::evaluate(Bot*)
+{
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!m_started) {
+        m_started = true;
+        m_deadline = now + m_duration;
+    }
+    if (now < m_deadline)
+        return false;
+    m_started = false;
+    return true;
+}
+
+BAPConditionType BAPConTimer::getType() { return static_cast<BAPConditionType>(39); }
+BAPConTimer::~BAPConTimer() {}
 
 } // namespace ai
 } // namespace hfe

@@ -17,6 +17,9 @@
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "../../../AIInterface/BFKnowledge/BFPhysics.h"
 #include "../AIBot/BotSubObjects.h"
+#include "../AIKnowledge/WeaponInfoManager.h"
+#include "../AIKnowledge/WeaponInfo.h"
+#include "../AIKnowledge/IPIArmament.h"
 #include "LookController.h"
 #include "../AIBot/SensingAgent.h"
 #include "../AIBot/BotSenses.h"
@@ -2081,6 +2084,109 @@ bool BAPAimAtPosition::getProjectilePosition(Vec3& out, double time)
     out.z += m_frame.m[14];
     return reached;
 }
+
+// ---- BAPOverrideSensingAgent ----------------------------------------------------------------
+
+BAPOverrideSensingAgent::~BAPOverrideSensingAgent() {}
+
+bool BAPOverrideSensingAgent::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->getSensingAgent()->setOverride(true);
+    finished = true;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPOverrideSensingAgent::getType() { return BAPSTOverrideSensingAgent; }
+bool BAPOverrideSensingAgent::isComposite() { return false; }
+
+// ---- BAPChangeWeapon ------------------------------------------------------------------------
+
+namespace {
+
+// A weapon change releases the fire, alternate-fire and reload inputs.
+void releaseFireInputs(io::PlayerInput* input)
+{
+    if (input->mappingFlags & (1ULL << io::PIFire))
+        input->inputs[io::PIFire] = 0.0f;
+    if (input->mappingFlags & (1ULL << io::PIAltFire))
+        input->inputs[io::PIAltFire] = 0.0f;
+    if (input->mappingFlags & (1ULL << io::PIReload))
+        input->inputs[io::PIReload] = 0.0f;
+}
+
+} // anonymous namespace
+
+BAPChangeWeapon::BAPChangeWeapon(Bot* bot, int weapon, int id) : m_bot(bot), m_weapon(weapon)
+{
+    m_id = id;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    m_weaponInfo = WeaponInfoManager::m_instance->getInformation(
+        equipment->getArmament()->getWeapon(weapon));
+    m_inputMask = 1ULL << m_weaponInfo->getWeaponActivate();
+}
+
+BAPChangeWeapon::~BAPChangeWeapon() {}
+
+bool BAPChangeWeapon::execute(Bot* bot, bool& finished, bool& failed)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment) {
+        finished = false;
+        failed = true;
+        return true;
+    }
+    IPIArmament* const armament = equipment->getArmament();
+    io::PlayerInput* const input = bot->playerInput();
+    if (!((equipment->getObjectTypeFlags() >> 21) & 1)) {
+        input->setInput(static_cast<io::PlayerInputMap>(m_weaponInfo->getWeaponActivate()), 1.0f);
+        finished = true;
+        failed = true;
+        return true;
+    }
+    if (armament->getActiveWeapon() != m_weapon) {
+        releaseFireInputs(input);
+        input->setInput(static_cast<io::PlayerInputMap>(m_weaponInfo->getWeaponActivate()), 1.0f);
+        finished = true;
+        failed = false;
+        return true;
+    }
+    input->setInput(static_cast<io::PlayerInputMap>(m_weaponInfo->getWeaponActivate()), 0.0f);
+    releaseFireInputs(input);
+    finished = true;
+    failed = true;
+    return true;
+}
+
+BAPStatementType BAPChangeWeapon::getType() { return BAPSTChangeWeapon; }
+bool BAPChangeWeapon::isComposite() { return true; }
+
+// ---- BAPIdle --------------------------------------------------------------------------------
+
+BAPIdle::BAPIdle(BAPCondition* condition, unsigned long long inputMask, int id)
+    : m_condition(condition)
+{
+    condition->m_owner = this;
+    m_inputMask = inputMask;
+    m_id = id;
+}
+
+BAPIdle::~BAPIdle()
+{
+    if (m_condition)
+        delete m_condition;
+}
+
+bool BAPIdle::execute(Bot* bot, bool& finished, bool& failed)
+{
+    finished = true;
+    failed = m_condition->evaluate(bot);
+    return true;
+}
+
+BAPStatementType BAPIdle::getType() { return BAPSTIdle; }
+bool BAPIdle::isComposite() { return true; }
+void BAPIdle::getDebugString(Bot*, std::string& out) { out = "Idling..."; }
 
 } // namespace ai
 } // namespace hfe

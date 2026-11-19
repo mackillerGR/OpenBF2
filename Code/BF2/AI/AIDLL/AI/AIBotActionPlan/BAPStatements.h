@@ -19,6 +19,7 @@ namespace hfe {
 namespace ai {
 
 class BAPCondition;
+class WeaponInfo;
 
 // A statement with a list of child statements. PE vtable 10282BA4 adds the pure eighth slot.
 class BAPStatementList : public BotScript
@@ -789,6 +790,57 @@ private:
     /* +0x188 */ Mat4 m_frame;
     /* +0x1C8 */ double m_impactTime;
     /* +0x1D0 */ bool m_solved;
+};
+
+// Raises the bot's sensing-agent override and finishes as failed. Type 21. PE vtable 10282B50,
+// ctor 10199750. [INFERRED] name.
+class BAPOverrideSensingAgent : public BotScript
+{
+public:
+    BAPOverrideSensingAgent() {}
+    virtual ~BAPOverrideSensingAgent();                                // PE 101997E0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101997B0
+    virtual BAPStatementType getType();                                // PE 10199780: 21
+    virtual bool isComposite();                                        // PE 10199770: false
+};
+
+// Switches the bot's soldier to a weapon slot by pressing its activate input. Finished as soon as
+// it pressed; failed unless the press changes the weapon. A vehicle presses and fails. The input
+// mask is the weapon's activate input. Type 28. PE vtable 102842C0. [INFERRED] name.
+class BAPChangeWeapon : public BotScript
+{
+public:
+    // The equipment and its armament are not null-checked, as shipped. PE 101B5E00.
+    BAPChangeWeapon(Bot* bot, int weapon, int id);
+    virtual ~BAPChangeWeapon();                                        // PE 101B5EB0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B5EF0
+    virtual BAPStatementType getType();                                // PE 101B5DE0: 28
+    virtual bool isComposite();                                        // PE 101B5DF0: true
+
+private:
+    /* +0x18 */ Bot* m_bot;
+    /* +0x1C */ int m_weapon;
+    /* +0x20 */ WeaponInfo* m_weaponInfo;
+};
+
+// Idles until its condition holds: finished every tick, failed while the condition is true.
+// Owns the condition. Type 13. PE vtable 102842DC. [INFERRED] name.
+class BAPIdle : public BotScript
+{
+public:
+    // PE 101B6070.
+    BAPIdle(BAPCondition* condition, unsigned long long inputMask, int id);
+    virtual ~BAPIdle();                                                // PE 101B6160
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101B6100
+    virtual BAPStatementType getType();                                // PE 101B60C0: 13
+    virtual bool isComposite();                                        // PE 101B6130: true
+    virtual void getDebugString(Bot* bot, std::string& out);           // PE 101B6140
+
+private:
+    /* +0x18 */ BAPCondition* m_condition;
 };
 
 } // namespace ai
