@@ -233,31 +233,45 @@ private:
     /* +0x28 */ bool* m_bool28;
 };
 
-// One target's state for the infantry fire generator; 0x38 bytes.
+// One bot's fire plan for the infantry fire generator; 0x38 bytes, copied whole into the stored
+// state and handed to the script builder. Layout from the constructor (PE 10105E20) and the copy
+// (PE 10105600 / 10105680); names [INFERRED], meanings of the flags [UNRESOLVED].
 struct FireInfanteryTarget
 {
-    int  m_int00;                             // -1
-    int  m_int04;                             // -1
-    int  m_int08;                             // -1
-    bool m_bool0C;
-    bool m_bool14[4];                         // at +0x14
-    int  m_int18[3];
-    bool m_bool24[3];
-    int  m_int28[4];
+    /* +0x00 */ unsigned int m_target;         // -1
+    /* +0x04 */ int   m_weapon;                // -1
+    /* +0x08 */ int   m_int08;                 // -1
+    /* +0x0C */ bool  m_bool0C;
+    /* +0x10 */ int   m_int10;                 // not initialised
+    /* +0x14 */ bool  m_bool14;
+    /* +0x15 */ bool  m_bool15;
+    /* +0x16 */ bool  m_bool16;
+    /* +0x17 */ bool  m_bool17;
+    /* +0x18 */ Vec3  m_vec18;                 // zero
+    /* +0x24 */ bool  m_bool24;
+    /* +0x25 */ bool  m_bool25;
+    /* +0x26 */ bool  m_bool26;
+    /* +0x28 */ Vec3  m_vec28;                 // zero
+    /* +0x34 */ float m_float34;               // zero
 };
 
-// One bot's aiming state for the infantry fire generator; 0x68 bytes.
+// One bot's aiming state for the infantry fire generator; 0x68 bytes. Names [INFERRED].
 struct FireInfanteryAim
 {
     FireInfanteryAim();
-    int            m_int08;                   // 0
-    std::list<int> m_list0C;                  // [UNRESOLVED] element type
-    int            m_int18;                   // 0
-    double         m_double20;                // 0
-    double         m_double28;                // 10
-    int            m_int30[9];                // 0
-    int            m_int58;                   // -1
-    int            m_int5C;                   // -1
+    /* +0x00 */ double         m_lastTime;     // not initialised
+    /* +0x08 */ int            m_state;        // 0
+    /* +0x0C */ std::list<int> m_history;      // earlier states
+    /* +0x18 */ int            m_subState;     // 0
+    /* +0x20 */ double         m_stateTime;    // 0
+    /* +0x28 */ double         m_stateDuration; // 10
+    /* +0x30 */ int            m_zero30[3];    // 0 [UNRESOLVED]
+    /* +0x3C */ Vec3           m_aimPosition;  // 0
+    /* +0x48 */ Vec3           m_aimOffset;    // 0
+    /* +0x54 */ int            m_tick;         // not initialised
+    /* +0x58 */ int            m_int58;        // -1
+    /* +0x5C */ int            m_int5C;        // -1
+    /* +0x60 */ double         m_double60;     // not initialised
 };
 
 class BBPFireInfantery : public FirePlanGenerator

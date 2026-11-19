@@ -20,18 +20,19 @@ BBPFireInfantery::BBPFireInfantery(int behaviourId)
     {
         FireInfanteryTarget& t = targets[i];
         t.m_bool0C = false;
-        for (int k = 0; k < 4; ++k)
-            t.m_bool14[k] = false;
-        t.m_int00 = -1;
-        t.m_int04 = -1;
+        t.m_bool14 = false;
+        t.m_bool15 = false;
+        t.m_bool16 = false;
+        t.m_bool17 = false;
+        t.m_target = static_cast<unsigned int>(-1);
+        t.m_weapon = -1;
         t.m_int08 = -1;
-        for (int k = 0; k < 3; ++k)
-        {
-            t.m_int18[k] = 0;
-            t.m_bool24[k] = false;
-        }
-        for (int k = 0; k < 4; ++k)
-            t.m_int28[k] = 0;
+        t.m_vec18.x = t.m_vec18.y = t.m_vec18.z = 0.0f;
+        t.m_bool24 = false;
+        t.m_bool25 = false;
+        t.m_bool26 = false;
+        t.m_vec28.x = t.m_vec28.y = t.m_vec28.z = 0.0f;
+        t.m_float34 = 0.0f;
     }
     m_targetState = checkPointer(targets);
     m_aim = checkPointer(new FireInfanteryAim[configuredBotCount()]);
@@ -57,23 +58,26 @@ void BBPFireInfantery::setPositionTarget(Bot* bot, int designator, const Vec3& p
     m_weapons[id] = weapon;
     m_designators[id] = designator;
     m_positions[id] = position;
-    m_aim[id].m_int08 = 0;
-    m_aim[id].m_int18 = 0;
-    m_aim[id].m_double20 = 0.0;
-    m_aim[id].m_double28 = 10.0;
-    m_targetState[id].m_int00 = -1;
+    m_aim[id].m_state = 0;
+    m_aim[id].m_subState = 0;
+    m_aim[id].m_stateTime = 0.0;
+    m_aim[id].m_stateDuration = 10.0;
+    m_targetState[id].m_target = static_cast<unsigned int>(-1);
 }
 
 FireInfanteryAim::FireInfanteryAim()
-    : m_int08(0)
-    , m_int18(0)
-    , m_double20(0.0)
-    , m_double28(10.0)
+    : m_state(0)
+    , m_history()
+    , m_subState(0)
+    , m_stateTime(0.0)
+    , m_stateDuration(10.0)
     , m_int58(-1)
     , m_int5C(-1)
 {
-    for (int k = 0; k < 9; ++k)
-        m_int30[k] = 0;
+    for (int k = 0; k < 3; ++k)
+        m_zero30[k] = 0;
+    m_aimPosition.x = m_aimPosition.y = m_aimPosition.z = 0.0f;
+    m_aimOffset.x = m_aimOffset.y = m_aimOffset.z = 0.0f;
 }
 
 // PE 10103FC0. The flags are not used. A bot without a plan also restarts its aim.
@@ -85,11 +89,11 @@ void BBPFireInfantery::setObjectTarget(Bot* bot, unsigned int target, int weapon
     m_weapons[id] = weapon;
     if (!m_hasPlan[id])
     {
-        m_aim[id].m_int08 = 0;
-        m_aim[id].m_int18 = 0;
-        m_aim[id].m_double20 = 0.0;
-        m_aim[id].m_double28 = 10.0;
-        m_targetState[id].m_int00 = -1;
+        m_aim[id].m_state = 0;
+        m_aim[id].m_subState = 0;
+        m_aim[id].m_stateTime = 0.0;
+        m_aim[id].m_stateDuration = 10.0;
+        m_targetState[id].m_target = static_cast<unsigned int>(-1);
     }
     m_hasPlan[id] = true;
 }
