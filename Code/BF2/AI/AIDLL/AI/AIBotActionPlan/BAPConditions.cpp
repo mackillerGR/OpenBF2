@@ -8,6 +8,8 @@
 #include "../../../../Math/Mat4.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
+#include "../../../AIInterface/BFKnowledge/BFPhysics.h"
+#include "../AIKnowledge/IPIControlInfo.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../Main/CommonSingletonServer.h"
@@ -881,6 +883,132 @@ BAPConShared* BAPConShared::share()
 {
     return checkPointer(new BAPConShared(m_value));
 }
+
+// ---- BAPConAimOnTarget ----------------------------------------------------------------------
+
+namespace {
+
+// PE 1009B6F0: the point transformed by the matrix, rows as basis vectors plus the translation.
+void transformPoint(const Mat4& matrix, const Vec3& in, Vec3& out)
+{
+    const float* const m = matrix.m;
+    const float z = in.x * m[2] + in.z * m[10] + in.y * m[6] + m[14];
+    const float y = in.x * m[1] + in.z * m[9] + in.y * m[5] + m[13];
+    const float x = in.z * m[8] + in.y * m[4] + in.x * m[0] + m[12];
+    out.x = x;
+    out.y = y;
+    out.z = z;
+}
+
+// Seconds after the last failed sky attack before a missed aim counts as a failed static attack.
+// PE 102843E0.
+const double kSkyAttackGrace = 2.5;
+// Seconds ahead of now at which the aim is solved. PE 10281270.
+const double kAimLead = 0.1;
+
+} // anonymous namespace
+
+BAPConAimOnTarget::BAPConAimOnTarget(unsigned int target, unsigned int equipment,
+                                     BotScriptValue<bool>* valid, BotScriptValue<Vec3>* direction,
+                                     bool trackFailures)
+    : m_target(target), m_equipment(equipment), m_valid(valid), m_direction(direction),
+      m_trackFailures(trackFailures)
+{
+}
+
+bool BAPConAimOnTarget::aimDirection(Bot* bot, Vec3& direction)
+{
+    if (m_valid && m_direction) {
+        direction = m_direction->m_value;
+        return m_valid->m_value;
+    }
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment || !equipment->getControlInfo())
+        return false;
+    IPIArmament* const armament = equipment->getArmament();
+    if (!armament)
+        return false;
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+        armament->getWeapon(armament->getActiveWeapon()));
+    if (!weapon)
+        return false;
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    // Neither primary-object lookup is checked, as shipped.
+    IPIMobile* const ownMobile =
+        informationManager->getInformation(equipment->getPrimaryObject(bot->getSide()))->getMobile();
+
+    m_solver.setDrag(weapon->getDrag());
+    m_solver.setSpeed(weapon->getExitVelocity());
+    const float gravity = static_cast<const IAIPhysics*>(CommonSingletonServer::m_iaiPhysics)->getGravity();
+    m_solver.setGravity(weapon->getGravityModifier() * gravity);
+
+    // Aim at the sensed point on the target when this bot has one, otherwise at its position.
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(bot->getSensedObjectFromHandle(m_target));
+    Vec3 aimPoint = {0.0f, 0.0f, 0.0f};
+    if (sensed && !(sensed->m_senseFlags & 8))
+        transformPoint(target->getTransformation(), sensed->m_senseNormal, aimPoint);
+    else
+        aimPoint = target->getPosition();
+
+    IPIMobile* const targetMobile =
+        informationManager->getInformation(target->getPrimaryObject(bot->getSide()))->getMobile();
+    const float* const origin = weapon->getAbsoluteTransformation().m + 12;
+    const Vec3 relative = {aimPoint.x - origin[0], aimPoint.y - origin[1], aimPoint.z - origin[2]};
+
+    Vec3 targetVelocity = {0.0f, 0.0f, 0.0f};
+    Vec3 ownVelocity = {0.0f, 0.0f, 0.0f};
+    if (ownMobile)
+        ownVelocity = ownMobile->getSpeed();
+    if (targetMobile)
+        targetVelocity = targetMobile->getSpeed();
+
+    const IBFTimer* const timer = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer);
+    const double now = timer->getGameTime();
+    m_solver.setTarget(relative, targetVelocity, ownVelocity, &weapon->getAbsoluteTransformation(), now);
+
+    // The solved direction goes to a local and the caller's `direction` is left as it was: the
+    // shipped body reuses the argument's stack slot before this point. Preserved retail defect.
+    Vec3 solved = {0.0f, 0.0f, 0.0f};
+    Vec3 work = {0.0f, 0.0f, 0.0f};
+    const bool lob = weapon->getIndirect();
+    return m_solver.solve(timer->getGameTime() + kAimLead, 0.5f, lob, solved, work, 0);
+}
+
+bool BAPConAimOnTarget::evaluate(Bot* bot)
+{
+    Vec3 direction = {0.0f, 0.0f, 0.0f};
+    const bool solved = aimDirection(bot, direction);
+    bool onTarget = false;
+    if (solved) {
+        const unsigned int handle = m_equipment == static_cast<unsigned int>(-1)
+            ? bot->getCurrentEquipment() : m_equipment;
+        // The equipment lookup is not checked, as shipped.
+        onTarget = informationManager->getInformation(handle)->getControlInfo()
+                       ->validateCameraDirection(direction);
+    }
+
+    if (m_trackFailures) {
+        const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+        BotMain* const main = static_cast<BotMain*>(bot);
+        if (main->getBotWantsToSimulateArtillery()) {
+            if (!onTarget)
+                main->setTimeOfLastFailedStaticSkyAttack(now);
+        } else if (!onTarget
+                   && (!solved || now - main->getTimeOfLastFailedStaticSkyAttack() > kSkyAttackGrace)) {
+            main->setTimeOfLastFailedStaticAttack(now);
+            main->setBotWantsToSimulateArtillery(false);
+            main->setBotIsSimulatingArtillery(false);
+        }
+    }
+    return onTarget;
+}
+
+BAPConditionType BAPConAimOnTarget::getType() { return static_cast<BAPConditionType>(32); }
+BAPConAimOnTarget::~BAPConAimOnTarget() {}
 
 } // namespace ai
 } // namespace hfe

@@ -10,6 +10,7 @@
 
 #include "../../../../Math/Vec3.h"
 #include "../AIPlanInterpreter/BAPContext.h"
+#include "AimSolver.h"
 
 namespace dice {
 namespace hfe {
@@ -389,6 +390,33 @@ private:
     /* +0x08 */ unsigned int m_target;
     /* +0x0C */ bool m_flagC;                             // 1 [UNRESOLVED]
     /* +0x0D */ bool m_flagD;                             // the second argument [UNRESOLVED]
+};
+
+// Kind 32: whether the bot's camera already points along the aim solution for a target. A plan
+// value pair can supply the direction instead of the solver. With `trackFailures`, a miss records
+// the static-attack failure times on the bot and, outside the artillery simulation, clears its
+// artillery flags. PE vtable 102843D0. [INFERRED] names.
+class BAPConAimOnTarget : public BAPCondition
+{
+public:
+    // `equipment` -1 means the bot's current equipment. PE 101B6D70.
+    BAPConAimOnTarget(unsigned int target, unsigned int equipment, BotScriptValue<bool>* valid,
+                      BotScriptValue<Vec3>* direction, bool trackFailures);
+    virtual bool evaluate(Bot* bot);                     // PE 101B70E0
+    virtual BAPConditionType getType();                  // PE 101B6DC0: 32
+    virtual ~BAPConAimOnTarget();                        // PE 101B6DD0
+
+private:
+    // The aim direction: the plan values when both are set, otherwise the ballistic solution for
+    // the active weapon. PE 101B6E00.
+    bool aimDirection(Bot* bot, Vec3& direction);
+
+    /* +0x08 */ unsigned int m_target;
+    /* +0x0C */ unsigned int m_equipment;
+    /* +0x10 */ AimSolver m_solver;
+    /* +0x80 */ BotScriptValue<bool>* m_valid;
+    /* +0x84 */ BotScriptValue<Vec3>* m_direction;
+    /* +0x88 */ bool m_trackFailures;
 };
 
 // Kind 41: a magazine test on the weapon in a plan value against an int plan value. With
