@@ -139,9 +139,15 @@ void CommunicationHub::enemySpottedByAI(IAIPlayer* player, IAIObject* object, in
     }
 }
 
-void CommunicationHub::enemySpottedByHuman(IAIObject*, unsigned char) const
+// PE 10083330. A human spotted the object for the side: refresh that side's knowledge of it,
+// creating the record (on the grid) when the side has none. The created record is not
+// null-checked, as shipped.
+void CommunicationHub::enemySpottedByHuman(IAIObject* object, unsigned char side) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::CommunicationHub::enemySpottedByHuman");
+    Information* information = informationManager->getInformation(object->getInformation(side));
+    if (!information)
+        information = informationManager->getInformation(object->forceGetInformation(side, true));
+    information->setTime(static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
 }
 
 void CommunicationHub::filterAndSendAIRadioMessage(BotMain*, int, ChannelMessageType,

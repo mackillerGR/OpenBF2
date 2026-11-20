@@ -173,9 +173,11 @@ int AIEventCourier::event_mineRemoved(unsigned int)
     BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_mineRemoved");
 }
 
-int AIEventCourier::event_enemySpotted(IAIObject *, unsigned char)
+// PE 100BF4B0. A tail jump into the communication hub; no null guard.
+int AIEventCourier::event_enemySpotted(IAIObject* object, unsigned char side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_enemySpotted");
+    CommunicationHub::m_instance->enemySpottedByHuman(object, side);
+    return 0;   // [CHOSEN, not recovered] the shipped body leaves the hub's eax; no caller reads it
 }
 
 int AIEventCourier::event_isRepaired(int)
