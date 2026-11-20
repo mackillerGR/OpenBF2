@@ -21,6 +21,7 @@
 #include "../../AIDLL/AI/AIKnowledge/BFInformationCourier.h"  // armament borrow/release by handle
 #include "../BFKnowledge/IAIObject.h"
 #include "../BFKnowledge/IAIObjectPlugIn.h"
+#include "../Module/BFConsole.h"                 // BFConsole::getAIMessageSettings
 #include "AIEventPayloads.h"
 
 namespace dice {
@@ -358,8 +359,14 @@ void AIEventListener::handleEvent(EventCategory category,
             }
             return;
         case 0xAu:
-            unwrittenArm("category 3 id 10 - radio message (needs BFConsole::getAIMessageSettings,"
-                         " itself a frontier)", (int)category, id);
+            {
+                // PE 0081529C. Only radio messages with loaded settings reach the AI.
+                const AIEventRadioMessagePayload* const p =
+                    static_cast<const AIEventRadioMessagePayload*>(userData);
+                AIRadioMessageSettings settings;
+                if (BFConsole::m_instance->getAIMessageSettings(p->messageId, settings))
+                    courier->eventRadioMessage(settings, p->senderId, p->receiverId);
+            }
             return;
         case 0xEu:
             unwrittenArm("category 3 id 14 - vehicle armament release", (int)category, id);

@@ -48,6 +48,7 @@
 #include "../GameLogic/SpawnSystem/SpawnManager.h"   // createAndSpawnAIPlayer
 #include "../GameLogic/SpawnSystem/SpawnGroup.h"     // ISpawnGroup::getActive
 #include "../../AI/AIInterface/AIInstance.h"   // g_aiInstance - the "AI enabled" test
+#include "../../AI/AIInterface/Main/AIEventPayloads.h" // the radio event payload
 #include "../../AI/AIInterface/IAIEventCourier.h" // missile-lock delivery to AI occupants
 #include "../../AI/AIInterface/SingletonServer.h" // cached AI courier refresh table
 #if defined(_WIN32)
@@ -3896,16 +3897,32 @@ void GameServer::handleRadioMessageReceivedEvent(RadioMessageReceivedEvent* even
     event->m_connectionId = connectionId;
 }
 
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: gameserver-radio-ai-courier]
-// The no-bot production path above never enters this arm. Keeping a fail-loud callable boundary
-// prevents a bots-enabled server from silently dropping radio commands while the 309-byte courier
-// body and its AI-event payload remain unrecovered.
-void GameServer::sendRadioMessageToAI(IEventWrapper&, int)
+// Client PE 0x4C8450. Posts AI event (3, 10) once for every live AI player that the message's
+// channel filter lets hear it, carrying the message id and the sender's and receiver's ids. The
+// sender is the local human player for sender -1, and must exist and be alive.
+void GameServer::sendRadioMessageToAI(IEventWrapper& wrapper, int messageId)
 {
-    std::fprintf(stderr,
-                 "[FRONTIER] dice::hfe::GameServer::sendRadioMessageToAI reached\n");
-    std::fflush(stderr);
-    std::abort();
+    world::IPlayer* const sender = wrapper.getSenderId() == -1
+        ? world::playerManager->getLocalHumanPlayer()                        // +0x30
+        : world::playerManager->getPlayerFromId(wrapper.getSenderId());      // +0x20
+    if (!sender || !sender->getIsAlive())
+        return;
+
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();   // PE +0x40
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+    {
+        world::IPlayer* const receiver = *it;
+        if (!receiver || !receiver->getIsAlive() || !receiver->getIsAIPlayer())
+            continue;
+        if (!filterMessage(wrapper, sender, receiver))
+            continue;
+        ai::AIEventRadioMessagePayload payload;
+        const int receiverId = receiver->getId();
+        payload.senderId = sender->getId();
+        payload.messageId = messageId;
+        payload.receiverId = receiverId;
+        eventManager->postEvent(static_cast<EventCategory>(3), 10, &payload, 0.0f);
+    }
 }
 
 // Forwards chat to player/admin and server-console listeners, temporarily hiding

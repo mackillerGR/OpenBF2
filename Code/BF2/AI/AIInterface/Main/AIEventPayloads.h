@@ -46,8 +46,18 @@ struct AIEventPlayerExitPayload
     void* aiObject;
 };
 
+// Event 10 (radio message): the radio message id and the sending and receiving players' ids,
+// one event per AI receiver. Posted by GameServer::sendRadioMessageToAI.
+struct AIEventRadioMessagePayload
+{
+    int messageId;
+    int senderId;
+    int receiverId;
+};
+
 #if !defined(_WIN64) && !defined(__LP64__)
 static_assert(sizeof(AIEventPlayerKilledPayload) == 12, "retail AI kill payload");
+static_assert(sizeof(AIEventRadioMessagePayload) == 12, "retail AI radio payload");
 static_assert(sizeof(AIEventOccupancyPayload) == 20, "retail AI occupancy payload");
 static_assert(sizeof(AIEventSoldierStatePayload) == 8, "retail AI soldier-state payload");
 static_assert(sizeof(AIEventPlayerExitPayload) == 8, "retail AI exit payload");

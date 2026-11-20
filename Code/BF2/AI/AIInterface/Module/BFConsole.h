@@ -42,7 +42,7 @@ public:
     void reset();                           // [FRONTIER]
     void addAIRadioMessage(const std::string& name, float a, float b, float c);
                                             // [FRONTIER]
-    bool getAIMessageSettings(int, AIRadioMessageSettings&);   // [FRONTIER]
+    bool getAIMessageSettings(int, AIRadioMessageSettings&);
     bool getVoiceFromAiMessageType(AIRadioMessageType, int&);  // [FRONTIER]
     void code(const std::string&);          // [FRONTIER]
 

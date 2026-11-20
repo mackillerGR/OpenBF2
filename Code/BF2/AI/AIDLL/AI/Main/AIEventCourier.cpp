@@ -159,9 +159,13 @@ void AIEventCourier::eventRevived(int playerId, IAIObject* soldier)
     IBotManager::instance->setBotIsRevived(playerId, soldier);
 }
 
-int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings&, int, int)
+// PE 100BF400. Hands the message to the communication hub with the fourth argument false; no
+// null guard on the hub.
+int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings& settings, int sender,
+                                      int receiver)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventRadioMessage");
+    CommunicationHub::m_instance->filterAndReceiveAIRadioMessage(settings, sender, receiver, false);
+    return 0;   // [CHOSEN, not recovered] the shipped body leaves the hub's eax; no caller reads it
 }
 
 int AIEventCourier::event_mineRemoved(unsigned int)
