@@ -1,8 +1,4 @@
 // [INFERRED] Source placement.
-// [FRONTIER] Remaining methods stop by name until implemented.
-// [TEMP] Temporary implementation boundaries remain.
-// [CHOSEN, not recovered] Temporary implementation boundaries remain.
-// [RETIRE-WHEN: aidll-01-adapters] Complete and validate the remaining BFPhysics operations.
 
 #include "BFPhysics.h"
 
@@ -10,6 +6,7 @@
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../../Core/ClassManager.h"
+#include "../../../Physics/BasicPhysicsSystem.h"
 
 namespace dice {
 namespace hfe {
@@ -39,11 +36,10 @@ BFPhysics::~BFPhysics()
 {
 }
 
-// - world::basicPhysicsSystem (ds:) vtable +0x20.
-// The whole class is a one-call forwarder; four bytes, one virtual.
+// The engine physics system's gravity. PE BF2.exe 8181D0.
 float BFPhysics::getGravity() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPhysics::getGravity");
+    return static_cast<world::IPhysicsSystem*>(world::basicPhysicsSystem)->getGravity();
 }
 
 } // namespace ai
