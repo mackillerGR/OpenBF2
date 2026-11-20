@@ -839,6 +839,166 @@ bool BAPMoveToFinding::getSteering(Vec2& point, bool& arrived, bool& failed, int
     return steering;
 }
 
+// ---- BAPAMoveToObject ----------------------------------------------------------------------
+
+BAPAMoveToObject::BAPAMoveToObject(Bot* bot, unsigned int target, float range, float float60,
+                                   float float64, BAPCondition* until, unsigned long long inputMask, int id)
+    : BAPAMove(bot)
+{
+    m_float60 = float60;
+    m_rangeSq = range * range;
+    m_targetObject = target;
+    m_inputMask = inputMask;
+    m_range = range;
+    m_float64 = float64;
+    m_id = id;
+    m_until = until;
+    if (until)
+        until->m_owner = this;
+}
+
+BAPAMoveToObject::~BAPAMoveToObject()
+{
+}
+
+bool BAPAMoveToObject::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPAMoveToObject::getType() { return BAPSTMoveToObject; }
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] Debug output only.
+// [RETIRE-WHEN: bap-debug-print] Recover the body and validate the plan debugger.
+void BAPAMoveToObject::printDebug(std::ostream&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPAMoveToObject::printDebug");
+}
+
+bool BAPAMoveToObject::isFinished(Bot* bot)
+{
+    if (!(m_until && m_until->evaluate(bot)) && !(getDistanceSq(bot) < m_rangeSq))
+        return false;
+    bot->getBotNavigation()->clearProgress();
+    return true;
+}
+
+unsigned int BAPAMoveToObject::getTargetObject() { return m_targetObject; }
+
+float BAPAMoveToObject::getDistance(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Information* const target = informationManager->getInformation(m_targetObject);
+    const Vec3& from = equipment->getPosition();
+    const Vec3& to = target->getPosition();
+    const float dx = from.x - to.x;
+    const float dy = from.y - to.y;
+    const float dz = from.z - to.z;
+    return std::sqrt(dx * dx + dz * dz + dy * dy);
+}
+
+float BAPAMoveToObject::getDistanceSq(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Information* const target = informationManager->getInformation(m_targetObject);
+    const Vec3& from = equipment->getPosition();
+    const Vec3& to = target->getPosition();
+    const float dx = from.x - to.x;
+    const float dy = from.y - to.y;
+    const float dz = from.z - to.z;
+    return dx * dx + dz * dz + dy * dy;
+}
+
+// ---- BAPMoveToObjectFinding ----------------------------------------------------------------
+
+BAPMoveToObjectFinding::BAPMoveToObjectFinding(Bot* bot, unsigned int target, float range, float float60,
+                                               float float64, BAPCondition* until,
+                                               unsigned long long inputMask, int id,
+                                               BAPCondition* condition, float minRange, int int120)
+    : BAPAMoveToObject(bot, target, range, float60, float64, until, inputMask, id)
+{
+    for (int i = 0; i < 8; ++i)
+        m_zeroE0[i] = 0;
+    m_minRangeSq = minRange * minRange;
+    m_minRange = minRange;
+    m_time128 = -1.0;
+    m_int120 = int120;
+    m_flag101 = false;
+    m_int104 = 1;
+    m_bot = bot;
+    m_condition = condition;
+    m_flag110 = true;
+    m_flag11C = false;
+    m_flag11D = false;
+    m_flag11E = false;
+    if (minRange > m_range)
+    {
+        m_minRange = m_range;
+        m_minRangeSq = m_rangeSq;
+    }
+    if (condition)
+        condition->m_owner = this;
+    m_flag11F = false;
+    m_active = true;
+}
+
+BAPMoveToObjectFinding::~BAPMoveToObjectFinding()
+{
+    if (m_condition)
+        delete m_condition;
+}
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] Debug output only.
+// [RETIRE-WHEN: bap-debug-print] Recover the body and validate the plan debugger.
+void BAPMoveToObjectFinding::printDebug(std::ostream&)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPMoveToObjectFinding::printDebug");
+}
+
+bool BAPMoveToObjectFinding::slot8() { return m_flag11D; }
+
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] The steering body and its helper (PE 101A62A0) are
+// not recovered yet. [RETIRE-WHEN: move-to-object-steering] Recover PE 101A6A80 and 101A62A0 and
+// drive a bot toward a moving target through the infantry move-to-object entry.
+bool BAPMoveToObjectFinding::getSteering(Vec2&, bool&, bool&, int)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BAPMoveToObjectFinding::getSteering");
+}
+
+bool BAPMoveToObjectFinding::isFinished(Bot* bot)
+{
+    const bool stopped = m_until && m_until->evaluate(bot);
+    bool finished;
+    if (!m_flag11D)
+        finished = stopped || isWithinRange();
+    else
+        finished = stopped || (m_flag11C && isWithinRange());
+    if (!finished)
+        return false;
+    bot->getBotNavigation()->clearProgress();
+    return true;
+}
+
+bool BAPMoveToObjectFinding::getPathTurn(float& turn)
+{
+    return m_bot->getBotNavigation()->getLargestAngleDiff(turn);
+}
+
+float BAPMoveToObjectFinding::slot14() { return m_bot->getBotNavigation()->getDistanceLeft(); }
+
+float BAPMoveToObjectFinding::getDistance(Bot* bot) { return BAPAMoveToObject::getDistance(bot); }
+float BAPMoveToObjectFinding::getDistanceSq(Bot* bot) { return BAPAMoveToObject::getDistanceSq(bot); }
+
+bool BAPMoveToObjectFinding::slot18() { return true; }
+
+bool BAPMoveToObjectFinding::isWithinRange()
+{
+    const float distanceSq = getDistanceSq(m_bot);
+    return distanceSq <= m_rangeSq && !(distanceSq < m_minRangeSq);
+}
+
 // ---- BAPSetSensingAgentFocus --------------------------------------------------------------
 
 BAPSetSensingAgentFocus::BAPSetSensingAgentFocus(float weight, const Vec3& direction, int id, bool flag)

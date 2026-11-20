@@ -91,6 +91,10 @@ public:
     void unAssignSquad();                       // PE inlined at
     SquadMember* getSquadMember(int index);
     SquadMember* getSquadMember(int playerId, int& index);
+    // Records the target's primary object as seen, indirectly and without a clear line, by every
+    // other member with a bot. Unknown targets or primaries are ignored. PE 101A2C30;
+    // [INFERRED] name.
+    void shareTarget(int playerId, unsigned int target);
     bool hasMemberWithKit(KitType type);
     bool isSquadAssignedToAnyArea();
     bool hasNoMission();                         // mission status 0; [INFERRED] name

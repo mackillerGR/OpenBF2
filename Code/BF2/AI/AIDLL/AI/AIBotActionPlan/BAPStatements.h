@@ -404,6 +404,79 @@ public:
     /* +0x10D */ bool m_pathRequested;     // = false
 };
 
+// Base of the moves toward an object. Type 9. Finished by the stop condition or once the
+// equipment is closer to the object than the range; then the navigation's progress is cleared.
+// PE vtable 10283068 (pose selector at +0x18: 10283028). The class name is [INFERRED], after
+// BAPAMove and the statement type's name "MoveToObject".
+class BAPAMoveToObject : public BAPAMove
+{
+public:
+    // PE 101DF400.
+    BAPAMoveToObject(Bot* bot, unsigned int target, float range, float float60, float float64,
+                     BAPCondition* until, unsigned long long inputMask, int id);
+    virtual ~BAPAMoveToObject();                                       // PE 101A5E70
+
+    // Never driven directly: unfinished and failed. PE 101DF4D0.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);
+    virtual BAPStatementType getType();                                // PE 101A5E40: 9
+    virtual void printDebug(std::ostream& out);                        // PE 101DF4F0
+    virtual bool isFinished(Bot* bot);                                 // PE 101DF470
+    virtual unsigned int getTargetObject();                            // PE 101A5E60
+    // The distance between the equipment and the object; neither lookup is null-checked.
+    virtual float getDistance(Bot* bot);                               // PE 101DF560
+    virtual float getDistanceSq(Bot* bot);                             // PE 101DF600
+
+    /* +0xC8 */ unsigned int m_targetObject;
+    /* +0xCC */ float m_range;
+    /* +0xD0 */ float m_rangeSq;
+};
+
+// Follows the bot's navigation toward an object until it is within the range band or the stop
+// condition holds. Type 9. PE vtable 102830F8 (pose selector at +0x18: 102830BC). The class
+// name follows the debug output "MoveToObjectFinding" with the tree's BAP prefix [INFERRED];
+// member names are [INFERRED] where given and [UNRESOLVED] where numbered.
+class BAPMoveToObjectFinding : public BAPAMoveToObject
+{
+public:
+    // PE 101A6130. A minimum range above the range is clamped to it. Owns both conditions.
+    BAPMoveToObjectFinding(Bot* bot, unsigned int target, float range, float float60, float float64,
+                           BAPCondition* until, unsigned long long inputMask, int id,
+                           BAPCondition* condition, float minRange, int int120);
+    virtual ~BAPMoveToObjectFinding();                                 // PE 101A6250
+
+    virtual void printDebug(std::ostream& out);                        // PE 101A6060
+    virtual bool slot8();                                              // PE 101A5F50
+    // Follows the navigation toward the object and its sensed or last valid position. PE 101A6A80.
+    virtual bool getSteering(Vec2& point, bool& arrived, bool& failed, int arg);
+    // The stop condition, or the range band; once m_flag11D is set the band counts only with
+    // m_flag11C. Either way the navigation's progress is then cleared. PE 101A5FE0.
+    virtual bool isFinished(Bot* bot);
+    virtual bool getPathTurn(float& turn);                             // PE 101A5F80
+    // The navigation's distance left along the path. PE 101A5F60.
+    virtual float slot14();
+    virtual float getDistance(Bot* bot);                               // PE 101A68C0
+    virtual float getDistanceSq(Bot* bot);                             // PE 101A6960
+    virtual bool slot18();                                             // PE 101A5F40: true
+    // Whether the squared distance lies between the minimum and the range squared. PE 101A5FA0.
+    virtual bool isWithinRange();
+
+    /* +0xD4 */ bool m_active;              // = true
+    /* +0xE0 */ int m_zeroE0[8];            // = 0 [UNRESOLVED]
+    /* +0x101 */ bool m_flag101;            // = false [UNRESOLVED]
+    /* +0x104 */ int m_int104;              // = 1 [UNRESOLVED]
+    /* +0x108 */ Bot* m_bot;
+    /* +0x10C */ BAPCondition* m_condition; // owned [UNRESOLVED] role
+    /* +0x110 */ bool m_flag110;            // = true [UNRESOLVED]
+    /* +0x114 */ float m_minRange;
+    /* +0x118 */ float m_minRangeSq;
+    /* +0x11C */ bool m_flag11C;            // = false [UNRESOLVED]
+    /* +0x11D */ bool m_flag11D;            // = false [UNRESOLVED]
+    /* +0x11E */ bool m_flag11E;            // = false [UNRESOLVED]
+    /* +0x11F */ bool m_flag11F;            // = false [UNRESOLVED]
+    /* +0x120 */ int m_int120;              // [UNRESOLVED]
+    /* +0x128 */ double m_time128;          // = -1 [UNRESOLVED]
+};
+
 // Hands the bot's sensing agent a look target: a direction from the equipment, or an object.
 // Type 35. PE vtable 102831D0. The class name follows the statement type's name
 // "SetSensingAgentFocus" with the tree's BAP prefix [INFERRED].

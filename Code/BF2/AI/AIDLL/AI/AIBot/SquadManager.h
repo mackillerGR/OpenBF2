@@ -76,6 +76,9 @@ public:
     void setValidArtilleryFleePos(SquadMember* member, Vec3 position);
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
+    // Hands a target a bot engages to the rest of the player's squad on the one-based side; a
+    // player in no squad is ignored. PE 1012B430; [INFERRED] name.
+    void shareTarget(int playerId, int side, unsigned int target);
     int getSquadStrengths(int side, int areaIndex, StrategicStrengthType type);
 
     // Clears messages and position records by erasing each container node individually.

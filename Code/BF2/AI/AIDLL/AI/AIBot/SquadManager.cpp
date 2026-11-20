@@ -477,6 +477,13 @@ SquadCoordinator* SquadManager::getSquadFromPlayer(int playerId, int side)
     return 0;
 }
 
+// PE 1012B430.
+void SquadManager::shareTarget(int playerId, int side, unsigned int target)
+{
+    if (SquadCoordinator* const squad = getSquadFromPlayer(playerId, side))
+        squad->shareTarget(playerId, target);
+}
+
 // Squad zero is ignored. An existing member anywhere on the
 // side also returns immediately: a bot's engine join notification must not insert it twice.
 // On a miss, retain the unchecked coordinator/player lookups, add, then update the leader.

@@ -24,6 +24,10 @@ namespace ai {
 class BotBehaviour;
 class AIStrategicObject;
 class IPIControlInfo;
+class Information;
+class IPIPhysical;
+class WeaponInfo;
+template <class T> class BotScriptValue;
 
 // Avoid-collision family. PE vtable 10282A98, constructor 10198DD0.
 class AvoidCollisionPlanGenerator : public PlanGenerator
@@ -288,6 +292,15 @@ public:
 private:
     // Builds the fire plan from the bot's stored target state. PE 10108090.
     BotScript* buildScript(Bot* bot, IPIControlInfo* control);
+    // Builds the aim-and-fire part of a direct fire plan: the aim, the fire solution and heat
+    // conditions, the trigger with its skill-scaled hold, and a zoom trigger when the weapon
+    // zooms. PE 10106230; [INFERRED] name.
+    BotScript* buildDirectFire(Bot* bot, FireInfanteryTarget* plan, BotScriptValue<WeaponInfo*>* weaponValue,
+                               BotScriptValue<unsigned int>* targetValue, BotScriptValue<bool>* aimValid,
+                               BotScriptValue<Vec3>* aimDirection, BotScriptValue<Vec3>* aimPosition,
+                               BotScriptValue<Vec3>* lookPosition, WeaponInfo* weapon, Information* own,
+                               IPIControlInfo* control, Information* target, IPIPhysical* targetPhysical,
+                               int guidance);
 
     /* +0x28 */ FireInfanteryTarget* m_targetState;
     /* +0x2C */ FireInfanteryAim*    m_aim;

@@ -27,6 +27,8 @@
 #include "../Main/AIRandom.h"
 #include "../Main/AISettingsInterfaces.h"
 #include "SquadManager.h"
+#include "SensingAgent.h"
+#include "BotSenses.h"
 #include <cmath>
 
 namespace dice {
@@ -1305,6 +1307,27 @@ SquadMember* SquadCoordinator::getSquadMember(int index)
 
 // First matching player wins. The output index is written
 // only on success, and the vector/member is fetched again after the player-id call.
+// PE 101A2C30. The primary is asked for with the coordinator's side made one-based.
+void SquadCoordinator::shareTarget(int playerId, unsigned int target)
+{
+    Vec3 normal;
+    normal.x = normal.y = normal.z = 0.0f;
+    Information* const information = informationManager->getInformation(target);
+    if (!information)
+        return;
+    const unsigned int primaryHandle = information->getPrimaryObject(m_side + 1);
+    Information* const primary = informationManager->getInformation(primaryHandle);
+    if (!primary)
+        return;
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+    {
+        SquadMember* const member = m_squadMembers[i];
+        if (member && member->hasBot() && member->getPlayerId() != playerId)
+            member->getBot()->getSensingAgent()->getSenses()->addSeen(
+                primaryHandle, normal, static_cast<unsigned int>(-1), primary, false, false);
+    }
+}
+
 SquadMember* SquadCoordinator::getSquadMember(int playerId, int& index)
 {
     for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
