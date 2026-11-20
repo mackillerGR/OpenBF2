@@ -1,6 +1,8 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BAPEntries operations.
 
 #include "BAPEntries.h"
+#include "../../../AIInterface/BFKnowledge/BFGameEffector.h"
+#include "../../../../Math/Vec3.h"
 #include "../AIBot/BotSubObjects.h"
 #include "../Main/AISettingsInterfaces.h"
 #include "../Main/CommonSingletonServer.h"
@@ -834,9 +836,93 @@ int EntryInfanteryMoveToObject::getTargetId()
     return 9;
 }
 
-bool EntryInfanteryMoveToObject::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10134710. Steers a soldier toward the move's object like EntryInfanteryMoveTo, avoiding
+// obstacles other than the object itself. Close after a failed static attack the failure time is
+// renewed; otherwise a pending wish to simulate artillery is turned into a failed sky attack. A
+// move that reports itself stuck makes the player commit suicide.
+bool EntryInfanteryMoveToObject::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryInfanteryMoveToObject::execute");
+    Vec2 flat;
+    flat.x = flat.y = 0.0f;
+    Vec2 avoid;
+    avoid.x = avoid.y = 0.0f;
+    Vec2 steer;
+    steer.x = steer.y = 0.0f;
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment ? equipment->getMobile() : 0;
+    if (!equipment || !mobile)
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+
+    IAIObjectPhysical* const physical = equipment->getAIObject()->getPhysical();
+    if (!physical->hasPhysicsEnabled())
+        physical->enablePhysics(equipment->getSide());
+
+    BAPAMove* const move = static_cast<BAPAMove*>(script);
+    if (!informationManager->getInformation(move->getTargetObject()))
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    if (bot->isFireAllowed() && move->isFinished(bot))
+    {
+        failed = true;
+        finished = true;
+        return true;
+    }
+
+    failed = false;
+    BotMain* const main = static_cast<BotMain*>(bot);
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - main->getTimeOfLastFailedStaticSkyAttack() < 1.5)
+    {
+        main->setTimeOfLastFailedStaticAttack(now);
+    }
+    else if (main->getBotWantsToSimulateArtillery())
+    {
+        main->setTimeOfLastFailedStaticSkyAttack(now);
+        main->setBotWantsToSimulateArtillery(false);
+    }
+    vec3ToVec2XZ(equipment->getPosition(), flat);   // the result is unused, as shipped
+
+    bool steerFailed;
+    finished = move->getSteering(steer, failed, steerFailed, 0);
+    if (!finished)
+    {
+        finished = resetSoldierControls(bot, bot->playerInput(), true, false, false);
+        failed = true;
+        return true;
+    }
+    if (steerFailed || failed)
+    {
+        finished = resetSoldierControls(bot, bot->playerInput(), true, false, false);
+        return true;
+    }
+
+    Information* const target = informationManager->getInformation(move->getTargetObject());
+    if (move->getAvoidanceSteering(bot, steer, avoid, target, move->slot8()))
+    {
+        finished = resetSoldierControls(bot, bot->playerInput(), true, false, false);
+        failed = true;
+        return true;
+    }
+
+    bot->getSensingAgent()->setLookDirection(avoid);
+    toggleSoldierZoom(bot);
+    io::PlayerInput* const input = bot->playerInput();
+    IPIControlInfo* const controlInfo = equipment->getControlInfo();
+    const bool focusing = move->isFocusing();
+    setSoldierThrottle(bot, input, controlInfo, mobile->getMaxSpeed(), focusing);
+    if (static_cast<int>(equipment->getSoldierPose()) != 4)
+        bot->requestSoldierPose(1, true);
+    if (move->slot20())
+        static_cast<IAIGameEffector*>(CommonSingletonServer::m_iaiGameEffector)->suicide(bot->getPlayer());
+    return true;
 }
 
 

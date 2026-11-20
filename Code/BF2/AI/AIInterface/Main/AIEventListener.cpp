@@ -258,9 +258,12 @@ void AIEventListener::handleEvent(EventCategory category,
 
         case 0x16u:
             {
-                // The payload is an object pointer followed by a team byte at offset 4.
+                // The payload is an object pointer followed by a team byte: offset 4 in the
+                // retail 32-bit images. [PLATFORM] The team follows the pointer, so a 64-bit
+                // port reads it at offset 8; a fixed 4 there reads the pointer's high half.
                 const unsigned char* const bytes = static_cast<const unsigned char*>(userData);
-                courier->event_enemySpotted(*static_cast<IAIObject* const*>(userData), bytes[4]);
+                courier->event_enemySpotted(*static_cast<IAIObject* const*>(userData),
+                                            bytes[sizeof(IAIObject*)]);
             }
             return;
 
