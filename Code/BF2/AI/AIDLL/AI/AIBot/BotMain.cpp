@@ -266,11 +266,9 @@ void BotMain::reset()
 {
     m_double172 = 0.0;
 
+    // PE 101819DA: IAIPlayer slot +4 (ELF +8), the player's reset.
     if (m_player)
-    {
-        // Retail calls IAIPlayer byte-slot +8 with no arguments. See the block above.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotMain::reset (IAIPlayer slot +8)");
-    }
+        m_player->reset();
 
     if (m_activePlan)
     {
