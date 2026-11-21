@@ -96,9 +96,12 @@ void BFObjectEnvironment::getAllDestroyableObjects(std::vector<DestroyableObject
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getAllDestroyableObjects");
 }
 
+// BF2.exe 81B940. Appends the id of every player, in the player manager's order.
 void BFObjectEnvironment::getWorldPlayerIds(std::vector<int>& out) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::getWorldPlayerIds");
+    const std::list<world::IPlayer*>& players = world::playerManager->getPlayers();
+    for (std::list<world::IPlayer*>::const_iterator it = players.begin(); it != players.end(); ++it)
+        out.push_back((*it)->getId());
 }
 
 // BF2.exe 81C890. The AI objects of living, upright players' vehicles. A player in a secondary
