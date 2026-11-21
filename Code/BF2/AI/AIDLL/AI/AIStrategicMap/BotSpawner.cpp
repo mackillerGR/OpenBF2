@@ -23,6 +23,7 @@
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFGame.h"
 #include "../../../AIInterface/BFKnowledge/KitTemplateManager.h"
 #include "../../../AIInterface/BFKnowledge/KitTemplate.h"
@@ -356,9 +357,8 @@ KitType BotSpawner::GetRandomKit(SquadMember*)
 #endif
 }
 
-// Chooses a kit from squad needs and nearby equipment. Always consumes the initial
+// PE 10197510. Chooses a kit from squad needs and nearby equipment. Always consumes the initial
 // random-kit selection; only nonleaders can take the medic early return.
-// Assigned-squad equipment remains an unimplemented boundary.
 int BotSpawner::findSuitableKit(const float*, const float*, const float*, const float*,
     AIStrategicObject* object, int side, Bot* bot)
 {
@@ -553,10 +553,88 @@ int BotSpawner::findSuitableKit(const float*, const float*, const float*, const 
         }
         if (squad->isSquadAssignedToAnyArea())
         {
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered]
-            // [RETIRE-WHEN: aidll-02-skeleton] Recover the assigned squad's
-            // equipment scan, area geometry and scoring (the kitCounts consumer).
-            BF2_AI_FRONTIER("dice::hfe::ai::BotSpawner::findSuitableKit [assigned-squad equipment]");
+            // PE 10197A66. The members' vehicles, then the enemies inside a box twice the
+            // assigned area's extent around its centre, choose the kit. Counter names are
+            // [INFERRED].
+            int memberVehicles = 0, damagedMemberVehicles = 0, memberInfantry = 0;
+            for (int i = 0; i < members; ++i)
+            {
+                IAIObject* const vehicle = squad->getSquadMember(i)->getPlayer()->getCurrentVehicle();
+                if (!vehicle)
+                    continue;
+                Information* const entry = informationManager->getInformation(vehicle->getInformation(side));
+                if (!entry || !entry->getUnit())
+                    continue;
+                IPIPhysical* const physical = entry->getPhysical();
+                switch (physical->getStrengthType())
+                {
+                case 0:
+                    ++memberInfantry;
+                    physical->getHealth(); // shipped discarded call
+                    break;
+                case 1: case 2: case 4:
+                    ++memberVehicles;
+                    if (physical->getHealth() < 0.5f)
+                        ++damagedMemberVehicles;
+                    break;
+                }
+            }
+
+            // The area pointer is not null-checked and the object is read as an area without a
+            // type query, as shipped. [UNRESOLVED] only the PE arm has been read; both ports use it.
+            AIStrategicObject* const area = AIStrategicObjectManager::getInstance()->getStrategicObject(
+                squad->getSquadStrategicAreaAssignment()->getIndex());
+            Vec2 minimum = static_cast<AIStrategicArea*>(area)->m_centre;
+            const Vec2 position = area->getPosition(side);
+            const double dx = static_cast<double>(position.x) - minimum.x;
+            const double dy = static_cast<float>(static_cast<double>(position.y) - minimum.y);
+            minimum.x = static_cast<float>(static_cast<double>(minimum.x) - (dx + dx));
+            minimum.y = static_cast<float>(static_cast<double>(minimum.y) - (dy + dy));
+            Vec2 maximum = {};
+            maximum = getBoxMaxCorner(minimum, position, maximum);
+            IAIInformationEnvironment* const environment =
+                static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment);
+            environment->getObjectsWithinRectangle(information, minimum, maximum, side, true, 0);
+
+            const int enemySide = (side == 1) + 1;
+            int enemyVehicles = 0, enemyInfantry = 0;
+            for (std::vector<unsigned int>::const_iterator it = information.begin(); it != information.end(); ++it)
+            {
+                const unsigned int handle = *it;
+                Information* const entry = (handle & 0xFFFFu) ? informationManager->getInformation(handle) : 0;
+                if (!entry)
+                    continue;
+                IPIPhysical* const physical = entry->getPhysical();
+                if (!vehicleOccupied(handle, side) || entry->getSide() != enemySide)
+                    continue;
+                switch (physical->getStrengthType())
+                {
+                case 0: ++enemyInfantry; break;
+                case 1: case 2: case 4: ++enemyVehicles; break;
+                }
+            }
+
+            if (enemyVehicles > kitCounts[6] + memberVehicles && templates[6])
+                return 6;
+            if (enemyInfantry > memberInfantry)
+            {
+                AIRandom* const random = AIRandom::m_instance;
+                if (static_cast<unsigned int>(random->m_index) >= AIRandom::kStateSize)
+                    random->generateNumbers();
+                const double draw = static_cast<double>(random->next()) * (1.0 / 4294967296.0);
+                if (draw > 0.85f && templates[0])
+                    return 0;
+                if (draw > 0.55f && templates[2])
+                    return 2;
+                if (draw > 0.25f && templates[3])
+                    return 3;
+                if (templates[4])
+                    return 4;
+            }
+            else if (damagedMemberVehicles + memberVehicles > kitCounts[4] + kitCounts[4] && templates[4])
+            {
+                return 4;
+            }
         }
     }
 
