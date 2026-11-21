@@ -7,6 +7,7 @@
 #include "BFGameEffector.h"
 
 #include "AIFrontier.h"
+#include "AIPlayer.h"
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../AIDLL/AI/Main/AISettingsInterfaces.h"   // IAISettings::getBotName
@@ -14,6 +15,7 @@
 #include "../../../Core/Ids.h"                          // IID_IGameServer
 #include "../../../Game/IGame.h"                        // the `game` global
 #include "../../../Game/IGameServer.h"                  // createPlayer, slot +0x20
+#include "../../../Game/IGameLogic.h"                   // the `gameLogic` global
 #include "../../../Scene/Object/PlayerManager.h"        // the `playerManager` global
 
 namespace dice {
@@ -99,9 +101,10 @@ int BFGameEffector::addBot(int& a, int& b, std::string& name)
     return 0;
 }
 
+// PE 81F350. Asks the game logic to respawn the bot's player; the player is not null-checked.
 int BFGameEffector::respawnBot(IAIPlayer* player)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGameEffector::respawnBot");
+    return gameLogic->reSpawnPlayer(player->getPlayer());
 }
 
 void BFGameEffector::forceSpawnBot(IAIPlayer* player, const Vec3& position, const Vec3& rotation)
