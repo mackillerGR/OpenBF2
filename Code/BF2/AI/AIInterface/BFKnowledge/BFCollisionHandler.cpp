@@ -7,6 +7,18 @@
 #include "BFCollisionHandler.h"
 
 #include "AIFrontier.h"
+#include "IAIObject.h"
+#include "IAIObjectPlugIn.h"
+#include "WeaponTemplate.h"
+#include "WeaponTemplateManager.h"
+#include "../../AIDLL/AI/Main/AICollisionHandler.h"
+#include "../../../Core/Ids.h"
+#include "../../../Game/Objects/Base/SimpleObjectTemplate.h"
+#include "../../../Game/Objects/IObjectTemplate.h"
+#include "../../../Game/Objects/IPlayer.h"
+#include "../../../Game/Objects/ObjectLayoutAccess.h"
+#include "../../../Scene/Object/ObjectTypes/Base/ObjectTemplateManager.h"
+#include "../../../Scene/Object/PlayerManager.h"
 #include "../../../Game/Objects/IObject.h"       // getAbsolutePosition, the +0x6C / +0x68 slot
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
@@ -126,14 +138,69 @@ void BFCollisionHandler::handleProjectileFire(world::IProjectileObject* projecti
     BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleProjectileFire");
 }
 
-void BFCollisionHandler::handleProjectileDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at)
+namespace {
+
+// Client PE 820680, the shared body of both damage slots. The damage, `type` (the attacking
+// seat player's id), `id` (a template id) and `at` follow the interface; the amount and the
+// position are not read. The weapon's AI template is named by the template's aiTemplate; the
+// AI is told the shooter's matching weapon slot and the template's strength against the
+// victim's strength type. Every lookup that misses ends the call.
+void forwardDamageToAI(world::IObject* target, int playerId, unsigned int templateId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleProjectileDamage");
+    if (templateId == static_cast<unsigned int>(-1))
+        return;
+    world::IObjectTemplate* const objectTemplate = world::objectTemplateManager->getTemplate(templateId);
+    if (!objectTemplate)
+        return;
+    const world::SimpleObjectTemplate* const simpleTemplate = static_cast<const world::SimpleObjectTemplate*>(
+        objectTemplate->queryImplementation(world::CID_SimpleObjectTemplate));
+    if (!simpleTemplate)
+        return;
+    WeaponTemplate* const weapon = BFCollisionHandler::weaponTemplateOf(simpleTemplate);
+    if (!weapon)
+        return;
+    world::IPlayer* const player = world::playerManager->getPlayerFromId(playerId);
+    if (!player)
+        return;
+    world::IObject* const vehicle = player->getVehicle();
+    if (!vehicle)
+        return;
+    IAIObject* const shooter = static_cast<IAIObject*>(world::object_detail::LayoutAccess::aiObject(vehicle));
+    if (!shooter)
+        return;
+    IAIObjectArmament* const armament = shooter->getArmament();
+    if (!armament)
+        return;
+    IAIObject* const victim = static_cast<IAIObject*>(world::object_detail::LayoutAccess::aiObject(target));
+    if (!victim)
+        return;
+    IAIObjectPhysical* const physical = victim->getPhysical();
+    if (!physical)
+        return;
+    const int weaponId = armament->getWeaponIdFromActivationId(weapon->m_weaponActivate, weapon->m_weaponFire);
+    if (weaponId == -1)
+        return;
+    const int strength = weapon->m_strengths[physical->getStrType()];
+    checkPointer(static_cast<IAICollisionHandler*>(CommonSingletonServer::m_iAICollisionHandler))
+        ->handleProjectileDamage(shooter, victim, strength, weaponId);
 }
 
-void BFCollisionHandler::handleExplosionDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at)
+} // anonymous namespace
+
+WeaponTemplate* BFCollisionHandler::weaponTemplateOf(const world::SimpleObjectTemplate* simpleTemplate)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFCollisionHandler::handleExplosionDamage");
+    return WeaponTemplateManager::m_instance->getTemplate(std::string(simpleTemplate->m_aiTemplate));
+}
+
+void BFCollisionHandler::handleProjectileDamage(world::IObject* target, float, int type, unsigned int id, Vec3)
+{
+    forwardDamageToAI(target, type, id);
+}
+
+// The same body as handleProjectileDamage: both vtable slots hold client PE 820680.
+void BFCollisionHandler::handleExplosionDamage(world::IObject* target, float, int type, unsigned int id, Vec3)
+{
+    forwardDamageToAI(target, type, id);
 }
 
 int BFCollisionHandler::handleIndirectProjectileHit(world::IPlayer* player, IAIObject* object, const Vec3& at, int a)

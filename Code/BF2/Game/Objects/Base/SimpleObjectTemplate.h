@@ -14,7 +14,7 @@
 
 namespace dice {
 namespace hfe {
-namespace ai { class AIObjectUnit; class WeaponObject; }   // field readers, friended below
+namespace ai { class AIObjectUnit; class BFCollisionHandler; class WeaponObject; }   // field readers, friended below
 namespace world {
 
 class ArtilleryHandler;
@@ -155,6 +155,8 @@ protected:
     friend class SimpleObject;
     friend class ai::AIObjectUnit;               // m_aiTemplate (+296) of a soldier's KIT - the
                                                 // AIObjectUnit reads the kit template directly.
+    friend class ai::BFCollisionHandler;         // m_aiTemplate (+296) - handleProjectileDamage
+                                                // names the weapon's AI template by it
     friend class ai::WeaponObject;               // a projectile's m_drag (+64), m_mass (+92) and
                                                 // WeaponObject reads gravity configuration directly.
     friend class GenericFireArm;                 // m_aiTemplate (+296) - GenericFireArm::init

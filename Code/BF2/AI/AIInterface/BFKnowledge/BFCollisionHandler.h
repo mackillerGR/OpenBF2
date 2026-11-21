@@ -17,8 +17,11 @@ namespace dice {
 namespace hfe {
 
 class IBase;
+namespace world { class SimpleObjectTemplate; }
 
 namespace ai {
+
+class WeaponTemplate;
 
 class IBFCollisionHandler
 {
@@ -81,6 +84,11 @@ public:
     virtual void handleProjectileFire(world::IProjectileObject* projectile, world::IObject* weapon);
     virtual void handleProjectileDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at);
     virtual void handleExplosionDamage(world::IObject* target, float amount, int type, unsigned int id, Vec3 at);
+
+    // The AI weapon template named by an object template's aiTemplate, or null. A helper of the
+    // damage slots, which SimpleObjectTemplate friends for that field. [CHOSEN, not recovered]
+    // placement: retail inlines the lookup into client PE 820680.
+    static WeaponTemplate* weaponTemplateOf(const world::SimpleObjectTemplate* simpleTemplate);
     virtual int handleIndirectProjectileHit(world::IPlayer* player, IAIObject* object, const Vec3& at, int a);
     virtual int handleIndirectProjectileHit(world::IPlayer* player, IAIObject* object, int a, const Vec3& at, int b);
     virtual int handleIndirectProjectileHit(world::IPlayer* player, IAIObject* object, world::IProjectileObject* projectile, world::IObject* weapon, int a);
