@@ -226,14 +226,14 @@ void BotManager::actionExecutePlan(const double& slice)
         {
             if (bot->getPlayer() && bot->getPlayer()->getCurrentVehicle())
             {
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-                // Retail: `IAIObject* primary = getPlayer->getCurrentVehicle->getPrimaryObject;
-                // if (primary) { bot->setBotStuck(true); primary->setIsAllowedByBots(false); }`
-                // IAIObject slots ELF +0xFC / +0x9C (PE +0xF8 / +0x98), named from the engine's
-                // AIObjectReal table (bf2 ). IAIObject has no declaration in this tree.
-                IAIObject* const vehicle = bot->getPlayer()->getCurrentVehicle();
-                (void)vehicle;
-                BF2_AI_FRONTIER("dice::hfe::ai::BotManager::actionExecutePlan (IAIObject::getPrimaryObject)");
+                // PE 1018FF51: a waiting bot in a vehicle marks itself stuck and keeps bots off
+                // the vehicle's primary object. getPlayer and getCurrentVehicle repeat as shipped.
+                IAIObject* const primary = bot->getPlayer()->getCurrentVehicle()->getPrimaryObject();
+                if (primary)
+                {
+                    bot->setBotStuck(true);
+                    primary->setIsAllowedByBots(false);
+                }
             }
             bool onFoot = false;
             if (bot->getPlayer())
