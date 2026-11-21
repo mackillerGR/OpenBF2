@@ -246,17 +246,14 @@ BotMain::~BotMain()
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::~BotMain");
 }
 
-// Releases each behavior's initialized state without deleting the behavior itself.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding BotMain operation.
+// PE 1017ECE0. Resets this bot's state in the plan generator of each behaviour that has one,
+// without deleting the behaviour.
 void BotMain::uninitAllBehaviours()
 {
     for (int i = 0; i < mu8NBehaviours; ++i)
     {
-        if (m_behaviours[i])
-        {
-            // Retail here is `m_behaviours[i]->something->uninit(this)` - see the block above.
-            BF2_AI_FRONTIER("dice::hfe::ai::BotMain::uninitAllBehaviours (a behaviour is present)");
-        }
+        if (m_behaviours[i] && m_behaviours[i]->getPlanGenerator())
+            m_behaviours[i]->getPlanGenerator()->reset(this);
     }
 }
 
