@@ -623,6 +623,21 @@ bool BAPConObjectInFront::evaluate(Bot* bot)
 BAPConditionType BAPConObjectInFront::getType() { return static_cast<BAPConditionType>(23); }
 BAPConObjectInFront::~BAPConObjectInFront() {}
 
+// ---- BAPConObjectManDown --------------------------------------------------------------------
+
+BAPConObjectManDown::BAPConObjectManDown(unsigned int object) : m_object(object) {}
+
+bool BAPConObjectManDown::evaluate(Bot*)
+{
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return false;
+    return object->getPhysical()->getManDown();
+}
+
+BAPConditionType BAPConObjectManDown::getType() { return static_cast<BAPConditionType>(27); }
+BAPConObjectManDown::~BAPConObjectManDown() {}
+
 // ---- BAPConTotalWeaponAmmo ------------------------------------------------------------------
 
 BAPConTotalWeaponAmmo::BAPConTotalWeaponAmmo(unsigned int object, float threshold)

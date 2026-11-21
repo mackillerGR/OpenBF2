@@ -304,6 +304,20 @@ private:
     /* +0x10 */ float m_threshold;
 };
 
+// Kind 27, "ObjectManDown": whether a known object is man down. False for an unknown object.
+// PE vtable 10284A6C. [INFERRED] name.
+class BAPConObjectManDown : public BAPCondition
+{
+public:
+    explicit BAPConObjectManDown(unsigned int object);   // PE 101C1AB0
+    virtual bool evaluate(Bot* bot);                     // PE 101C1B20
+    virtual BAPConditionType getType();                  // PE 101C1AE0: 27
+    virtual ~BAPConObjectManDown();
+
+private:
+    /* +0x08 */ unsigned int m_object;
+};
+
 // Kind 43, "TotalWeaponAmmo": whether the product of the ammunition fractions of a known
 // object's weapons is at or below a threshold. Weapons of types 1 and 2, with unlimited
 // ammunition (-1) or without a maximum are left out. False for an unknown object. PE vtable

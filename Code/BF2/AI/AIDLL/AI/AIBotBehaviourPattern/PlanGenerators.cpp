@@ -985,9 +985,111 @@ void BBPRevive::offerRevive(unsigned int target, int weapon, Bot* bot)
 }
 
 
-BotScript* BBPRevive::generate(Bot*)
+// PE 101210A0. Builds the medic's revive plan for the offered man-down soldier: approach until
+// within 1.6 (flat), then crouch and fire the chosen weapon (the defibrillator), while the target
+// exists and stays man down. A current fire plan of this behaviour on the same target is kept.
+BotScript* BBPRevive::generate(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPRevive::generate");
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPRevive::generate (script debugger reset)");
+        bot->getScriptContext()->clear();
+        dropPlan(bot);
+        return 0;
+    }
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId
+        && bot->getPlan()->getType() == static_cast<BAPStatementType>(15)
+        && static_cast<BAPWrapper*>(bot->getPlan())->getWrapperIndex() == 0
+        && static_cast<BAPFireWrapper*>(bot->getPlan())->m_target
+               == static_cast<unsigned int>(m_int0C[bot->getBotId()]))
+        return bot->getPlan();
+
+    bot->getSquadMember()->clearRequest();
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPRevive::generate (script debugger reset)");
+    dropPlan(bot);
+    bot->getScriptContext()->clear();
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Information* const target = informationManager->getInformation(m_int0C[bot->getBotId()]);
+    if (!equipment || !equipment->getUnit())
+        return 0;
+    IPIMobile* const mobile = equipment->getMobile();
+    if (!mobile || !target)
+        return 0;
+    IPIControlInfo* const control = equipment->getControlInfo();
+    IPIArmament* const armament = equipment->getArmament();
+    const int strengthType = target->getPhysical()->getStrengthType();
+    const Vec3& targetPosition = target->getPosition();
+    const Vec3& own = equipment->getPosition();
+    Vec3 toTarget;
+    toTarget.x = targetPosition.x - own.x;
+    toTarget.y = targetPosition.y - own.y;
+    toTarget.z = targetPosition.z - own.z;
+    const float distance = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y + toTarget.z * toTarget.z);
+    const int weaponIndex = chooseSupportWeapon(armament->getWeapons(), m_int10[bot->getBotId()],
+                                                distance, strengthType, false, false, true, false);
+    if (weaponIndex == -1)
+    {
+        equipment->getAIObject()->update();
+        return 0;
+    }
+    bot->setReviveTarget(static_cast<unsigned int>(m_int0C[bot->getBotId()]));
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(weaponIndex));
+
+    BAPSerial* const serial = checkPointer(new BAPSerial(m_behaviourId, -1));
+    // A weapon whose activate input is 64 gets a reset of the movement and action inputs instead.
+    if (weapon->getWeaponActivate() == 64)
+    {
+        serial->addStatement(checkPointer(new BAPResetControls(true, false, true, m_behaviourId)));
+    }
+    else
+    {
+        serial->addStatement(checkPointer(new BAPTrigger(
+            weapon->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(weapon->getWeaponActivate()), m_behaviourId, 0.0, false)));
+    }
+
+    BAPConObjectDistance* const near =
+        checkPointer(new BAPConObjectDistance(m_int0C[bot->getBotId()], 1.6f, false, true, false));
+    BAPConAnd* const close = checkPointer(new BAPConAnd);
+    close->addCondition(checkPointer(new BAPConObjectDistance(m_int0C[bot->getBotId()], 10.0f, true, true, false)));
+    close->addCondition(checkPointer(new BAPConObjectMoved(m_int0C[bot->getBotId()], 0.2f)));
+    BAPMoveToObjectFinding* const move = checkPointer(new BAPMoveToObjectFinding(
+        bot, m_int0C[bot->getBotId()], 0.0f, mobile->getMaxSpeed(), mobile->getMaxSpeed(), 0,
+        control->getDriveControls(), m_behaviourId, close, 0.0f, -1));
+    BAPIf* const revive =
+        checkPointer(new BAPIf(near, checkPointer(new BAPRevive(m_behaviourId)), move, m_behaviourId, true, false));
+
+    BAPConAnd* const valid = checkPointer(new BAPConAnd);
+    BAPConObjectExists* const exists = checkPointer(new BAPConObjectExists(m_int0C[bot->getBotId()]));
+    BAPConObjectManDown* const manDown = checkPointer(new BAPConObjectManDown(m_int0C[bot->getBotId()]));
+    valid->addCondition(exists);
+    valid->addCondition(manDown);
+
+    BAPParallel* const root = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+    root->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+    root->addStatement(checkPointer(new BAPOverrideSensingAgent));
+    root->addStatement(checkPointer(new BAPALookAtObject(
+        bot, m_int0C[bot->getBotId()], 0.0f, checkPointer(new BAPConFalse),
+        equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, 0.0f)));
+    root->addStatement(revive);
+    root->addStatement(checkPointer(new BAPMergeSoldierInputs(m_behaviourId)));
+    serial->addStatement(checkPointer(new BAPWhile(valid, root, false, m_behaviourId)));
+
+    if (bot->getPlayer()->getSpawnKit() == 5)
+    {
+        const unsigned int handle = static_cast<unsigned int>(m_int0C[bot->getBotId()]);
+        bot->getSquadMember()->setCurrentRequestAction(1, handle);
+    }
+
+    BAPFireWrapper* const script = checkPointer(new BAPFireWrapper(
+        bot, static_cast<unsigned int>(m_int0C[bot->getBotId()]), true, false, weaponIndex, -1, serial,
+        m_behaviourId));
+    script->m_owner = this;
+    static_cast<BotMain*>(bot)->resetAllControls(true, true, true);
+    return script;
 }
 
 BBPC4::BBPC4(int behaviourId)

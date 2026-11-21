@@ -2749,6 +2749,44 @@ bool BAPOverrideSensingAgent::execute(Bot* bot, bool& finished, bool& failed)
 BAPStatementType BAPOverrideSensingAgent::getType() { return BAPSTOverrideSensingAgent; }
 bool BAPOverrideSensingAgent::isComposite() { return false; }
 
+// ---- BAPRevive -------------------------------------------------------------------------------
+
+BAPRevive::BAPRevive(int id) : m_pressed(false)
+{
+    m_id = id;
+}
+
+BAPRevive::~BAPRevive() {}
+
+// The equipment information is not null-checked, as shipped.
+bool BAPRevive::execute(Bot* bot, bool& finished, bool& failed)
+{
+    bot->requestSoldierPose(2, true);
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (equipment->getSoldierPose() == 2)
+    {
+        io::PlayerInput* const input = static_cast<BotMain*>(bot)->playerInput();
+        if (!m_pressed)
+        {
+            if (input->mappingFlags & (1ULL << io::PIFire))
+                input->inputs[io::PIFire] = 1.0f;
+            m_pressed = true;
+        }
+        else
+        {
+            failed = true;
+            if (input->mappingFlags & (1ULL << io::PIFire))
+                input->inputs[io::PIFire] = 0.0f;
+            m_pressed = false;
+        }
+    }
+    finished = true;
+    return true;
+}
+
+BAPStatementType BAPRevive::getType() { return BAPSTRevive; }
+bool BAPRevive::isComposite() { return true; }
+
 // ---- BAPPlaceC4 -----------------------------------------------------------------------------
 
 BAPPlaceC4::BAPPlaceC4(int placementType, AIStrategicObject* object, bool place)

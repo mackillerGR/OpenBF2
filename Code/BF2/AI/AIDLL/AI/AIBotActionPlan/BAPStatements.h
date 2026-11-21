@@ -925,6 +925,22 @@ public:
     virtual bool isComposite();                                        // PE 10199770: false
 };
 
+// Crouches the bot and, while its soldier crouches, presses fire on one execution and releases it
+// on the next, which fails the statement. Always finished. Type 44. PE vtable 10284AA0.
+// [INFERRED] names.
+class BAPRevive : public BotScript
+{
+public:
+    explicit BAPRevive(int id);                                        // PE 101C1B60
+    virtual ~BAPRevive();                                              // PE 101C1BD0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101C1C10
+    virtual BAPStatementType getType();                                // PE 101C1BB0: 44
+    virtual bool isComposite();                                        // PE 101C1BC0: true
+
+    /* +0x18 */ bool m_pressed;
+};
+
 // Places the bot's C4 at its equipment's position, or removes the placed charge. Finishes as
 // failed at once. Type 22. PE vtable 10284AE0. [INFERRED] names.
 class BAPPlaceC4 : public BotScript
