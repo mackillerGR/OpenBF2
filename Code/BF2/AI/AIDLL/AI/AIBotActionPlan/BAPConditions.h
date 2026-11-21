@@ -273,6 +273,70 @@ private:
     /* +0x0C */ float m_threshold;
 };
 
+// Kind 21, "ObjectExists": whether the object is known. PE vtable 10283B40. [INFERRED] name.
+class BAPConObjectExists : public BAPCondition
+{
+public:
+    explicit BAPConObjectExists(unsigned int object);    // PE 101ADC40
+    virtual bool evaluate(Bot* bot);                     // PE 101ADCB0
+    virtual BAPConditionType getType();                  // PE 101ADC70: 21
+    virtual ~BAPConObjectExists();
+
+private:
+    /* +0x08 */ unsigned int m_object;
+};
+
+// Kind 23, "ObjectInFront": whether a known object lies within a cone along the facing of the
+// bot's current equipment. The cone starts `offset` along the facing from the equipment and
+// holds directions whose cosine to the facing is above `threshold`. False when either object is
+// unknown. PE vtable 10283A38. [INFERRED] names.
+class BAPConObjectInFront : public BAPCondition
+{
+public:
+    BAPConObjectInFront(unsigned int object, float offset, float threshold);   // PE 101AD4A0
+    virtual bool evaluate(Bot* bot);                     // PE 101AD520
+    virtual BAPConditionType getType();                  // PE 101AD4E0: 23
+    virtual ~BAPConObjectInFront();
+
+private:
+    /* +0x08 */ unsigned int m_object;
+    /* +0x0C */ float m_offset;
+    /* +0x10 */ float m_threshold;
+};
+
+// Kind 43, "TotalWeaponAmmo": whether the product of the ammunition fractions of a known
+// object's weapons is at or below a threshold. Weapons of types 1 and 2, with unlimited
+// ammunition (-1) or without a maximum are left out. False for an unknown object. PE vtable
+// 10283B0C. [INFERRED] names.
+class BAPConTotalWeaponAmmo : public BAPCondition
+{
+public:
+    BAPConTotalWeaponAmmo(unsigned int object, float threshold);   // PE 101ADAB0
+    virtual bool evaluate(Bot* bot);                     // PE 101ADB30
+    virtual BAPConditionType getType();                  // PE 101ADAF0: 43
+    virtual ~BAPConTotalWeaponAmmo();
+
+private:
+    /* +0x08 */ unsigned int m_object;
+    /* +0x0C */ float m_threshold;
+};
+
+// Kind 54, "Weapon active": whether the active weapon of the bot's current equipment is the
+// weapon in a plan value. The equipment information is not null-checked, and the active weapon
+// is looked up twice with the first answer dropped, as shipped. PE vtable 10283A78. [INFERRED]
+// name.
+class BAPConWeaponActive : public BAPCondition
+{
+public:
+    explicit BAPConWeaponActive(BotScriptValue<WeaponInfo*>* weapon);  // PE 101AD6D0
+    virtual bool evaluate(Bot* bot);                     // PE 101AD750
+    virtual BAPConditionType getType();                  // PE 101AD700: 54
+    virtual ~BAPConWeaponActive();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+};
+
 // Kind 50: whether the bot may fire. PE vtable 10284130. [INFERRED] name.
 class BAPConFireAllowed : public BAPCondition
 {

@@ -76,6 +76,12 @@ public:
     // [INFERRED] name.
     bool isAtSquadArea();
     float getMaxSpeed() const { return m_maxSpeed; }          // PE 1017BC10
+    // Sets the member's current request to the action on the target. PE 1017BB30.
+    void setCurrentRequestAction(int action, unsigned int handle)
+    {
+        m_request->m_action = action;
+        m_request->m_handle = handle;
+    }
     // PE 1017BB70: no action, no handle. [INFERRED] name.
     void clearRequest() { m_request->m_action = 0; m_request->m_handle = static_cast<unsigned int>(-1); }
     // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.

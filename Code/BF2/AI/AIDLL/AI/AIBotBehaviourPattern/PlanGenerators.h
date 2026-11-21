@@ -134,6 +134,10 @@ public:
     // [INFERRED] name.
     void offerSupport(unsigned int target, int weapon, int playerId, Bot* bot);
 private:
+    // Whether the object's primary object, or one of its secondary objects, is occupied by a
+    // human player. PE 100FF370; the generator itself is not read. [INFERRED] name.
+    bool hasHumanOccupant(Information* object, int side);
+
     /* +0x0C */ int* m_int0C;                 // -1
     /* +0x10 */ int* m_int10;                 // -1
     /* +0x14 */ int* m_int14;                 // -1

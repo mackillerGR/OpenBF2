@@ -22,6 +22,11 @@
 #include "../AIUtils/checkPointer.h"
 #include "../AIBot/BotNavigation.h"
 #include "../AIBot/CommunicationAgent.h"
+#include "../AIBot/SensingAgent.h"
+#include "../AIKnowledge/IPIMobile.h"
+#include "../Main/IBotManager.h"
+#include <cmath>
+#include <vector>
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
@@ -400,9 +405,397 @@ void BBPMedicAssist::offerSupport(unsigned int target, int weapon, int playerId,
     m_int14[bot->getBotId()] = playerId;
 }
 
-BotScript* BBPMedicAssist::generate(Bot*)
+// PE 100FF370. The side is handed to every occupant lookup.
+bool BBPMedicAssist::hasHumanOccupant(Information* object, int side)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPMedicAssist::generate");
+    if (!object)
+        return false;
+    Information* const primary = informationManager->getInformation(object->getPrimaryObject(side));
+    if (!primary)
+        return false;
+    IAIPlayerFactory* const players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory);
+    IPIUnit* unit = primary->getUnit();
+    if (unit && unit->isOccupied())
+    {
+        IAIPlayer* const player = players->getPlayerFromId(unit->getOccupyingPlayerId(side));
+        if (player && !player->getIsAIPlayer())
+            return true;
+    }
+    int iterator;
+    Information* part = informationManager->getInformation(primary->getFirstSecondaryObject(iterator, side));
+    while (part)
+    {
+        unit = part->getUnit();
+        if (unit && unit->isOccupied())
+        {
+            IAIPlayer* const player = players->getPlayerFromId(unit->getOccupyingPlayerId(side));
+            if (player && !player->getIsAIPlayer())
+                return true;
+        }
+        part = informationManager->getInformation(primary->getSecondaryObject(iterator, side));
+    }
+    return false;
+}
+
+namespace {
+
+// PE 102C05C0: a zero-initialised dword that only BBPMedicAssist::generate reads, handed to its
+// look statements as their last argument. Nothing in the image writes it. [UNRESOLVED]
+int s_medicLookArgument = 0;
+
+// PE 101ADCF0 (register-passed weapons and preferred index in the PE). Picks the weapon with
+// the greatest strength against the strength type among those whose type flags match exactly;
+// weapons with no ammunition qualify only when one type flag is set. Weapons in range (strictly
+// between the minimum and maximum range) beat any out of range; the preferred index counts
+// triple once chosen. -1 when none qualifies. [INFERRED] name.
+int chooseSupportWeapon(const std::vector<unsigned int>& weapons, int preferred, float distance,
+                        int strengthType, bool skipIndirect, bool wantType1, bool wantType3,
+                        bool wantType2)
+{
+    int best = -1;
+    int bestStrength = 0;
+    bool inRangeFound = false;
+    for (unsigned int i = 0; i < weapons.size(); ++i)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+        if (!weapon)
+            continue;
+        if (wantType3 != (weapon->getWeaponType() == 3))
+            continue;
+        if (wantType1 != (weapon->getWeaponType() == 1))
+            continue;
+        if (wantType2 != (weapon->getWeaponType() == 2))
+            continue;
+        if (skipIndirect && weapon->getIndirect())
+            continue;
+        if (weapon->getAmmo() == 0 && !wantType2 && !wantType1 && !wantType3)
+            continue;
+        if (weapon->getStrength(strengthType) <= 0)
+            continue;
+        if (weapon->getMaxRange() > distance && weapon->getMinRange() < distance)
+        {
+            if (inRangeFound)
+            {
+                if (bestStrength > weapon->getStrength(strengthType))
+                    continue;
+            }
+            else
+            {
+                inRangeFound = true;
+            }
+        }
+        else
+        {
+            if (inRangeFound)
+                continue;
+            if (bestStrength >= weapon->getStrength(strengthType))
+                continue;
+        }
+        best = static_cast<int>(i);
+        bestStrength = weapon->getStrength(strengthType);
+        if (static_cast<int>(i) == preferred)
+            bestStrength *= 3;
+    }
+    return best;
+}
+
+unsigned long long singleInputMask(int input)
+{
+    return static_cast<unsigned long long>(static_cast<long long>(1 << input));
+}
+
+} // anonymous namespace
+
+// PE 100FF770. Builds the support plan of a medic (kit 5), engineer (kit 4) or support soldier
+// (kit 3) for the offered target: approach it, keep the chosen weapon on it while it is in
+// reach and look at it, until it is gone or healed, repaired or rearmed. A current fire plan of
+// this behaviour on the same target is kept and only answers the target's radio request. When
+// the bot's equipment is the target itself the plan only triggers the weapon. The static-target
+// branch moves to the entry position of the bot's own equipment, and the look-and-fire statements
+// built for targets without a strength type and the alternative-weapon trigger are never added
+// (and leak), as shipped.
+BotScript* BBPMedicAssist::generate(Bot* bot)
+{
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPMedicAssist::generate (script debugger reset)");
+        bot->getScriptContext()->clear();
+        dropPlan(bot);
+        return 0;
+    }
+
+    const int kit = bot->getPlayer()->getSpawnKit();
+    CommunicationAgent* const communication = bot->getCommunicationAgent();
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId
+        && bot->getPlan()->getType() == static_cast<BAPStatementType>(15)
+        && static_cast<BAPWrapper*>(bot->getPlan())->getWrapperIndex() == 0
+        && static_cast<BAPFireWrapper*>(bot->getPlan())->m_target
+               == static_cast<unsigned int>(m_int0C[bot->getBotId()]))
+    {
+        const int player = m_int14[bot->getBotId()];
+        if (player >= 0)
+        {
+            int request;
+            if (kit == 5)
+                request = 3;
+            else if (kit == 4)
+                request = 4;
+            else if (kit == 3)
+                request = 10;
+            else
+                return bot->getPlan();
+            if (communication->handleMessages(static_cast<AIRadioMessageType>(request), player))
+                bot->getCommunicationAgent()->enqueueRadioMessage(6, 6, 3, 1.0f, -1);
+        }
+        return bot->getPlan();
+    }
+
+    bot->getBotId();   // read and dropped, as shipped
+    bot->getSquadMember()->clearRequest();
+    bot->getSensingAgent()->clearPlanTargetInformation();
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPMedicAssist::generate (script debugger reset)");
+    dropPlan(bot);
+    bot->getScriptContext()->clear();
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    Information* const target = informationManager->getInformation(m_int0C[bot->getBotId()]);
+    if (!equipment || !equipment->getUnit())
+        return 0;
+    IPIMobile* const mobile = equipment->getMobile();
+    if (!mobile || !target)
+        return 0;
+    IPIArmament* const armament = equipment->getArmament();
+    IPIControlInfo* const control = equipment->getControlInfo();
+    IPIPhysical* const physical = equipment->getPhysical();
+    IPIPhysical* const targetPhysical = target->getPhysical();
+
+    const bool supportKit = bot->getPlayer()->getSpawnKit() == 3;
+    const int strengthType = targetPhysical->getStrengthType();
+    const Vec3& targetPosition = target->getPosition();
+    const Vec3& own = equipment->getPosition();
+    Vec3 toTarget;
+    toTarget.x = targetPosition.x - own.x;
+    toTarget.y = targetPosition.y - own.y;
+    toTarget.z = targetPosition.z - own.z;
+    const float distance = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y + toTarget.z * toTarget.z);
+    const int weaponIndex = chooseSupportWeapon(armament->getWeapons(), m_int10[bot->getBotId()],
+                                                distance, strengthType, false, !supportKit, false,
+                                                supportKit);
+    if (weaponIndex == -1)
+    {
+        equipment->getAIObject()->update();
+        return 0;
+    }
+    WeaponInfo* weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(weaponIndex));
+
+    BAPSerial* const serial = checkPointer(new BAPSerial(m_behaviourId, -1));
+    const float reach = targetPhysical->getSmallestRadius() + physical->getSmallestRadius();
+    bool targetIsFree;
+
+    if (equipment != target)
+    {
+        const bool noStrengthType = targetPhysical->getStrengthType() == 0;
+        const float range = weapon->getReplenishRadius() * 0.5f + reach;
+        IPIUnit* const targetUnit = target->getUnit();
+
+        // Whether the target stays put, so the plan heads for a position instead of the object.
+        bool targetIsStatic = true;
+        bool decided = false;
+        if (targetUnit)
+        {
+            if (!targetUnit->useNoPathfindingToGetToObject() && target->getMobile())
+            {
+                targetIsStatic = false;
+                decided = true;
+            }
+        }
+        if (!decided && !target->isPrimary())
+        {
+            // The primary object is not null-checked, as shipped.
+            Information* const primary =
+                informationManager->getInformation(target->getPrimaryObject(bot->getSide()));
+            targetIsStatic = primary->getMobile() == 0;
+        }
+
+        BotScriptValue<WeaponInfo*>* const weaponValue = bot->getScriptContext()->createVariable(weapon, 0);
+        bot->getScriptContext()->createVariable(0, 0);
+
+        BAPConAnd* const stop = checkPointer(new BAPConAnd);
+        stop->addCondition(checkPointer(new BAPConObjectExists(m_int0C[bot->getBotId()])));
+        if (kit == 3)
+        {
+            if (hasHumanOccupant(target, bot->getSide()))
+                stop->addCondition(checkPointer(new BAPConTotalWeaponAmmo(m_int0C[bot->getBotId()], 0.95f)));
+            else
+                stop->addCondition(checkPointer(new BAPConTotalWeaponAmmo(m_int0C[bot->getBotId()], 0.75f)));
+        }
+        else
+        {
+            if (hasHumanOccupant(target, bot->getSide()))
+                stop->addCondition(checkPointer(new BAPConObjectHealthBelow(m_int0C[bot->getBotId()], 0.99f)));
+            else
+                stop->addCondition(checkPointer(new BAPConObjectHealthBelow(m_int0C[bot->getBotId()], 0.75f)));
+        }
+
+        BAPParallel* const root = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+        root->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+        root->addStatement(checkPointer(new BAPOverrideSensingAgent));
+        if (!targetIsStatic)
+        {
+            root->addStatement(checkPointer(new BAPMoveToObjectFinding(
+                bot, m_int0C[bot->getBotId()], reach, mobile->getMaxSpeed(), mobile->getMaxSpeed(), 0,
+                control->getDriveControls(), m_behaviourId, 0, 0.0f, -1)));
+        }
+        else
+        {
+            const Vec3& entry = equipment->getUnit()->getEntryPositionOfNonMobile();
+            Vec3 position;
+            position.x = entry.x;
+            position.y = entry.y;
+            position.z = entry.z;
+            root->addStatement(checkPointer(new BAPMoveToFinding(
+                bot, position, mobile->getMaxSpeed(), mobile->getMaxSpeed(), 0,
+                control->getDriveControls(), m_behaviourId, 0.5f, 0.0f)));
+        }
+        root->addStatement(checkPointer(new BAPALookAtObject(
+            bot, m_int0C[bot->getBotId()], 0.0f, checkPointer(new BAPConFalse),
+            equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookArgument)));
+        if ((target->getObjectTypeFlags() >> 21 & 1) && (kit == 5 || kit == 3))
+        {
+            root->addStatement(checkPointer(new BAPSoldierPose(
+                1, checkPointer(new BAPConTrue), m_behaviourId,
+                static_cast<unsigned int>(m_int0C[bot->getBotId()]), true)));
+        }
+        else
+        {
+            root->addStatement(checkPointer(
+                new BAPSoldierPose(1, checkPointer(new BAPConTrue), m_behaviourId, true)));
+        }
+
+        BAPConAnd* const inReach = checkPointer(new BAPConAnd);
+        inReach->addCondition(checkPointer(
+            new BAPConObjectDistance(m_int0C[bot->getBotId()], range, false, false, false)));
+
+        BAPParallel* const fire = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+        fire->addStatement(checkPointer(new BAPTrigger(
+            weapon->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(weapon->getWeaponActivate()), m_behaviourId, 0.0, false)));
+        BAPOverrideSensingAgent* const override = checkPointer(new BAPOverrideSensingAgent);
+        BAPParallel* const aim = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+        if (!noStrengthType)
+        {
+            aim->addStatement(override);
+            aim->addStatement(checkPointer(new BAPALookAtObject(
+                bot, m_int0C[bot->getBotId()], 0.0f, checkPointer(new BAPConFalse),
+                equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookArgument)));
+            BAPTriggerContinously* const trigger = checkPointer(new BAPTriggerContinously(
+                weapon->getWeaponFire(), checkPointer(new BAPConWeaponActive(weaponValue)),
+                checkPointer(new BAPConFalse), checkPointer(new BAPConFalse),
+                singleInputMask(weapon->getWeaponFire()), m_behaviourId, 0.0));
+            BAPConObjectInFront* const inFront =
+                checkPointer(new BAPConObjectInFront(m_int0C[bot->getBotId()], 0.0f, 0.1f));
+            aim->addStatement(checkPointer(new BAPIf(inFront, trigger, 0, m_behaviourId, true, false)));
+        }
+        fire->addStatement(checkPointer(new BAPWhile(checkPointer(new BAPConTrue), aim, true, m_behaviourId)));
+
+        WeaponInfo* const alternative = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(2));
+        if (alternative)
+        {
+            checkPointer(new BAPTrigger(
+                alternative->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+                singleInputMask(alternative->getWeaponActivate()), m_behaviourId, 0.0, false));
+        }
+
+        const int player = m_int14[bot->getBotId()];
+        if (player >= 0)
+        {
+            bool answered = false;
+            bool known = true;
+            if (kit == 5)
+            {
+                answered = communication->handleMessages(static_cast<AIRadioMessageType>(3), player);
+            }
+            else if (kit == 4)
+            {
+                answered = communication->handleMessages(static_cast<AIRadioMessageType>(4), player);
+                if (Bot* const targetBot = IBotManager::instance->getBotFromPlayerId(player))
+                    static_cast<BotMain*>(targetBot)->setIsEngineerTarget(true);
+            }
+            else if (kit == 3)
+            {
+                answered = communication->handleMessages(static_cast<AIRadioMessageType>(10), player);
+            }
+            else
+            {
+                known = false;
+            }
+            if (known && answered)
+                serial->addStatement(checkPointer(new BAPSendRadioMessage(6, 6, 2, 1.0f, m_behaviourId, -1)));
+        }
+
+        BotScript* reached;
+        if (!noStrengthType && !targetIsStatic)
+        {
+            BAPSerial* const closeIn = checkPointer(new BAPSerial(m_behaviourId, 1));
+            BAPMoveToObjectFinding* const move = checkPointer(new BAPMoveToObjectFinding(
+                bot, m_int0C[bot->getBotId()], 0.0f, mobile->getMaxSpeed(), mobile->getMaxSpeed(), 0,
+                control->getDriveControls(), m_behaviourId, 0, 0.0f, -1));
+            BAPConTimer* const timer = checkPointer(new BAPConTimer(0.5, false, false, false));
+            closeIn->addStatement(checkPointer(
+                new BAPWhile(checkPointer(new BAPConNot(timer)), move, false, m_behaviourId)));
+            closeIn->addStatement(fire);
+            reached = checkPointer(new BAPIf(inReach, closeIn, 0, m_behaviourId, true, false));
+        }
+        else
+        {
+            reached = checkPointer(new BAPIf(inReach, fire, 0, m_behaviourId, true, false));
+        }
+        root->addStatement(reached);
+        root->addStatement(checkPointer(new BAPMergeSoldierInputs(m_behaviourId)));
+        BAPWhile* const loop = checkPointer(new BAPWhile(stop, root, false, m_behaviourId));
+        serial->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+        serial->addStatement(loop);
+        targetIsFree = targetUnit ? !targetUnit->isOccupied() : false;
+    }
+    else
+    {
+        BAPParallel* const self = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+        self->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+        self->addStatement(checkPointer(new BAPSoldierPose(
+            1, 3, 3, 2, 0.0f, checkPointer(new BAPConTrue), checkPointer(new BAPConFalse), m_behaviourId, true)));
+        self->addStatement(checkPointer(new BAPTrigger(
+            weapon->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(weapon->getWeaponActivate()), m_behaviourId, 0.0, true)));
+        serial->addStatement(self);
+        targetIsFree = false;
+    }
+
+    if (bot->getPlayer()->getSpawnKit() == 5)
+    {
+        const unsigned int handle = target->getHandle();
+        bot->getSquadMember()->setCurrentRequestAction(1, handle);
+    }
+    else if (bot->getPlayer()->getSpawnKit() == 4)
+    {
+        bot->setRepairTarget(static_cast<unsigned int>(m_int0C[bot->getBotId()]));
+        const unsigned int handle = target->getHandle();
+        bot->getSquadMember()->setCurrentRequestAction(2, handle);
+    }
+    else if (bot->getPlayer()->getSpawnKit() == 3)
+    {
+        const unsigned int handle = target->getHandle();
+        bot->getSquadMember()->setCurrentRequestAction(4, handle);
+    }
+
+    BAPFireWrapper* const script = checkPointer(new BAPFireWrapper(
+        bot, static_cast<unsigned int>(m_int0C[bot->getBotId()]), targetIsFree, false, weaponIndex, -1,
+        serial, m_behaviourId));
+    script->m_owner = this;
+    static_cast<BotMain*>(bot)->resetAllControls(true, true, true);
+    return script;
 }
 
 // The cover generators release the fifth array twice and never the fourth, as shipped.

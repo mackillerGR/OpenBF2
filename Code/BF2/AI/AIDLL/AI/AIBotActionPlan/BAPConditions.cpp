@@ -560,6 +560,116 @@ void BAPConObjectHealthBelow::printDebug(std::ostream& out)
 
 BAPConObjectHealthBelow::~BAPConObjectHealthBelow() {}
 
+namespace {
+
+// PE 1006EEC0, the conditional Vec3 normaliser (file-local copies live in other TUs too).
+void normaliseConeDirection(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f)) {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        value.z = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+}
+
+} // anonymous namespace
+
+// ---- BAPConObjectExists ---------------------------------------------------------------------
+
+BAPConObjectExists::BAPConObjectExists(unsigned int object) : m_object(object) {}
+
+bool BAPConObjectExists::evaluate(Bot*)
+{
+    return informationManager->getInformation(m_object) != 0;
+}
+
+BAPConditionType BAPConObjectExists::getType() { return static_cast<BAPConditionType>(21); }
+BAPConObjectExists::~BAPConObjectExists() {}
+
+// ---- BAPConObjectInFront --------------------------------------------------------------------
+
+BAPConObjectInFront::BAPConObjectInFront(unsigned int object, float offset, float threshold)
+    : m_object(object), m_offset(offset), m_threshold(threshold)
+{
+}
+
+bool BAPConObjectInFront::evaluate(Bot* bot)
+{
+    Information* const target = informationManager->getInformation(m_object);
+    if (!target)
+        return false;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return false;
+    const Mat4& transformation = equipment->getTransformation();
+    const Vec3 facing = { transformation.m[8], transformation.m[9], transformation.m[10] };
+    const Vec3 offset = { facing.x * m_offset, facing.y * m_offset, facing.z * m_offset };
+    const Vec3& own = equipment->getPosition();
+    const Vec3 apex = { offset.x + own.x, offset.y + own.y, offset.z + own.z };
+    const Vec3& position = target->getPosition();
+    Vec3 direction = { position.x - apex.x, position.y - apex.y, position.z - apex.z };
+    normaliseConeDirection(direction);
+    return direction.z * facing.z + direction.y * facing.y + direction.x * facing.x > m_threshold;
+}
+
+BAPConditionType BAPConObjectInFront::getType() { return static_cast<BAPConditionType>(23); }
+BAPConObjectInFront::~BAPConObjectInFront() {}
+
+// ---- BAPConTotalWeaponAmmo ------------------------------------------------------------------
+
+BAPConTotalWeaponAmmo::BAPConTotalWeaponAmmo(unsigned int object, float threshold)
+    : m_object(object), m_threshold(threshold)
+{
+}
+
+bool BAPConTotalWeaponAmmo::evaluate(Bot*)
+{
+    float fraction = 1.0f;
+    Information* const object = informationManager->getInformation(m_object);
+    if (!object)
+        return false;
+    // The weapon list is copied, as shipped.
+    const std::vector<unsigned int> weapons = object->getArmament()->getWeapons();
+    for (unsigned int i = 0; i < weapons.size(); ++i)
+    {
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(weapons[i]);
+        if (!weapon || weapon->getWeaponType() == 1 || weapon->getWeaponType() == 2
+            || weapon->getAmmo() == -1 || weapon->getMaxAmmo() == 0)
+            continue;
+        const float current = static_cast<float>(weapon->getCurrentAmmo());
+        fraction *= current / static_cast<float>(weapon->getMaxAmmo());
+    }
+    return fraction <= m_threshold;
+}
+
+BAPConditionType BAPConTotalWeaponAmmo::getType() { return static_cast<BAPConditionType>(43); }
+BAPConTotalWeaponAmmo::~BAPConTotalWeaponAmmo() {}
+
+// ---- BAPConWeaponActive ---------------------------------------------------------------------
+
+BAPConWeaponActive::BAPConWeaponActive(BotScriptValue<WeaponInfo*>* weapon) : m_weapon(weapon) {}
+
+bool BAPConWeaponActive::evaluate(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    armament->getWeapon(armament->getActiveWeapon());
+    WeaponInfo* const active =
+        WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    return m_weapon->m_value == active;
+}
+
+BAPConditionType BAPConWeaponActive::getType() { return static_cast<BAPConditionType>(54); }
+BAPConWeaponActive::~BAPConWeaponActive() {}
+
 // ---- BAPConFireAllowed ----------------------------------------------------------------------
 
 BAPConFireAllowed::BAPConFireAllowed() {}
