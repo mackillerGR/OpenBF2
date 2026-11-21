@@ -1036,10 +1036,9 @@ BotScript* BBPIdleInfantery::generate(Bot* bot)
             }
             if ((equipment->getObjectTypeFlags() >> 21) & 1)
             {
-                // Retail adds a stance-2 SoldierPose statement (PE vtable 102835AC, constructor
-                // 101A9130) whose second base is not yet recovered.
-                // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-soldier-pose]
-                BF2_AI_FRONTIER("dice::hfe::ai::BBPIdleInfantery::generate (SoldierPose statement)");
+                // PE 100F58B4.
+                root->addStatement(checkPointer(
+                    new BAPSoldierPose(2, checkPointer(new BAPConTrue), m_behaviourId, true)));
             }
         }
     }

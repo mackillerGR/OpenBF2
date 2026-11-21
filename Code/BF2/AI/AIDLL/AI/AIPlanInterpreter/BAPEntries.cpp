@@ -1516,9 +1516,33 @@ int EntrySoldierPose::getTargetId()
     return 26;
 }
 
-bool EntrySoldierPose::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10132BE0. Asks for the selector's pose, or for crouching (pose 1) while one of the mapped
+// inputs 0, 3 or 13 holds a value (NaN counts). Done and failed once the equipment is in the pose;
+// otherwise done, requesting the pose unless the soldier is in pose 4.
+bool EntrySoldierPose::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntrySoldierPose::execute");
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return false;
+    BAPSoldierPose* const statement = static_cast<BAPSoldierPose*>(script);
+    int pose = statement->getPose();
+    const io::PlayerInput* const input = bot->playerInput();
+    const unsigned long long mapped = input->mappingFlags;
+    if (((mapped & 8) && !(input->inputs[3] == 0.0f)) || ((mapped & 1) && !(input->inputs[0] == 0.0f))
+        || ((mapped & 0x2000) && !(input->inputs[13] == 0.0f)))
+        pose = 1;
+    if (static_cast<int>(equipment->getSoldierPose()) == pose)
+    {
+        finished = true;
+        failed = true;
+        return true;
+    }
+    const int current = static_cast<int>(equipment->getSoldierPose());
+    if (current != 4 && current != pose)
+        bot->requestSoldierPose(pose, statement->m_flag58);
+    finished = true;
+    failed = false;
+    return true;
 }
 
 

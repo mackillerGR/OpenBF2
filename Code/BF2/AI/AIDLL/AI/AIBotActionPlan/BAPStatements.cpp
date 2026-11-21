@@ -841,6 +841,65 @@ bool BAPMoveToFinding::getSteering(Vec2& point, bool& arrived, bool& failed, int
     return steering;
 }
 
+// ---- BAPSoldierPose ------------------------------------------------------------------------
+
+BAPSoldierPose::BAPSoldierPose(int pose, BAPCondition* until, int id, bool flag)
+    : BAPSoldierPoseSelector(pose, pose, 2.0f, pose, 0.0f, static_cast<unsigned int>(-1), 5.0f)
+{
+    m_until = until;
+    m_condition = 0;
+    m_flag58 = flag;
+    until->m_owner = this;   // not null-checked, as shipped
+    m_inputMask = 0x6000000000ULL;
+    m_id = id;
+}
+
+BAPSoldierPose::BAPSoldierPose(int pose, BAPCondition* until, int id, unsigned int companion, bool flag)
+    : BAPSoldierPoseSelector(pose, pose, 2.0f, pose, 0.0f, companion, 5.0f)
+{
+    m_until = until;
+    m_condition = 0;
+    m_flag58 = flag;
+    until->m_owner = this;   // not null-checked, as shipped
+    m_inputMask = 0x6000000000ULL;
+    m_id = id;
+}
+
+BAPSoldierPose::BAPSoldierPose(int defaultPose, int abovePose, int threshold, int belowPose, float limit,
+                               BAPCondition* until, BAPCondition* condition, int id, bool flag)
+    : BAPSoldierPoseSelector(defaultPose, abovePose, static_cast<float>(threshold), belowPose, limit,
+                             static_cast<unsigned int>(-1), 5.0f)
+{
+    m_until = until;
+    m_condition = condition;
+    m_flag58 = flag;
+    if (m_until)
+        m_until->m_owner = this;
+    if (m_condition)
+        m_condition->m_owner = this;
+    m_id = id;
+    m_inputMask = 0x6000000000ULL;
+}
+
+BAPSoldierPose::~BAPSoldierPose()
+{
+    if (m_until)
+        delete m_until;
+    if (m_condition)
+        delete m_condition;
+}
+
+bool BAPSoldierPose::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPSoldierPose::getType() { return BAPSTSoldierPose; }
+
+bool BAPSoldierPose::isComposite() { return false; }
+
 // ---- BAPAMoveToObject ----------------------------------------------------------------------
 
 BAPAMoveToObject::BAPAMoveToObject(Bot* bot, unsigned int target, float range, float float60,

@@ -279,6 +279,33 @@ protected:
     /* +0x30 */ unsigned int m_companion;
 };
 
+// Asks the soldier for a pose chosen by its pose selector; driven by the interpreter's soldier
+// pose entry, which counts it done once the equipment holds the pose. Drives the crouch and lie
+// inputs. Type 26. PE vtable 102835AC with the pose selector at +0x18 (PE vtable 10283570).
+// [INFERRED] class name, after the statement type's name "SoldierPose".
+class BAPSoldierPose : public BotScript, public BAPSoldierPoseSelector
+{
+public:
+    // One pose throughout. PE 101A9130.
+    BAPSoldierPose(int pose, BAPCondition* until, int id, bool flag);
+    // One pose, crouching beside a non-standing human companion. PE 101A91B0.
+    BAPSoldierPose(int pose, BAPCondition* until, int id, unsigned int companion, bool flag);
+    // The full selector, an optional stop condition and a second owned condition. PE 101A92D0.
+    BAPSoldierPose(int defaultPose, int abovePose, int threshold, int belowPose, float limit,
+                   BAPCondition* until, BAPCondition* condition, int id, bool flag);
+    virtual ~BAPSoldierPose();                                         // PE 101A9430
+
+    // Never driven directly: unfinished and failed. PE 101A93E0.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);
+    virtual BAPStatementType getType();                                // PE 101A93C0: 26
+    virtual bool isComposite();                                        // PE 101A93D0: false
+
+    /* +0x50 */ BAPCondition* m_until;      // owned
+    /* +0x54 */ BAPCondition* m_condition;  // owned [UNRESOLVED] role
+    // Handed to requestSoldierPose with the pose. [UNRESOLVED] meaning.
+    /* +0x58 */ bool m_flag58;
+};
+
 // Base of the moves that follow a path from the bot's navigation. Type 7. Construction clears
 // the bot's move-to status. PE vtable 10282D18 (twenty-one slots) with the pose selector at
 // +0x18 (PE vtable 10282CD8). An empty intermediate class (PE vtable 10282AF4) between
