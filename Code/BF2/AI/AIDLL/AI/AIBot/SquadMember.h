@@ -91,7 +91,7 @@ public:
     void updateMemberPos();                  // nonnull vehicle [FRONTIER]
     bool isMobile();
     void moveWithFormation();
-    void moveWithoutFormation();             // alive owner query [FRONTIER]
+    void moveWithoutFormation();             // PE 1017D9A0
     float getVehicleRadius();
 
     // [INFERRED] carrier name. The two fields are attested by setCurrentRequestAction

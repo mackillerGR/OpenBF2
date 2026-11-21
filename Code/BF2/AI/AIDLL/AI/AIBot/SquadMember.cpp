@@ -895,6 +895,9 @@ void SquadMember::moveLeader(Information* vehicle)
     announceOrder(6);
 }
 
+// PE 1017D9A0. Out of formation a living bot member refreshes its speed and, without a path,
+// leads itself to the squad goal while it is more than sqrt(8) away during a running order, or
+// whenever the side's player commands. The vehicle and its information are not null-checked.
 void SquadMember::moveWithoutFormation()
 {
     if (!m_bot)
@@ -902,12 +905,29 @@ void SquadMember::moveWithoutFormation()
     if (!m_player->getIsAlive())
         return;
 
-    Vec3 position = {};
-    getPosition(position);
+    const Vec3 position = m_position;
     const Vec3 goal = m_squad->getSquadGotoPos();
-    IAIObject* const vehicle = m_player->getCurrentVehicle();
-    (void)goal; (void)vehicle;
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::moveWithoutFormation (IAIObject information handle)");
+    Information* const vehicle =
+        informationManager->getInformation(m_player->getCurrentVehicle()->getInformation(m_side + 1));
+    if (IPIMobile* const mobile = vehicle->getMobile())
+        m_maxSpeed = mobile->getMaxSpeed();
+    if (m_squad->getMissionStatus() == 2)
+    {
+        if (m_havePath)
+            return;
+        const float dx = goal.x - position.x;
+        const float dy = goal.y - position.y;
+        const float dz = goal.z - position.z;
+        if (dx * dx + dy * dy + dz * dz > 8.0f)
+        {
+            moveLeader(vehicle);
+            return;
+        }
+    }
+    if (m_havePath)
+        return;
+    if (IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        moveLeader(vehicle);
 }
 
 // [FRONTIER] Returns the member's vehicle radius once the information query chain is implemented.
