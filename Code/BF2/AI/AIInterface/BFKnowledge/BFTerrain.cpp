@@ -6,6 +6,8 @@
 
 #include "BFTerrain.h"
 
+#include <cmath>
+
 #include "AIFrontier.h"
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
@@ -116,19 +118,33 @@ bool BFTerrain::isInsideCombatArea(IAIPlayer* player) const
     BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::isInsideCombatArea");
 }
 
+// The engine terrain's normal at a point. Client PE 820BA0: a tail jump.
 void BFTerrain::getNormal(float x, float z, Vec3& normal) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::getNormal");
+    static_cast<world::IHeightmapCluster*>(m_heightmapCluster)->getNormalInWorldCoords(x, z, normal);
 }
 
+// The engine terrain's normal and material at a point; the height the engine answers is
+// dropped by the interface. Client PE 820BB0: a tail jump.
 void BFTerrain::getHeightAndNormal(float x, float z, Vec3& normal, unsigned char& material) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::getHeightAndNormal");
+    static_cast<world::IHeightmapCluster*>(m_heightmapCluster)
+        ->getHeightAndNormalInWorldCoords(x, z, normal, material);
 }
 
+// The terrain's slope at a point in radians: the arc cosine of the normal's clamped up
+// component. Client PE 820E10.
 float BFTerrain::getSlope(float x, float z) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFTerrain::getSlope");
+    Vec3 normal;
+    normal.x = normal.y = normal.z = 0.0f;
+    static_cast<world::IHeightmapCluster*>(m_heightmapCluster)->getNormalInWorldCoords(x, z, normal);
+    float up = normal.y;
+    if (up >= 1.0f)
+        up = 1.0f;
+    if (!(up >= -1.0f))   // below the range, or NaN, as the shipped fcomi/fcmovb pair gives
+        up = -1.0f;
+    return std::acos(up);
 }
 
 // slot 12 - the second half of `getTerrainAltitude`, and the same one-line
