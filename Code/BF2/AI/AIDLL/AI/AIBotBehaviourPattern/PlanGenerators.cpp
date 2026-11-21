@@ -20,6 +20,11 @@
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIUtils/checkPointer.h"
+#include "../AIBot/BotNavigation.h"
+#include "../AIBot/CommunicationAgent.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 #include "../../../AIInterface/BFKnowledge/BFTimer.h"
 #include "../Main/CommonSingletonServer.h"
 
@@ -821,9 +826,91 @@ void BBPIdle2d::setTarget(Bot* bot, int target)
     m_int0C[bot->getBotId()] = target;
 }
 
-BotScript* BBPIdle2d::generate(Bot*)
+// PE 100F6490. Keeps its own plan; a vehicle bot asked by a player (m_int0C) answers a waiting
+// request with radio message 6. A new plan answers once more when the player's vehicle is within
+// 40 and, unless the player is 255, the bot's equipment has a free seat; it then holds the controls
+// released forever while dropping flares on a missile lock.
+BotScript* BBPIdle2d::generate(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPIdle2d::generate");
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        releaseScriptState(bot);
+        if (bot->getPlan())
+        {
+            if (bot->getPlan())
+                delete bot->getPlan();
+            bot->setPlan(0);
+        }
+        return 0;
+    }
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (bot->hasPlan())
+    {
+        if (bot->getPlan()->getId() == m_behaviourId)
+        {
+            // The equipment is not null-checked, as shipped.
+            const int player = m_int0C[bot->getBotId()];
+            if (player >= 0 && !((equipment->getObjectTypeFlags() >> 21) & 1)
+                && bot->getCommunicationAgent()->handleMessages(static_cast<AIRadioMessageType>(2), player))
+                bot->getCommunicationAgent()->enqueueRadioMessage(6, 6, 3, 1.0f, -1);
+            return bot->getPlan();
+        }
+    }
+    else if (bot->getPlan())
+    {
+        if (bot->getPlan())
+            delete bot->getPlan();
+        bot->setPlan(0);
+    }
+
+    releaseScriptState(bot);
+    bot->getSquadMember()->clearRequest();
+    BAPSerial* const root = checkPointer(new BAPSerial(m_behaviourId, -1));
+    // Neither lookup is checked, as shipped.
+    Information* const primary = informationManager->getInformation(equipment->getPrimaryObject(bot->getSide()));
+    const int player = m_int0C[bot->getBotId()];
+    if (player >= 0 && !((primary->getObjectTypeFlags() >> 21) & 1))
+    {
+        IAIPlayer* const requester =
+            static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(player);
+        IAIObject* const vehicle = requester ? requester->getCurrentVehicle() : 0;
+        if (vehicle)
+        {
+            const unsigned int equipmentHandle = bot->getCurrentEquipment();
+            Information* const requesterVehicle =
+                informationManager->getInformation(vehicle->getHandle(bot->getSide()));
+            if (requesterVehicle)
+            {
+                const float* const to = requesterVehicle->getTransformation().m + 12;
+                const float* const from = primary->getTransformation().m + 12;
+                const float dx = from[0] - to[0];
+                const float dy = from[1] - to[1];
+                const float dz = from[2] - to[2];
+                const float distanceSq = dx * dx + dy * dy + dz * dz;
+                if ((player == 0xFF || hasFreeSeat(equipmentHandle, bot->getSide()))
+                    && distanceSq < 1600.0f && equipment->isPrimary()
+                    && bot->getCommunicationAgent()->handleMessages(static_cast<AIRadioMessageType>(2), player))
+                    root->addStatement(checkPointer(new BAPSendRadioMessage(6, 6, 2, 1.0f, m_behaviourId, -1)));
+            }
+        }
+    }
+
+    BAPResetControls* const release = new BAPResetControls(true, true, true, m_behaviourId);
+    BAPConTrue* const always = new BAPConTrue;
+    root->addStatement(checkPointer(new BAPWhile(checkPointer(always), checkPointer(release), m_behaviourId)));
+
+    BAPParallel* const body = checkPointer(new BAPParallel(m_behaviourId, true, -1, false));
+    // The first argument is the bot pointer in retail, stored and never read; on a 64-bit port
+    // only its low half fits. [PLATFORM]
+    body->addStatement(new BAPUseFlareOnMissileLock(
+        static_cast<int>(reinterpret_cast<std::size_t>(bot)), 0x800000000000ULL, m_behaviourId));
+    body->addStatement(root);
+    BAPInfoWrapper* const script =
+        checkPointer(new BAPInfoWrapper(equipment->getPosition(), body, m_behaviourId, bot));
+    script->m_owner = this;
+    bot->getBotNavigation()->clearProgress();
+    return script;
 }
 
 BBPIdle3d::BBPIdle3d(int behaviourId)

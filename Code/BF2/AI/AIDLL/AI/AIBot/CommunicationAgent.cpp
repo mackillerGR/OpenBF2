@@ -186,6 +186,22 @@ bool CommunicationAgent::handleMessages(AIRadioMessageType type)
     return handled;
 }
 
+// PE 10148250.
+bool CommunicationAgent::handleMessages(AIRadioMessageType type, int sender)
+{
+    std::list<AIRadioMessageInfo>& inbox = m_receivedMessages[type];
+    bool handled = false;
+    for (std::list<AIRadioMessageInfo>::iterator it = inbox.begin(); it != inbox.end(); ++it)
+    {
+        if (it->m_senderPlayerId == sender && !it->m_handled && !it->m_flag17)
+        {
+            it->m_handled = true;
+            handled = true;
+        }
+    }
+    return handled;
+}
+
 // PE 10148200. The search compares the time for exact equality.
 bool CommunicationAgent::handleMessage(const AIRadioMessageInfo& message)
 {

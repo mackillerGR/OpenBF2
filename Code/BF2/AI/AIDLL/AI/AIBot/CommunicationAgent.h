@@ -82,6 +82,8 @@ public:
     // Marks every inbox message of the type that is neither handled nor flagged; false when there
     // was none. PE 101481B0; [INFERRED] name.
     bool handleMessages(AIRadioMessageType type);
+    // The same for the messages of the type from one sender. PE 10148250; [INFERRED] name.
+    bool handleMessages(AIRadioMessageType type, int sender);
     // Marks the inbox copy of the message (same type, sender and time) as handled unless it
     // already is or is flagged; false when that fails. PE 10148200; [INFERRED] name.
     bool handleMessage(const AIRadioMessageInfo& message);
