@@ -478,6 +478,52 @@ private:
     /* +0x88 */ bool m_trackFailures;
 };
 
+// Kind 56: a static (lobbed) attack on a soldier is clear. False while a soldier stays within
+// ten seconds of a failed static attack, when a friendly soldier stands within 7 of the aim
+// position at about its height, or when the lob path (muzzle to the arc's peak, or a short step
+// along the aim, then on to the aim position) hits the world more than 3.5 from the aim position;
+// a blocked path records the failure time (a sky attack while simulating artillery, which then
+// stops). A clear path starts the artillery simulation when the bot wants it and the weapon is
+// not thrown. PE vtable 10283E40; [INFERRED] name.
+class BAPConLobPathClear : public BAPCondition
+{
+public:
+    // PE 101B2580.
+    BAPConLobPathClear(unsigned int target, BotScriptValue<Vec3>* aimPosition,
+                       BotScriptValue<Vec3>* aimDirection);
+    virtual bool evaluate(Bot* bot);                     // PE 101B2750
+    virtual BAPConditionType getType();                  // PE 101B25C0: 56
+    virtual ~BAPConLobPathClear();                       // PE 101B2600
+
+private:
+    /* +0x08 */ unsigned int m_target;
+    /* +0x10 */ AimSolver m_solver;
+    /* +0x80 */ BotScriptValue<Vec3>* m_aimPosition;
+    /* +0x84 */ BotScriptValue<Vec3>* m_aimDirection;
+};
+
+// Kind 57: the line along the muzzle, run 5 past the sensed target, hits the world within the
+// radius of the aim position and no friendly soldier stands within the radius of the hit at
+// about its height. A failure records the time of the failed splash attack. PE vtable 10283E10;
+// [INFERRED] name.
+class BAPConMuzzleImpactNear : public BAPCondition
+{
+public:
+    // PE 101B2150. Keeps the radius squared.
+    BAPConMuzzleImpactNear(unsigned int target, BotScriptValue<Vec3>* aimPosition,
+                           BotScriptValue<Vec3>* aimDirection, float radius);
+    virtual bool evaluate(Bot* bot);                     // PE 101B2200
+    virtual BAPConditionType getType();                  // PE 101B2100: 57
+    virtual ~BAPConMuzzleImpactNear();                   // PE 101B21A0
+
+private:
+    /* +0x08 */ unsigned int m_target;
+    /* +0x10 */ AimSolver m_solver;
+    /* +0x80 */ BotScriptValue<Vec3>* m_aimPosition;
+    /* +0x84 */ BotScriptValue<Vec3>* m_aimDirection;   // kept, never read
+    /* +0x88 */ float m_radiusSq;
+};
+
 // Kind 41: a magazine test on the weapon in a plan value against an int plan value. With
 // `changed`: without magazines, whether the int value is non-zero; otherwise whether the first
 // magazine's shot count differs from it. Without `changed`: true without magazines, otherwise

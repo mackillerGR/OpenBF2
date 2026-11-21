@@ -22,6 +22,9 @@ public:
     // Sets the drag coefficient and its inverse (0 for no drag). PE 101B2090.
     void setDrag(float drag);
     void setGravity(float gravity) { m_gravity = gravity; }
+    // The peak of a drag-free arc launched along `direction`: its offset from the muzzle and the
+    // time to reach it. False unless the direction points upward. PE 101DFE30; [INFERRED] name.
+    bool peak(const Vec3& direction, Vec3& offset, float& time) const;
     void setSpeed(float speed) { m_speed = speed; }
     // Thrown weapons predict over a fixed time; the aiming wrapper sets both flags each tick.
     // [INFERRED] names.

@@ -940,17 +940,15 @@ BotScript* BBPFireInfantery::buildDirectFire(Bot* bot, FireInfanteryTarget* plan
     if (reported) {
         if (splashOnSoldier) {
             ready->addCondition(solution);
-            // Retail adds a kind-57 condition (constructor PE 101B2150; target, aim position, aim
-            // direction, 3.5) that is not recovered yet. Reached only by static attacks.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-condition-57]
-            BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildDirectFire (condition kind 57)");
+            ready->addCondition(checkPointer(
+                new BAPConMuzzleImpactNear(targetHandle, aimPosition, aimDirection, 3.5f)));
+        } else {
+            ready->addCondition(checkPointer(new BAPConLobPathClear(targetHandle, aimPosition, aimDirection)));
+            ready->addCondition(solution);
         }
-        // Retail adds a kind-56 condition (constructor PE 101B2580; target, aim position, aim
-        // direction) that is not recovered yet. Reached only by static attacks.
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-condition-56]
-        BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildDirectFire (condition kind 56)");
+    } else {
+        ready->addCondition(solution);
     }
-    ready->addCondition(solution);
 
     float hold = 0.0f;
     if (m_holdFire && weapon->getMaxRange() > 10.0f) {

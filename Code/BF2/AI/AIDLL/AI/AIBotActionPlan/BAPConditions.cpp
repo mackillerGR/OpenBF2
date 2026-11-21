@@ -12,6 +12,7 @@
 #include "../../../AIInterface/BFKnowledge/BFPhysics.h"
 #include "../AIKnowledge/IPIControlInfo.h"
 #include "BAPStatements.h"
+#include "../../../AIInterface/BFKnowledge/BFObjectEnvironment.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../Main/CommonSingletonServer.h"
@@ -1227,6 +1228,205 @@ bool BAPConTimer::evaluate(Bot*)
 
 BAPConditionType BAPConTimer::getType() { return static_cast<BAPConditionType>(39); }
 BAPConTimer::~BAPConTimer() {}
+
+
+// ---- BAPConLobPathClear / BAPConMuzzleImpactNear -------------------------------------------
+
+namespace {
+
+// Whether a friendly soldier of the bot's side stands within sqrt(radiusSq) of the point, at
+// most 2.5 above or below it.
+bool friendlySoldierNear(Bot* bot, const Vec3& point, float radiusSq)
+{
+    const std::vector<IAIPlayer*>& players =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getAllPlayers();
+    for (unsigned int i = 0; i < players.size(); ++i)
+    {
+        IAIPlayer* const player = players[i];
+        if (!player || player->getSide() != bot->getSide())
+            continue;
+        IAIObject* const vehicle = player->getCurrentVehicle();
+        if (!vehicle)
+            continue;
+        Information* const information =
+            informationManager->getInformation(vehicle->getInformation(bot->getSide()));
+        if (!information || !((information->getObjectTypeFlags() >> 21) & 1))
+            continue;
+        if (!(std::fabs(information->getPosition().y - point.y) < 2.5f))
+            continue;
+        const Vec3& position = information->getPosition();
+        const float dx = point.x - position.x;
+        const float dy = point.y - position.y;
+        const float dz = point.z - position.z;
+        if (dx * dx + dy * dy + dz * dz < radiusSq)
+            return true;
+    }
+    return false;
+}
+
+void setUpSolver(AimSolver& solver, WeaponInfo* weapon)
+{
+    solver.setDrag(weapon->getDrag());
+    solver.setSpeed(weapon->getExitVelocity());
+    const float gravity = static_cast<const IAIPhysics*>(CommonSingletonServer::m_iaiPhysics)->getGravity();
+    solver.setGravity(weapon->getGravityModifier() * gravity);
+}
+
+} // anonymous namespace
+
+BAPConLobPathClear::BAPConLobPathClear(unsigned int target, BotScriptValue<Vec3>* aimPosition,
+                                       BotScriptValue<Vec3>* aimDirection)
+    : m_target(target), m_aimPosition(aimPosition), m_aimDirection(aimDirection)
+{
+}
+
+BAPConditionType BAPConLobPathClear::getType() { return static_cast<BAPConditionType>(56); }
+
+BAPConLobPathClear::~BAPConLobPathClear()
+{
+}
+
+// PE 101B2750. Neither the equipment nor its armament or weapon is checked, as shipped.
+bool BAPConLobPathClear::evaluate(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* const weapon =
+        WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+        return false;
+    BotMain* const main = static_cast<BotMain*>(bot);
+    const bool vehicle = !((equipment->getObjectTypeFlags() >> 21) & 1);
+    const double now = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - main->getTimeOfLastFailedStaticAttack() < 10.0 && !vehicle)
+        return false;
+
+    const Vec3& aimPosition = m_aimPosition->m_value;
+    if (friendlySoldierNear(bot, aimPosition, 49.0f))
+        return false;
+
+    bot->getSensedObjectFromHandle(m_target);   // the result is unused, as shipped
+    setUpSolver(m_solver, weapon);
+    const Mat4& origin = weapon->getProjectileOrigin();
+    const Vec3& direction = m_aimDirection->m_value;
+    Vec3 via = {0.0f, 0.0f, 0.0f};
+    float time = 0.0f;
+    if (main->getBotWantsToSimulateArtillery() && m_solver.peak(direction, via, time))
+    {
+        via.y = (via.y + weapon->getExitVelocity() * direction.y * time) * 0.5f;
+    }
+    else
+    {
+        via.x = direction.x * 3.0f;
+        via.y = direction.y * 3.0f;
+        via.z = direction.z * 3.0f;
+    }
+    const Vec3 from = {origin.m[12], origin.m[13], origin.m[14]};
+    via.x += from.x;
+    via.y += from.y;
+    via.z += from.z;
+
+    IAIObjectEnvironment* const environment =
+        static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment);
+    std::vector<IAIObject*> ignore;
+    ignore.push_back(equipment->getAIObject());
+    IgnoreListPredicate filter(ignore);
+    Vec3 hit = {0.0f, 0.0f, 0.0f};
+    bool blocked;
+    if (environment->collideLineWithWorld(from, via, &filter, &hit))
+    {
+        const float dx = aimPosition.x - hit.x;
+        const float dy = aimPosition.y - hit.y;
+        const float dz = aimPosition.z - hit.z;
+        blocked = !(dx * dx + dy * dy + dz * dz < 12.25f);
+    }
+    else
+    {
+        ignore.resize(0);
+        ignore.push_back(target->getAIObject());
+        blocked = false;
+        if (environment->collideLineWithWorld(via, aimPosition, &filter, &hit))
+        {
+            const float dx = aimPosition.x - hit.x;
+            const float dy = aimPosition.y - hit.y;
+            const float dz = aimPosition.z - hit.z;
+            blocked = !(dz * dz + dy * dy + dx * dx < 12.25f);
+        }
+    }
+    if (blocked)
+    {
+        if (main->getBotWantsToSimulateArtillery())
+        {
+            main->setTimeOfLastFailedStaticSkyAttack(now);
+            main->setBotIsSimulatingArtillery(false);
+        }
+        else
+        {
+            main->setTimeOfLastFailedStaticAttack(now);
+        }
+        return false;
+    }
+    if (main->getBotWantsToSimulateArtillery() && !weapon->getIsThrown())
+        main->setBotIsSimulatingArtillery(true);
+    return true;
+}
+
+BAPConMuzzleImpactNear::BAPConMuzzleImpactNear(unsigned int target, BotScriptValue<Vec3>* aimPosition,
+                                               BotScriptValue<Vec3>* aimDirection, float radius)
+    : m_target(target), m_aimPosition(aimPosition), m_aimDirection(aimDirection), m_radiusSq(radius * radius)
+{
+}
+
+BAPConditionType BAPConMuzzleImpactNear::getType() { return static_cast<BAPConditionType>(57); }
+
+BAPConMuzzleImpactNear::~BAPConMuzzleImpactNear()
+{
+}
+
+// PE 101B2200. Neither the equipment nor its armament or weapon is checked, as shipped.
+bool BAPConMuzzleImpactNear::evaluate(Bot* bot)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* const weapon =
+        WeaponInfoManager::m_instance->getInformation(armament->getWeapon(armament->getActiveWeapon()));
+    if (!informationManager->getInformation(m_target))
+        return false;
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(bot->getSensedObjectFromHandle(m_target));
+    if (!sensed)
+        return false;
+    setUpSolver(m_solver, weapon);
+    const Mat4& origin = weapon->getProjectileOrigin();
+    const Vec3 from = {origin.m[12], origin.m[13], origin.m[14]};
+    const float dx = sensed->m_lastPosition.x - from.x;
+    const float dy = sensed->m_lastPosition.y - from.y;
+    const float dz = sensed->m_lastPosition.z - from.z;
+    const float reach = std::sqrt(dz * dz + dy * dy + dx * dx) + 5.0f;
+    const Vec3 to = {reach * origin.m[8] + from.x, reach * origin.m[9] + from.y, reach * origin.m[10] + from.z};
+
+    std::vector<IAIObject*> ignore;
+    ignore.push_back(equipment->getAIObject());
+    IgnoreListPredicate filter(ignore);
+    Vec3 hit = {0.0f, 0.0f, 0.0f};
+    bool clear = false;
+    if (static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment)
+            ->collideLineWithWorld(from, to, &filter, &hit)
+        && !friendlySoldierNear(bot, hit, m_radiusSq))
+    {
+        const Vec3& aimPosition = m_aimPosition->m_value;
+        const float ax = aimPosition.x - hit.x;
+        const float ay = aimPosition.y - hit.y;
+        const float az = aimPosition.z - hit.z;
+        clear = ax * ax + ay * ay + az * az < m_radiusSq;
+    }
+    if (clear)
+        return true;
+    static_cast<BotMain*>(bot)->setTimeOfLastFailedSplashDamageAttack(
+        static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+    return false;
+}
 
 } // namespace ai
 } // namespace hfe

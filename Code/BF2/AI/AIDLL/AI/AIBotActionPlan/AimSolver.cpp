@@ -438,6 +438,20 @@ bool AimSolver::lobDirection(Vec3& direction, Vec3& work) const
     return true;
 }
 
+// PE 101DFE30.
+bool AimSolver::peak(const Vec3& direction, Vec3& offset, float& time) const
+{
+    if (!(direction.y > 0.0f) && !(direction.y != direction.y))
+        return false;
+    const float rise = direction.y * m_speed;
+    const float t = -(rise / m_gravity);
+    time = t;
+    offset.x = t * direction.x * m_speed;
+    offset.y = rise * t * 0.5f;
+    offset.z = t * direction.z * m_speed;
+    return true;
+}
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice
