@@ -27,6 +27,9 @@
 #include "../Main/AIRandom.h"
 #include "../Main/AISettingsInterfaces.h"
 #include "SquadManager.h"
+#include "../Main/IBotManager.h"
+#include "../AIKnowledge/IPIPhysical.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include "SensingAgent.h"
 #include "BotSenses.h"
 #include <cmath>
@@ -1087,9 +1090,128 @@ bool SquadCoordinator::findValidPositionNear(SquadMember* member, Vec3& position
     return false;
 }
 
-float SquadCoordinator::getSupportDemand(SquadMember*, unsigned int, int)
+// PE 101A3890.
+float SquadCoordinator::getSupportDemand(SquadMember* member, unsigned int target, int type)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::getSupportDemand");
+    SquadManager* const squads = SquadManager::m_instance;
+    float demand = 1.0f;
+    SquadMember* const other = squads->getSquadMemberOfObject(target, m_side + 1);
+    if (!other)
+    {
+        // Nobody of ours occupies the target.
+        if (squads->isRequestedInSquads(target, type, m_side + 1))
+            return 0.0f;
+        Information* const information = informationManager->getInformation(target);
+        if (!information)
+            return demand;
+        const Vec3& position = information->getPosition();
+        const float dx = position.x - m_v108.x;
+        const float dy = position.y - m_v108.y;
+        const float dz = position.z - m_v108.z;
+        if (dx * dx + dy * dy + dz * dz > 20000.0f)
+            demand = 0.0f;
+        IPIUnit* const unit = information->getUnit();
+        if (!unit)
+            return demand;
+        const int playerId = unit->getOccupyingPlayerId(m_side + 1);
+        if (playerId == -1)
+            return demand;
+        if (IBotManager::instance->getBotFromPlayerId(playerId))
+            return demand;
+        return demand + demand;
+    }
+
+    if (other->getSquadIndex() == member->getSquadIndex())
+    {
+        // A member of this squad: no demand when the other is the supporter kind itself,
+        // otherwise reduced by what the rest of the squad asked for already.
+        bool handled = false;
+        int supporterKit = 0;
+        if (other->getMemberIndex() != member->getMemberIndex() && type == 1)
+            supporterKit = 5;
+        else if (type == 4 && other->getMemberIndex() != member->getMemberIndex())
+            supporterKit = 3;
+        if (supporterKit)
+        {
+            // The target's lookup is not checked, as shipped.
+            IPIPhysical* const physical = informationManager->getInformation(target)->getPhysical();
+            if (physical && physical->getHealth() > 0.001f
+                && other->getPlayer()->getSpawnKit() == supporterKit)
+                handled = true;
+        }
+        if (handled)
+        {
+            demand = 0.0f;
+        }
+        else
+        {
+            for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+            {
+                SquadMember* const each = m_squadMembers[i];
+                if (each->getMemberIndex() != member->getMemberIndex() && each->hasRequest(target, type))
+                {
+                    if (type != 5)
+                    {
+                        demand = 0.0f;
+                        break;
+                    }
+                    demand = static_cast<float>(demand * 0.75);
+                }
+            }
+        }
+    }
+    else
+    {
+        // A member of another squad: wanted when close and that squad lacks the supporter kit.
+        const bool requested = squads->isRequestedInSquads(target, type, m_side + 1);
+        float distanceSq = 0.0f;
+        Vec3 position = {0.0f, 0.0f, 0.0f};
+        if (other->getPosition(position))
+        {
+            const float dx = position.x - m_v108.x;
+            const float dy = position.y - m_v108.y;
+            const float dz = position.z - m_v108.z;
+            distanceSq = dx * dx + dy * dy + dz * dz;
+        }
+        int supporterKit = 0;
+        switch (type)
+        {
+        case 1: supporterKit = 5; break;
+        case 2: supporterKit = 4; break;
+        case 4: supporterKit = 3; break;
+        default: break;
+        }
+        if (supporterKit)
+        {
+            if (requested || !(distanceSq < 1000.0f))
+                demand = 0.0f;
+            else if (squads->getSquadFromPlayer(other->getPlayerId(), m_side + 1)->hasMemberWithKit(supporterKit))
+                demand = 0.1f;
+            else
+                demand = 0.5f;
+        }
+    }
+    if (other->hasBot())
+        return demand;
+    return demand + demand;
+}
+
+// PE 101A3840.
+bool SquadCoordinator::hasMemberRequest(unsigned int target, int action)
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        if (m_squadMembers[i]->hasRequest(target, action))
+            return true;
+    return false;
+}
+
+// PE 101A37B0.
+bool SquadCoordinator::hasMemberWithKit(int kit)
+{
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        if (m_squadMembers[i] && m_squadMembers[i]->getPlayer()->getSpawnKit() == kit)
+            return true;
+    return false;
 }
 
 // PE 101A3120. The closest object to the pending position is looked up after the assignment is

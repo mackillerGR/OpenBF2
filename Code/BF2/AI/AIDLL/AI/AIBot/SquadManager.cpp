@@ -477,6 +477,32 @@ SquadCoordinator* SquadManager::getSquadFromPlayer(int playerId, int side)
     return 0;
 }
 
+// PE 1012AA40.
+SquadMember* SquadManager::getSquadMemberOfObject(unsigned int object, int side)
+{
+    Information* const information = informationManager->getInformation(object);
+    if (!information || !information->getUnit())
+        return 0;
+    const int playerId = information->getUnit()->getOccupyingPlayerId(side);
+    if (playerId == -1)
+        return 0;
+    return getSquadMember(playerId, side);
+}
+
+// PE 1012B3E0.
+bool SquadManager::isRequestedInSquads(unsigned int target, int action, int side)
+{
+    bool requested = false;
+    std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < coordinators.size(); ++i)
+    {
+        requested = coordinators[i]->hasMemberRequest(target, action);
+        if (requested)
+            break;
+    }
+    return requested;
+}
+
 // PE 1012B430.
 void SquadManager::shareTarget(int playerId, int side, unsigned int target)
 {

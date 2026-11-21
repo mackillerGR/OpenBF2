@@ -115,7 +115,15 @@ public:
     bool acceptMission(SquadMember* member);
     // How much the squad wants the member to give support of the type to the target.
     // PE 101A3890; [INFERRED] name. [FRONTIER]
+    // How much the member's support (type 1 heal, 2 ammunition, 4 repair; 3 and 5 also occur)
+    // is wanted on the target: 0 when handled already, scaled down by requests of others and
+    // doubled for human players or members without a bot. PE 101A3890.
     float getSupportDemand(SquadMember* member, unsigned int target, int type);
+    // Whether any member requested the action on the target; members are not null-checked.
+    // PE 101A3840; [INFERRED] name.
+    bool hasMemberRequest(unsigned int target, int action);
+    // Whether a member's player has the spawn kit. PE 101A37B0; [INFERRED] name.
+    bool hasMemberWithKit(int kit);
     // Records an order as the pending mission. A commander order is refused while a bot
     // commander's squad is busy (near its goal or on a mission); a squad order from a human
     // leader becomes the secondary goal. [INFERRED] name. PE 101A3000.

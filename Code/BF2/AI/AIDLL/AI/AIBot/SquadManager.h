@@ -76,6 +76,12 @@ public:
     void setValidArtilleryFleePos(SquadMember* member, Vec3 position);
     SquadMember* getSquadMember(int playerId, int side);
     SquadCoordinator* getSquadFromPlayer(int playerId, int side);
+    // The squad member occupying the object, as the one-based side sees it, or null. PE 1012AA40;
+    // [INFERRED] name.
+    SquadMember* getSquadMemberOfObject(unsigned int object, int side);
+    // Whether a member of any squad on the one-based side has requested the action on the
+    // target. PE 1012B3E0; [INFERRED] name.
+    bool isRequestedInSquads(unsigned int target, int action, int side);
     // Hands a target a bot engages to the rest of the player's squad on the one-based side; a
     // player in no squad is ignored. PE 1012B430; [INFERRED] name.
     void shareTarget(int playerId, int side, unsigned int target);

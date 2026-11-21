@@ -60,6 +60,7 @@ public:
     bool isAtFormationPosition() const { return m_flag30; }   // PE 1017BBF0; [INFERRED] name
     bool isFleeingArtillery() const { return m_flag4B; }      // PE 1017BAF0; [INFERRED] name
     int getMemberIndex();
+    int getSquadIndex() const { return m_squadIndex; }   // PE 1017BC90
     void setMemberIndex(int index);          // PE 1017BCA0
     void resetMember();                      // [INFERRED] name; PE 1017BDC0
     // PE 1017BB00. Plan roots raise this while they live. [INFERRED] name.
