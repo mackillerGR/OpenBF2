@@ -14,6 +14,7 @@
 #include "../AIBot/SquadManager.h"                              // squad notification forwarders
 #include "../AIBot/SquadMember.h"                               // eventPlayerKilled
 #include "IBotManager.h"                                        // the bot lifecycle forwarders
+#include "../AIBot/BotMain.h"                                    // event_isRepaired
 #include "../AIKnowledge/Information.h"                          // eventManDown
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIPhysical.h"
@@ -168,9 +169,11 @@ int AIEventCourier::eventRadioMessage(const AIRadioMessageSettings& settings, in
     return 0;   // [CHOSEN, not recovered] the shipped body leaves the hub's eax; no caller reads it
 }
 
-int AIEventCourier::event_mineRemoved(unsigned int)
+// PE 100BF4A0. A tail jump into the bot manager; no null guard.
+int AIEventCourier::event_mineRemoved(unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_mineRemoved");
+    IBotManager::instance->removeMineTarget(handle);
+    return 0;   // [CHOSEN, not recovered] the shipped body leaves the manager's eax; no caller reads it
 }
 
 // PE 100BF4B0. A tail jump into the communication hub; no null guard.
@@ -180,9 +183,12 @@ int AIEventCourier::event_enemySpotted(IAIObject* object, unsigned char side)
     return 0;   // [CHOSEN, not recovered] the shipped body leaves the hub's eax; no caller reads it
 }
 
-int AIEventCourier::event_isRepaired(int)
+// PE 100BF4C0. Marks the bot of the player, if any, as repaired.
+int AIEventCourier::event_isRepaired(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_isRepaired");
+    if (Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId))
+        static_cast<BotMain*>(bot)->setIsRepaired(true);
+    return 0;   // [CHOSEN, not recovered] the shipped body returns whatever eax held; no caller reads it
 }
 
 // PE 100BF5D0. The arguments reach the manager swapped.
