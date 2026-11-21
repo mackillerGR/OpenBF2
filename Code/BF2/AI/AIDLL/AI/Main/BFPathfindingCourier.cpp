@@ -41,24 +41,29 @@ BFPathfindingCourier::~BFPathfindingCourier()
 {
 }
 
+// PE 100D2550: the number of pathfinding maps.
 int BFPathfindingCourier::getNumberOfVehicles() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::getNumberOfVehicles");
+    return IAIPathfinding::instance->getNumberOfMaps();
 }
 
-bool BFPathfindingCourier::isVehicleUsed(unsigned int) const
+// PE 100D2560: whether the pathfinding map is used.
+bool BFPathfindingCourier::isVehicleUsed(unsigned int vehicle) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isVehicleUsed");
+    return IAIPathfinding::instance->isMapUsed(vehicle);
 }
 
-bool BFPathfindingCourier::isValidPosition(int, int, const Vec3&) const
+// PE 100D2580: the position query on one map for one equipment type, materials respected.
+bool BFPathfindingCourier::isValidPosition(int map, int equipmentType, const Vec3& position) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isValidPosition");
+    return IAIPathfinding::instance->isValidPosition(map, equipmentType, position, true);
 }
 
-bool BFPathfindingCourier::isValidPosition(const Vec3&) const
+// PE 100D25A0: the position query on the trace map for equipment type 1.
+bool BFPathfindingCourier::isValidPosition(const Vec3& position) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFPathfindingCourier::isValidPosition");
+    IAIPathfinding* const pathfinding = IAIPathfinding::instance;
+    return pathfinding->isValidPosition(pathfinding->getTraceMapIndex(), 1, position, true);
 }
 
 void BFPathfindingCourier::getLastValidSquadleaderPosition(const Vec3&) const
