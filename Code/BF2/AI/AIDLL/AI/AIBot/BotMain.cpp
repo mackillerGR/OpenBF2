@@ -1810,10 +1810,10 @@ void BotMain::event_shotMissed(int i, const Vec3& v)
     BF2_AI_FRONTIER("dice::hfe::ai::BotMain::event_shotMissed");
 }
 
-// +0x178
+// +0x178. PE 1017EA90: a tail call into the senses.
 void BotMain::event_heardObject(unsigned int h)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::event_heardObject");
+    m_sensingAgent->getSenses()->addHeard(h);
 }
 
 // +0x17C

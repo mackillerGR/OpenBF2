@@ -159,7 +159,7 @@ public:
     virtual void event_projectile(FireObject* f, unsigned int h) = 0;                             // +0x16C [FRONTIER]
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v) = 0;                      // +0x170 [FRONTIER]
     virtual void event_shotMissed(int i, const Vec3& v) = 0;                                      // +0x174 [FRONTIER]
-    virtual void event_heardObject(unsigned int h) = 0;                                           // +0x178 [FRONTIER]
+    virtual void event_heardObject(unsigned int h) = 0;                                           // +0x178
     virtual bool isInTransitionPhase() const = 0;                                                 // +0x17C
     virtual void setIsInTransitionPhase(bool b) = 0;                                              // +0x180
     virtual void addToMoveInclination(float f) = 0;                                               // +0x184
@@ -318,7 +318,7 @@ public:
     virtual void event_projectile(FireObject* f, unsigned int h);                                 // +0x16C [FRONTIER]
     virtual void event_shotHit(int i, world::IObject* o, const Vec3& v);                          // +0x170 [FRONTIER]
     virtual void event_shotMissed(int i, const Vec3& v);                                          // +0x174 [FRONTIER]
-    virtual void event_heardObject(unsigned int h);                                               // +0x178 [FRONTIER]
+    virtual void event_heardObject(unsigned int h);                                               // +0x178
     virtual bool isInTransitionPhase() const;                                                     // +0x17C
     virtual void setIsInTransitionPhase(bool b);                                                  // +0x180
     virtual void addToMoveInclination(float f);                                                   // +0x184

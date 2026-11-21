@@ -91,6 +91,13 @@ public:
     // PE 101BD8F0.
     void addSeen(unsigned int handle, const Vec3& normal, unsigned int part, Information* info,
                  bool direct, bool clear);
+    // Records that the bot heard `handle`. Ignored within 1.5 s of the bot's quiet time, for the
+    // bot's own equipment, objects on its side, soldiers while the bot is not a soldier, and a
+    // zero hearing chance. A first hearing queues the record (creating it, and alerting the
+    // sensing agent, when new); either way the record's position is refreshed and the primary
+    // object's knowledge is renewed with at least a tenth as the chance. PE 101BC540;
+    // [INFERRED] name.
+    void addHeard(unsigned int handle);
     // Hearing, incoming fire and seen-record upkeep within the slice. The first step gets a
     // tenth of it. Reached through BotMain::updateSensing. PE 101BFA10; [INFERRED] name.
     void updateSensing(const double& slice);

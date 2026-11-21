@@ -975,6 +975,68 @@ void BotSenses::addSeen(unsigned int handle, const Vec3& normal, unsigned int pa
     seen->second = --m_list56.end();
 }
 
+// PE 101BC540.
+void BotSenses::addHeard(unsigned int handle)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment)
+        return;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (now - m_bot->getDouble172() < 1.5)
+        return;
+    if (handle == m_bot->getCurrentEquipment())
+        return;
+    Information* const info = informationManager->getInformation(handle);
+    if (!info)
+        return;
+    if (info->getSide() == m_bot->getSide())
+        return;
+    if (!((equipment->getObjectTypeFlags() >> 21) & 1) && ((info->getObjectTypeFlags() >> 21) & 1))
+        return;
+    const float chance = getHearingProbability(handle, info);
+    if (!(chance > 0.0f))
+        return;
+    const int side = m_bot->getSide();
+    if (m_set64.insert(handle).second)
+    {
+        SensedObjectMap::iterator found = m_sensedObjects.find(handle);
+        info->getAIObject()->addInformationToGrid(info->getSide());
+        SensedObject* object;
+        if (found == m_sensedObjects.end())
+        {
+            object = checkPointer(new SensedObject(handle, false, info->getSide() != 0));
+            m_sensedObjects.insert(SensedObjectMap::value_type(handle, object));
+            m_bot->getSensingAgent()->setAlerted();
+        }
+        else
+        {
+            object = found->second;
+            object->m_senseFlags |= 1;
+            object->m_lastSense = 1;
+        }
+        object->m_handle = handle;
+        object->m_lastSeen = now;
+        object->m_senseFlags |= 1;
+        object->m_lastSense = 1;
+        object->m_position = info->getPosition();
+        object->m_positionTime = now;
+        Information* const primary = informationManager->getInformation(info->getPrimaryObject(side));
+        if (primary->setTime(now, std::max(chance, 0.1f)))   // not null-checked, as shipped
+            primary->getAIObject()->addInformationToGrid(side);
+        m_list76.push_back(TimedObject(now, object));
+        return;
+    }
+
+    // Already queued: the record exists; neither lookup is checked, as shipped.
+    SensedObject* const object = m_sensedObjects.find(handle)->second;
+    object->m_senseFlags |= 1;
+    object->m_lastSense = 1;
+    object->m_position = info->getPosition();
+    object->m_positionTime = now;
+    object->m_lastSeen = now;
+    informationManager->getInformation(info->getPrimaryObject(side))->setTime(now, std::max(chance, 0.1f));
+}
+
 // PE 101BDDC0.
 void BotSenses::see(const double& slice)
 {
