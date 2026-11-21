@@ -55,15 +55,18 @@ BotSenses::BotSenses(BotMain* owner)
     m_cursor60 = m_list56.end();
 }
 
-// Clears sensed-object records and resets per-life sensing state.
-// [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
+// PE 101BD6A0. Deletes the sensed-object and fire records and resets per-life sensing state.
 void BotSenses::reset()
 {
     for (SensedObjectMap::iterator it = m_sensedObjects.begin(); it != m_sensedObjects.end(); )
     {
-        // Retail here releases the object's `Information` through `informationManager` and then
-        // deletes `it->second`. See the block above for why this tree cannot write it yet.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::reset (sensed objects present)");
+        // PE 101BD6C0: a record that added a contact removes it from the object's information.
+        if (it->second->m_contactAdded)
+        {
+            if (Information* const information = informationManager->getInformation(it->second->getHandle()))
+                information->removeContact();
+        }
+        delete it->second;
         m_sensedObjects.erase(it++);
     }
     m_sensedObjects.clear();
@@ -85,8 +88,7 @@ void BotSenses::reset()
 
     for (std::list<FireEntry>::iterator it = m_list84.begin(); it != m_list84.end(); ++it)
     {
-        // Retail here is `delete it->first;`. See the block above.
-        BF2_AI_FRONTIER("dice::hfe::ai::BotSenses::reset (fire objects present)");
+        delete it->first;   // PE 101BD840
     }
     m_list84.clear();
 
