@@ -1115,9 +1115,13 @@ void BotManager::setBotRecievedMoveSquadOrder(int)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveSquadOrder");
 }
 
-void BotManager::setBotTeamKilled(int, int)
+// PE 1018AC70. The bot with the first player id (the killer, [INFERRED]) queues radio message 9;
+// the second id is not read.
+void BotManager::setBotTeamKilled(int killer, int)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotTeamKilled");
+    Bot* const bot = getBotFromPlayerId(killer);
+    if (bot)
+        bot->getCommunicationAgent()->enqueueRadioMessage(9, 6, 3, 0.0f, -1);
 }
 
 void BotManager::registerDamageOnBot(float, int, int)

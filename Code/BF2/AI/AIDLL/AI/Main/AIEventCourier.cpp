@@ -332,9 +332,11 @@ void AIEventCourier::event_squadOrderRejected(int, int)
 {
 }
 
-int AIEventCourier::event_botTeamKilled(int, int)
+// PE 100BF690. A tail jump into the bot manager.
+int AIEventCourier::event_botTeamKilled(int a, int b)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::event_botTeamKilled");
+    IBotManager::instance->setBotTeamKilled(a, b);
+    return 0;   // [CHOSEN, not recovered] the shipped body leaves the manager's eax; no caller reads it
 }
 
 int AIEventCourier::event_freeCameraFire(bool)
