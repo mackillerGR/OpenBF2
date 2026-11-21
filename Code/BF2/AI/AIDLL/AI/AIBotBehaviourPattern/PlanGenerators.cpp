@@ -1009,9 +1009,87 @@ void BBPC4::offerPlan(Bot* bot, bool detonate, AIStrategicObject* object)
     m_object = object;
 }
 
-BotScript* BBPC4::generate(Bot*)
+// PE 101224E0. Switches to the C4 slot (4), arms it with the alternate fire unless the weapon is
+// already in state 1 (when detonating: only while it is not), waits 0.7 seconds, fires, then places
+// or removes the charge, and finally switches back to slot 2 when there is one. Any current plan
+// of this behaviour is kept.
+BotScript* BBPC4::generate(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPC4::generate");
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPC4::generate (script debugger reset)");
+        bot->getScriptContext()->clear();
+        dropPlan(bot);
+        return 0;
+    }
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPC4::generate (script debugger reset)");
+    BAPContext* const context = bot->getScriptContext();
+    context->clear();
+    bot->getCurrentEquipment();   // read and dropped, as shipped
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId)
+        return bot->getPlan();
+    dropPlan(bot);
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment || !equipment->getUnit() || !equipment->getMobile())
+        return 0;
+    IPIArmament* const armament = equipment->getArmament();
+    WeaponInfo* weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(4));
+    if (!weapon)
+        return 0;
+
+    BAPTrigger* const select = checkPointer(new BAPTrigger(
+        weapon->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+        singleInputMask(weapon->getWeaponActivate()), m_behaviourId, 0.0, false));
+    BAPSerial* const serial = checkPointer(new BAPSerial(m_behaviourId, -1));
+    serial->addStatement(checkPointer(new BAPResetControls(true, true, true, m_behaviourId)));
+    serial->addStatement(checkPointer(select));
+    BotScriptValue<WeaponInfo*>* const weaponValue = context->createVariable(weapon, 0);
+
+    BAPIf* arm;
+    BAPPlaceC4* charge;
+    if (m_detonate)
+    {
+        BAPTrigger* const altFire = checkPointer(new BAPTrigger(
+            weapon->getWeaponAltFire(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(weapon->getWeaponAltFire()), m_behaviourId, 0.0, true));
+        BAPConNot* const notArmed =
+            checkPointer(new BAPConNot(checkPointer(new BAPConWeaponStateOne(weaponValue))));
+        arm = checkPointer(new BAPIf(notArmed, altFire, 0, m_behaviourId, true, false));
+        charge = checkPointer(new BAPPlaceC4(0, m_object, false));
+    }
+    else
+    {
+        BAPTrigger* const altFire = checkPointer(new BAPTrigger(
+            weapon->getWeaponAltFire(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(weapon->getWeaponAltFire()), m_behaviourId, 0.0, true));
+        BAPConWeaponStateOne* const armed = checkPointer(new BAPConWeaponStateOne(weaponValue));
+        arm = checkPointer(new BAPIf(armed, altFire, 0, m_behaviourId, true, false));
+        charge = checkPointer(new BAPPlaceC4(0, m_object, true));
+    }
+    serial->addStatement(arm);
+    serial->addStatement(checkPointer(new BAPIdle(
+        checkPointer(new BAPConTimer(static_cast<double>(0.7f), false, false, false)), 0, m_behaviourId)));
+    serial->addStatement(checkPointer(new BAPTrigger(
+        weapon->getWeaponFire(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+        singleInputMask(weapon->getWeaponFire()), m_behaviourId, 0.0, true)));
+    serial->addStatement(charge);
+
+    WeaponInfo* const previous = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(2));
+    if (previous)
+    {
+        serial->addStatement(checkPointer(new BAPTrigger(
+            previous->getWeaponActivate(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+            singleInputMask(previous->getWeaponActivate()), m_behaviourId, 0.0, false)));
+    }
+
+    BAPFireWrapper* const script = checkPointer(new BAPFireWrapper(
+        bot, static_cast<unsigned int>(-1), true, false, 4, -1, serial, m_behaviourId));
+    script->m_owner = this;
+    static_cast<BotMain*>(bot)->resetAllControls(true, true, true);
+    return script;
 }
 
 BBPRunOverSoldier::BBPRunOverSoldier(int behaviourId)

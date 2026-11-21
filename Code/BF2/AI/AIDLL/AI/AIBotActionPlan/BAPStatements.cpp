@@ -2749,6 +2749,39 @@ bool BAPOverrideSensingAgent::execute(Bot* bot, bool& finished, bool& failed)
 BAPStatementType BAPOverrideSensingAgent::getType() { return BAPSTOverrideSensingAgent; }
 bool BAPOverrideSensingAgent::isComposite() { return false; }
 
+// ---- BAPPlaceC4 -----------------------------------------------------------------------------
+
+BAPPlaceC4::BAPPlaceC4(int placementType, AIStrategicObject* object, bool place)
+    : m_placementType(placementType), m_object(object), m_place(place)
+{
+}
+
+BAPPlaceC4::~BAPPlaceC4() {}
+
+// The equipment information is not null-checked, as shipped.
+bool BAPPlaceC4::execute(Bot* bot, bool& finished, bool& failed)
+{
+    if (m_place)
+    {
+        if (!bot->isC4Placed())
+        {
+            Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+            const Vec3& position = equipment->getPosition();
+            bot->placeC4(m_placementType, position, m_object);
+        }
+    }
+    else if (bot->isC4Placed())
+    {
+        bot->removeC4();
+    }
+    finished = true;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPPlaceC4::getType() { return BAPSTPlaceC4; }
+bool BAPPlaceC4::isComposite() { return false; }
+
 // ---- BAPChangeWeapon ------------------------------------------------------------------------
 
 namespace {

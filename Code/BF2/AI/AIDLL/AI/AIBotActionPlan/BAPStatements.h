@@ -925,6 +925,24 @@ public:
     virtual bool isComposite();                                        // PE 10199770: false
 };
 
+// Places the bot's C4 at its equipment's position, or removes the placed charge. Finishes as
+// failed at once. Type 22. PE vtable 10284AE0. [INFERRED] names.
+class BAPPlaceC4 : public BotScript
+{
+public:
+    // PE 101C1CD0. The behaviour id is left unset, as shipped.
+    BAPPlaceC4(int placementType, AIStrategicObject* object, bool place);
+    virtual ~BAPPlaceC4();                                             // PE 101C1D50
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101C1D90
+    virtual BAPStatementType getType();                                // PE 101C1D20: 22
+    virtual bool isComposite();                                        // PE 101C1D10: false
+
+    /* +0x18 */ int m_placementType;
+    /* +0x1C */ AIStrategicObject* m_object;
+    /* +0x20 */ bool m_place;
+};
+
 // Switches the bot's soldier to a weapon slot by pressing its activate input. Finished as soon as
 // it pressed; failed unless the press changes the weapon. A vehicle presses and fails. The input
 // mask is the weapon's activate input. Type 28. PE vtable 102842C0. [INFERRED] name.
