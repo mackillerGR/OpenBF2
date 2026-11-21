@@ -3,6 +3,8 @@
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../Main/IAIPathfinding.h"
 #include "BAPStatements.h"
+#include <cfloat>
+#include <algorithm>
 
 #include "BAPConditions.h"
 #include "../AIBot/BotMain.h"
@@ -959,12 +961,408 @@ void BAPMoveToObjectFinding::printDebug(std::ostream&)
 
 bool BAPMoveToObjectFinding::slot8() { return m_flag11D; }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] The steering body and its helper (PE 101A62A0) are
-// not recovered yet. [RETIRE-WHEN: move-to-object-steering] Recover PE 101A6A80 and 101A62A0 and
-// drive a bot toward a moving target through the infantry move-to-object entry.
-bool BAPMoveToObjectFinding::getSteering(Vec2&, bool&, bool&, int)
+namespace {
+
+float lengthSquared(const Vec3& v)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPMoveToObjectFinding::getSteering");
+    return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
+// PE 1006EEC0; defined with the look-at wrapper below.
+int normaliseVector(Vec3& value);
+
+} // anonymous namespace
+
+// PE 101A6A80. The fourth argument is handed on bit for bit as updatePath's distance.
+bool BAPMoveToObjectFinding::getSteering(Vec2& point, bool& arrived, bool& failed, int arg)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment || !m_active)
+    {
+        m_active = false;
+        return false;
+    }
+    IPIPhysical* const physical = equipment->getPhysical();
+    if (static_cast<BotMain*>(m_bot)->getShouldWaitForRepairs()
+        || (physical->isInAir() && !physical->isInWater()))
+    {
+        arrived = false;
+        failed = true;
+        return true;
+    }
+    Information* const target = informationManager->getInformation(m_targetObject);
+    if (!target)
+    {
+        m_active = false;
+        return false;
+    }
+    IPIMobile* const mobile = equipment->getMobile();   // not null-checked, as shipped
+    const IPIMobile::ValidPos& ownValid = mobile->getLastValidPosition(mobile->getVehicleNumber());
+    Information* const primary =
+        informationManager->getInformation(target->getPrimaryObject(equipment->getSide()));
+    IPIMobile* const primaryMobile = primary ? primary->getMobile() : 0;
+    if (!primary || !primaryMobile)
+    {
+        m_active = false;
+        return false;
+    }
+    const IPIMobile::ValidPos& targetValid = primaryMobile->getLastValidPosition(mobile->getVehicleNumber());
+    if (ownValid.polygon == static_cast<unsigned int>(-1))
+    {
+        m_bot->getBotNavigation()->setPathSearchPending(true);
+        m_active = false;
+        return false;
+    }
+    if (targetValid.polygon == static_cast<unsigned int>(-1))
+    {
+        m_active = false;
+        return false;
+    }
+
+    const Vec3& targetPosition = targetValid.position;
+    const Vec3& ownPosition = ownValid.position;
+    Vec3 offset;
+    offset.x = targetPosition.x - ownPosition.x;
+    offset.y = targetPosition.y - ownPosition.y;
+    offset.z = targetPosition.z - ownPosition.z;
+    const float distance = std::sqrt(offset.x * offset.x + offset.y * offset.y + offset.z * offset.z);
+
+    const SensedObject* const sensed =
+        static_cast<const SensedObject*>(m_bot->getSensedObjectFromHandle(m_targetObject));
+    bool seen = true;
+    if (sensed)
+    {
+        seen = (sensed->m_senseFlags >> 3) & 1;
+        if (!seen)
+            m_flag11F = false;
+    }
+    const bool inRange = isWithinRange();
+    const bool wasInBand = m_flag11C;
+    const bool stale = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime()
+                       - m_time128 > 1.0;
+
+    // Decide whether to choose a new goal.
+    bool choose = false;
+    if (seen && !isSamePosition3(m_target, targetPosition) && !m_flag11F && (!m_flag11D || wasInBand))
+    {
+        m_flag11F = true;
+        choose = true;
+    }
+    else if (!isSamePosition3(m_target, m_bot->getBotNavigation()->getGoal()))
+    {
+        choose = true;
+    }
+    else if (stale)
+    {
+        bool checkBand;
+        if (!m_flag11D)
+        {
+            checkBand = !(distance < m_minRange);
+            choose = !checkBand;
+        }
+        else
+        {
+            const float range = m_minRange;
+            const Vec3 fromGoal = {targetPosition.x - m_target.x, targetPosition.y - m_target.y,
+                                   targetPosition.z - m_target.z};
+            checkBand = !(range * range > lengthSquared(fromGoal));
+            if (!checkBand)
+            {
+                choose = wasInBand;
+            }
+        }
+        if (checkBand && wasInBand && !inRange && !isSamePosition3(m_target, targetPosition))
+            choose = true;
+    }
+
+    if (choose)
+    {
+        chooseGoal(distance, &offset, &ownPosition, targetValid.quadTree, targetValid.polygon,
+                   &targetPosition, false);
+    }
+    else if (m_flag11E && m_bot->getBotNavigation()->isSearchActive())
+    {
+        if (stale && m_condition && m_condition->evaluate(m_bot))
+        {
+            if (!m_flag110 || m_flag11C)
+            {
+                m_flag110 = true;
+                chooseGoal(distance, &offset, &ownPosition, targetValid.quadTree, targetValid.polygon,
+                           &targetPosition, false);
+            }
+        }
+        else
+        {
+            m_flag110 = false;
+        }
+    }
+    else
+    {
+        Vec3 unused;
+        Vec3 zero = {0.0f, 0.0f, 0.0f};
+        chooseGoal(0.0f, &unused, &zero, targetValid.quadTree, targetValid.polygon, &targetPosition, true);
+    }
+
+    const bool active = m_active;
+    m_flag11E = true;
+    if (!active)
+        return false;
+    if (!m_flag11D)
+        m_bot->getBotNavigation()->updateLastPoint(primary);
+
+    float pathDistance;
+    std::memcpy(&pathDistance, &arg, sizeof(pathDistance));
+    const bool steering = m_bot->getBotNavigation()->updatePath(m_steerPoint, m_flag11C, failed, pathDistance);
+    const Vec3& position = equipment->getPosition();
+    Vec3 ground;
+    ground.x = m_steerPoint.x;
+    ground.y = position.y;
+    ground.z = m_steerPoint.y;
+    if (steering)
+    {
+        point = m_steerPoint;
+        arrived = m_flag11C;
+        if (!((equipment->getObjectTypeFlags() >> 4) & 1))
+        {
+            double elapsed;
+            int zoneSide;
+            SquadManager* const squads = SquadManager::m_instance;
+            if (squads->isInArtilleryDangerZone(ground, m_bot->getSide(), elapsed, zoneSide)
+                && !squads->isInArtilleryDangerZone(equipment->getPosition(), m_bot->getSide(), elapsed,
+                                                    zoneSide))
+            {
+                failed = true;
+                return steering;
+            }
+        }
+    }
+    if (failed)
+    {
+        if (!steering)
+            m_flag11E = false;
+        return steering;
+    }
+
+    if (!m_flag11D && ((equipment->getObjectTypeFlags() >> 21) & 1)
+        && std::fabs(target->getPosition().y - equipment->getPosition().y) < 2.0f)
+    {
+        // Near the object a soldier with a usable weapon keeps looking at it.
+        const float distanceLeft = m_bot->getBotNavigation()->getDistanceLeft();
+        IPIPhysical* const targetPhysical = target->getPhysical();
+        IPIArmament* const armament = equipment->getArmament();
+        if (!armament || armament->getActiveWeapon() == -1)
+        {
+            m_active = false;
+            return false;
+        }
+        WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(
+            armament->getWeapon(armament->getActiveWeapon()));
+        if (!weapon)
+        {
+            m_active = false;
+            return false;
+        }
+        Vec3 zero = {0.0f, 0.0f, 0.0f};
+        if ((!m_bot->isFiring() || !(weapon->getMaxRange() > 5.0f) || weapon->getWeaponType() == 4)
+            && targetPhysical->getRadius() + 25.0f > distanceLeft)
+            setFocus(m_bot, true, zero, m_targetObject);
+        else
+            setFocus(m_bot, false, zero, static_cast<unsigned int>(-1));
+    }
+    else if ((equipment->getObjectTypeFlags() >> 21) & 1)
+    {
+        double elapsed;
+        int zoneSide;
+        if (SquadManager::m_instance->isInArtilleryDangerZone(equipment->getPosition(), m_bot->getSide(),
+                                                              elapsed, zoneSide))
+        {
+            SquadMember* const member = m_bot->getSquadMember();
+            if (member && member->isFleeingArtillery())
+                setFocus(m_bot, true, ground, static_cast<unsigned int>(-1));
+        }
+    }
+
+    if (!failed && isFinished(m_bot))
+    {
+        m_active = true;
+        arrived = true;
+        m_flag11C = true;
+        point = m_steerPoint;
+        return true;
+    }
+    if (!steering)
+        m_flag11E = false;
+    return steering;
+}
+
+// PE 101A62A0.
+void BAPMoveToObjectFinding::chooseGoal(float distance, const Vec3*, const Vec3* from, unsigned int island,
+                                        unsigned int polygon, const Vec3* targetPosition, bool direct)
+{
+    m_flag11D = false;
+    m_flag11C = false;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if (!equipment)
+    {
+        m_active = false;
+        return;
+    }
+    Information* const target = informationManager->getInformation(m_targetObject);
+    if (!target)
+    {
+        m_active = false;
+        return;
+    }
+    IPIMobile* targetMobile = target->getMobile();
+    if (!targetMobile && !target->isPrimary())
+    {
+        Information* const primary =
+            informationManager->getInformation(target->getPrimaryObject(m_bot->getSide()));
+        if (primary)
+            targetMobile = primary->getMobile();
+    }
+    IPIPhysical* const targetPhysical = target->getPhysical();
+    float reach = FLT_MAX;
+    if (targetPhysical)
+        reach = targetPhysical->getRadius() * 1.1f;
+    const int equipmentType = equipment->getUnit()->getEquipmentType();
+
+    unsigned int goalIsland = island;
+    unsigned int goalPolygon = polygon;
+    if (distance < m_minRange && !direct)
+    {
+        Vec3 candidates[3];
+        const Vec3& velocity = targetMobile->getSpeed();   // not null-checked, as shipped
+        Vec3 flat = {velocity.x, 0.0f, velocity.z};
+        const float speed = std::sqrt(flat.x * flat.x + flat.z * flat.z);
+        const bool soldier = (equipment->getObjectTypeFlags() >> 21) & 1;
+        const float length = std::min(10.0f, (m_range - m_minRange) * 0.2f) + m_minRange;
+        Vec3& first = candidates[0];
+        Vec3& second = candidates[1];
+        Vec3& third = candidates[2];
+        if (soldier && speed > 1.5f)
+        {
+            // Step aside of a running target, on the side the bot is already on.
+            const float inverse = 1.0f / speed;
+            flat.x *= inverse;
+            flat.y *= inverse;
+            flat.z *= inverse;
+            Vec3 side = {flat.z, flat.y, -flat.x};
+            const Vec3 away = {from->x - targetPosition->x, from->y - targetPosition->y,
+                               from->z - targetPosition->z};
+            const bool sameSide = !(side.z * away.z + side.y * away.y + side.x * away.x < 0.0f);
+            if (!sameSide)
+            {
+                side.x = -side.x;
+                side.y = -side.y;
+                side.z = -side.z;
+            }
+            side.x *= length;
+            side.y *= length;
+            side.z *= length;
+            first = side;
+            second.x = -side.x;
+            second.y = -side.y;
+            second.z = -side.z;
+            if (sameSide)
+            {
+                third.x = side.z;
+                third.y = side.y;
+                third.z = -side.x;
+            }
+            else
+            {
+                third.x = -side.z;
+                third.y = -side.y;
+                third.z = side.x;
+            }
+        }
+        else
+        {
+            if (soldier)
+            {
+                first.x = from->x - targetPosition->x;
+                first.y = from->y - targetPosition->y;
+                first.z = from->z - targetPosition->z;
+                normaliseVector(first);
+            }
+            else
+            {
+                const Mat4& transformation = equipment->getTransformation();
+                first.x = transformation.m[8];
+                first.y = transformation.m[9];
+                first.z = transformation.m[10];
+            }
+            first.x *= length;
+            first.y *= length;
+            first.z *= length;
+            second.x = first.z;
+            second.y = first.y;
+            second.z = -first.x;
+            third.x = -first.z;
+            third.y = -first.y;
+            third.z = first.x;
+        }
+        m_flag11D = true;
+        setFocus(m_bot, true, equipment->getPosition(), static_cast<unsigned int>(-1));
+
+        BotNavigation* const navigation = m_bot->getBotNavigation();
+        float farthest = 0.0f;
+        Vec3 reached = {0.0f, 0.0f, 0.0f};
+        Vec3 goal = {0.0f, 0.0f, 0.0f};
+        unsigned int blockedPolygon = static_cast<unsigned int>(-1);
+        unsigned int tracedPolygon;
+        bool clear = false;
+        for (int i = 0; i < 3 && !clear; ++i)
+        {
+            const Vec3 probe = {candidates[i].x + targetPosition->x, candidates[i].y + targetPosition->y,
+                                candidates[i].z + targetPosition->z};
+            clear = IAIPathfinding::instance->trace(navigation, false, probe, reached, tracedPolygon,
+                                                    equipmentType, -1, 0.0f, 0, 0);
+            if (!clear)
+            {
+                const float dx = targetPosition->x - reached.x;
+                const float dy = targetPosition->y - reached.y;
+                const float dz = targetPosition->z - reached.z;
+                const float lengthSq = dz * dz + dy * dy + dx * dx;
+                if (lengthSq > farthest)
+                {
+                    farthest = lengthSq;
+                    goal.x = (reached.x - targetPosition->x) * 0.98f + targetPosition->x;
+                    goal.y = (reached.y - targetPosition->y) * 0.98f + targetPosition->y;
+                    goal.z = (reached.z - targetPosition->z) * 0.98f + targetPosition->z;
+                    blockedPolygon = tracedPolygon;
+                }
+            }
+        }
+        goalIsland = static_cast<unsigned int>(navigation->getInfantryIsland());
+        if (clear)
+        {
+            m_target.x = (reached.x - targetPosition->x) * 0.98f + targetPosition->x;
+            m_target.y = (reached.y - targetPosition->y) * 0.98f + targetPosition->y;
+            m_target.z = (reached.z - targetPosition->z) * 0.98f + targetPosition->z;
+            goalPolygon = tracedPolygon;
+        }
+        else
+        {
+            m_target = goal;
+            goalPolygon = blockedPolygon;
+        }
+    }
+    else
+    {
+        m_flag11D = false;
+        Vec3 zero = {0.0f, 0.0f, 0.0f};
+        setFocus(m_bot, false, zero, static_cast<unsigned int>(-1));
+        m_target = *targetPosition;
+    }
+
+    m_int70 = 0;
+    m_flag102 = false;
+    if (m_flag11D)
+        m_target.y = static_cast<IAITerrain*>(CommonSingletonServer::m_iaiTerrain)->getHeight(m_target.x, m_target.z);
+    m_active = m_bot->getBotNavigation()->initPathfinding(goalIsland, goalPolygon, m_target, reach, m_range);
+    m_time128 = static_cast<const IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
 }
 
 bool BAPMoveToObjectFinding::isFinished(Bot* bot)

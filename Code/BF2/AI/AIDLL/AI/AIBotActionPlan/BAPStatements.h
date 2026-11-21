@@ -446,7 +446,9 @@ public:
 
     virtual void printDebug(std::ostream& out);                        // PE 101A6060
     virtual bool slot8();                                              // PE 101A5F50
-    // Follows the navigation toward the object and its sensed or last valid position. PE 101A6A80.
+    // Follows the navigation toward the object's last valid position, choosing a new goal when the
+    // object moved, the path's goal is stale or the bot came too close; keeps the sensing agent on
+    // the object while a soldier with a usable weapon is near it. PE 101A6A80.
     virtual bool getSteering(Vec2& point, bool& arrived, bool& failed, int arg);
     // The stop condition, or the range band; once m_flag11D is set the band counts only with
     // m_flag11C. Either way the navigation's progress is then cleared. PE 101A5FE0.
@@ -460,9 +462,18 @@ public:
     // Whether the squared distance lies between the minimum and the range squared. PE 101A5FA0.
     virtual bool isWithinRange();
 
+    // Picks the goal and requests the path. Too close to the object (closer than the minimum
+    // range) and not asked to go straight, it traces up to three points around the object (to
+    // the side of its travel, or around the bot's facing) and heads for the first one the trace
+    // reaches, else for the farthest blocked one; otherwise it heads for the object's last valid
+    // position. `unused` is never read. PE 101A62A0; [INFERRED] name.
+    void chooseGoal(float distance, const Vec3* unused, const Vec3* from, unsigned int island,
+                    unsigned int polygon, const Vec3* targetPosition, bool direct);
+
     /* +0xD4 */ bool m_active;              // = true
     /* +0xE0 */ int m_zeroE0[8];            // = 0 [UNRESOLVED]
     /* +0x101 */ bool m_flag101;            // = false [UNRESOLVED]
+    /* +0x102 */ bool m_flag102;            // cleared by chooseGoal [UNRESOLVED]
     /* +0x104 */ int m_int104;              // = 1 [UNRESOLVED]
     /* +0x108 */ Bot* m_bot;
     /* +0x10C */ BAPCondition* m_condition; // owned [UNRESOLVED] role

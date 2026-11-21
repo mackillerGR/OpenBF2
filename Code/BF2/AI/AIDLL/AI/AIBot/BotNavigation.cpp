@@ -2,6 +2,7 @@
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the remaining BotNavigation operations.
 
 #include "BotNavigation.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include <cstring>
 
 #include "BotMain.h"                       // getBotId / getCurrentEquipment - vtable +0xE8, +0xD8
@@ -1384,6 +1385,27 @@ void BotNavigation::updateObstacles()
     static_cast<IAIInformationEnvironment*>(AISingletonServer::m_iaiInformationEnvironment)
         ->getObjectsWithinRadius(m_obstacles, position, 50.0f, m_bot->getSide(), false, &predicate);
     m_obstacleCount = static_cast<int>(m_obstacles.size());
+}
+
+void BotNavigation::updateLastPoint(Information* info)
+{
+    if (m_clusterPath->m_nodes.size() > static_cast<unsigned int>(m_clusterPath->m_i0) || m_flag120
+        || m_flag68 || m_points.empty())
+        return;
+    const int count = static_cast<int>(m_points.size());
+    if (count <= 0)
+        return;
+    const IPIMobile::ValidPos& valid = info->getMobile()->getLastValidPosition(m_vehicleNumber);
+    if (m_island112 != valid.quadTree)
+        return;
+    NavigationPoint& last = m_points[count - 1];
+    last.m_position = valid.position;
+    last.m_polygon = valid.polygon;
+}
+
+void BotNavigation::setPathSearchPending(bool pending)
+{
+    m_flag192 = pending && !m_bot->getPlayer()->isClimbingLadder();
 }
 
 // PE 10172230. True within three seconds of the time held in +244.

@@ -1034,21 +1034,22 @@ BotScript* BBPFireInfantery::buildScript(Bot* bot, IPIControlInfo* controlArgume
         targetMobile = informationManager->getInformation(target->getPrimaryObject(bot->getSide()))
                            ->getMobile() != 0;
 
-    // A mobile equipment against a fixed target looks for a spot thirty metres past it.
+    // A mobile equipment against a fixed target looks for a spot thirty metres short of it, on
+    // the equipment's side.
     Vec3 firePosition = {0.0f, 0.0f, 0.0f};
     bool firePositionValid = true;
     if (mobile && !targetMobile) {
         const Vec3& targetPosition = target->getPosition();
-        Vec3 beyond = {targetPosition.x - ownPosition.x, targetPosition.y - ownPosition.y,
-                       targetPosition.z - ownPosition.z};
-        normaliseVector(beyond);
-        beyond.x = beyond.x * 30.0f + targetPosition.x;
-        beyond.y = beyond.y * 30.0f + targetPosition.y;
-        beyond.z = beyond.z * 30.0f + targetPosition.z;
+        Vec3 shortOf = {ownPosition.x - targetPosition.x, ownPosition.y - targetPosition.y,
+                       ownPosition.z - targetPosition.z};
+        normaliseVector(shortOf);
+        shortOf.x = shortOf.x * 30.0f + targetPosition.x;
+        shortOf.y = shortOf.y * 30.0f + targetPosition.y;
+        shortOf.z = shortOf.z * 30.0f + targetPosition.z;
         unsigned int quadTree;
         unsigned int polygon;
         firePositionValid = IAIPathfinding::instance->findClosestValidPolygon(
-            quadTree, polygon, firePosition, mobile->getVehicleNumber(), targetPosition, beyond, 10,
+            quadTree, polygon, firePosition, mobile->getVehicleNumber(), targetPosition, shortOf, 10,
             own->getUnit()->getEquipmentType());
     }
 

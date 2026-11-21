@@ -55,7 +55,15 @@ public:
     // as off its path (+194). PE 101733E0.
     void updateNavPoints();
     void updateObstacles();
+    // Once the cluster path is used up and the bot is on its fine path, moves the last point to
+    // the object's last valid position for the bot's vehicle, when that is on the path's island.
+    // PE 101732E0.
     void updateLastPoint(Information* info);
+    // Sets the pending-search flag, which stays clear while the bot's player is on a ladder.
+    // PE 10172260; [INFERRED] name.
+    void setPathSearchPending(bool pending);
+    // The island of the equipment's last valid infantry position, as of the last request.
+    int getInfantryIsland() const { return m_int212; }
     // Traces 2 to the right and to the left of the equipment's last valid position (ground
     // vehicles); a clear side stores 2, a blocked one the distance to the hit. PE 101725B0.
     void updateSpaceLeftAndRight();
