@@ -181,6 +181,9 @@ public:
         // two role sets; `it` is advanced past the bot. PE 1013F160; [INFERRED] name.
         void reassign(std::set<int>::iterator& it, AIStrategicObject* from, AIStrategicObject* to,
                       SAI* sai);
+        // The same after finding the bot in `from`'s second per-side set. PE 10140D60;
+        // [INFERRED] name.
+        void reassign(AIStrategicObject* from, AIStrategicObject* to, SAI* sai);
         // Returns the bot to the SAI's free set; with `removeFromObject` it first leaves the role
         // sets of the object at m_int0C and the busy set. PE 10140F60; [INFERRED] name.
         void release(bool removeFromObject, SAI* sai);
@@ -273,6 +276,10 @@ public:
     void prepareUpdate();
     void clearSpawnsToPoints();                      // PE inlined in prepareUpdate
     void handleTeleportingBot(int botId);            // named frontier
+    // Re-places a bot after an equipment change: a bot outside the free set leaves its target or
+    // its role, then the bot moves to the strategic object closest to its new equipment.
+    // PE 10141890; [INFERRED] name.
+    void replaceBotAfterEquipmentChange(int botId);
     bool updateStrategicObjects();
     void chooseStrategy();
     // Activates the container, releasing the units every strategic object holds for this side

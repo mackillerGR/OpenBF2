@@ -33,6 +33,7 @@
 #include "../AIBot/WaypointList.h"
 #include "../AIBot/BotSquad.h"
 #include "../AIBot/SquadManager.h"
+#include "../AIBot/SquadMember.h"
 #include "../AIStrategicEntity/AIStrategicObject.h"
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIStrategicMap/BotSpawner.h"
@@ -737,9 +738,55 @@ float* SAI::getFriendlyTypes(int) const
     return const_cast<float*>(m_friendlyCounts);
 }
 
-void SAI::setBotHasChangedEquipment(int)
+// PE 101428A0. Releases the bot's squad-member path flag, then re-places the bot.
+void SAI::setBotHasChangedEquipment(int botId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::setBotHasChangedEquipment");
+    Bot* const bot = IBotManager::instance->getBot(static_cast<unsigned int>(botId));
+    SquadMember* const member = SquadManager::m_instance->getSquadMember(bot->getPlayerId(), m_side);
+    if (member)
+        member->setHavePath(false);
+    replaceBotAfterEquipmentChange(botId);
+}
+
+// PE 10141890. The closest object is not null-checked, as shipped.
+void SAI::replaceBotAfterEquipmentChange(int botId)
+{
+    if (!m_botInfo[botId])
+        return;
+    if (m_set44.find(botId) == m_set44.end())
+    {
+        if (m_botInfo[botId]->m_int04 != -1)
+        {
+            AIStrategicObject* const target =
+                AIStrategicObjectManager::getInstance()->getStrategicObject(m_botInfo[botId]->m_int04);
+            m_botInfo[botId]->leaveAssigned(target, true, this);
+            BotInfo* const info = m_botInfo[botId];
+            info->m_bot->getBotId();   // read and dropped, as shipped
+            AIStrategicObjectManager::getInstance()->getStrategicObject(info->m_int0C);   // likewise
+            m_set44.insert(static_cast<int>(info->m_bot->getBotId()));
+        }
+        else if (m_botInfo[botId]->m_int0C != -1)
+        {
+            m_botInfo[botId]->release(true, this);
+        }
+    }
+
+    BotInfo* const info = m_botInfo[botId];
+    info->m_double14 = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    info->m_int08 = -1;
+    Information* const information = informationManager->getInformation(info->m_bot->getCurrentEquipment());
+    if (!information || !information->getUnit())
+        return;
+    IPIMobile* const mobile = information->getMobile();
+    AIStrategicObjectManager* const manager = AIStrategicObjectManager::getInstance();
+    const int vehicleNumber = mobile ? mobile->getVehicleNumber() : -1;
+    AIStrategicObject* const closest = manager->getClosestObject(
+        information->getPosition(), information->getUnit()->getEquipmentType(), vehicleNumber, m_side);
+    if (closest->getIndex() != m_botInfo[botId]->m_int0C)
+    {
+        AIStrategicObject* const current = manager->getStrategicObject(m_botInfo[botId]->m_int0C);
+        m_botInfo[botId]->reassign(current, closest, this);
+    }
 }
 
 // find, update the second member of the existing pair, or do nothing.
@@ -1510,6 +1557,14 @@ void SAI::BotInfo::commit(std::set<int>::iterator& it, bool attack, SAI* sai)
 }
 
 // PE 1013F160.
+// PE 10140D60.
+void SAI::BotInfo::reassign(AIStrategicObject* from, AIStrategicObject* to, SAI* sai)
+{
+    const int botId = static_cast<int>(m_bot->getBotId());
+    std::set<int>::iterator it = from->getBotSet92(sai->m_side).find(botId);
+    reassign(it, from, to, sai);
+}
+
 void SAI::BotInfo::reassign(std::set<int>::iterator& it, AIStrategicObject* from,
                             AIStrategicObject* to, SAI* sai)
 {
