@@ -2340,12 +2340,13 @@ Vec3 BAPALookDirection::getTarget(bool& valid)
 }
 
 BAPALookAtObject::BAPALookAtObject(Bot* bot, unsigned int object, float deadZone, BAPCondition* until,
-                                   unsigned long long inputMask, int id, int arg8, int arg9)
+                                   unsigned long long inputMask, int id,
+                                   BotScriptValue<Vec3>* position, float heightOffset)
     : BAPALook(deadZone, until, inputMask, id)
     , m_bot(bot)
     , m_object(object)
-    , m_arg40(arg8)
-    , m_arg44(arg9)
+    , m_position(position)
+    , m_heightOffset(heightOffset)
 {
     m_until->m_owner = this;
 }
@@ -2356,11 +2357,39 @@ BAPALookAtObject::~BAPALookAtObject()
         delete m_until;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-look-at-object] Recover the body and
-// validate a bot that looks at a sensed object.
-Vec3 BAPALookAtObject::getTarget(bool&)
+// PE 101AD890. The direction from the camera of the bot's current equipment to the target, or
+// (1, 0, 0) with `valid` cleared for an unknown object. The equipment is not null-checked, as
+// shipped.
+Vec3 BAPALookAtObject::getTarget(bool& valid)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BAPALookAtObject::getTarget");
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    Information* const object = informationManager->getInformation(m_object);
+    valid = object != 0;
+    Vec3 direction;
+    if (!valid)
+    {
+        direction.x = 1.0f;
+        direction.y = 0.0f;
+        direction.z = 0.0f;
+        return direction;
+    }
+    const Mat4& camera = equipment->getControlInfo()->getCameraTransformation();
+    const Vec3& from = *reinterpret_cast<const Vec3*>(&camera.m[12]);
+    Vec3 to;
+    if (!m_position)
+    {
+        const Vec3& position = object->getPosition();
+        to = position;
+    }
+    else
+    {
+        to = m_position->m_value;
+    }
+    direction.x = to.x - from.x;
+    direction.y = to.y + m_heightOffset - from.y;
+    direction.z = to.z - from.z;
+    normaliseVector(direction);
+    return direction;
 }
 
 // ---- BAPAimAt -------------------------------------------------------------------------------

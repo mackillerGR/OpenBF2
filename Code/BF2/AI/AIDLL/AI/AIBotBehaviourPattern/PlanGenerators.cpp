@@ -440,9 +440,9 @@ bool BBPMedicAssist::hasHumanOccupant(Information* object, int side)
 
 namespace {
 
-// PE 102C05C0: a zero-initialised dword that only BBPMedicAssist::generate reads, handed to its
-// look statements as their last argument. Nothing in the image writes it. [UNRESOLVED]
-int s_medicLookArgument = 0;
+// PE 102C05C0: a zero-initialised float that only BBPMedicAssist::generate reads, handed to its
+// look statements as their height offset. Nothing in the image writes it. [UNRESOLVED]
+float s_medicLookHeightOffset = 0.0f;
 
 // PE 101ADCF0 (register-passed weapons and preferred index in the PE). Picks the weapon with
 // the greatest strength against the strength type among those whose type flags match exactly;
@@ -662,7 +662,7 @@ BotScript* BBPMedicAssist::generate(Bot* bot)
         }
         root->addStatement(checkPointer(new BAPALookAtObject(
             bot, m_int0C[bot->getBotId()], 0.0f, checkPointer(new BAPConFalse),
-            equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookArgument)));
+            equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookHeightOffset)));
         if ((target->getObjectTypeFlags() >> 21 & 1) && (kit == 5 || kit == 3))
         {
             root->addStatement(checkPointer(new BAPSoldierPose(
@@ -690,7 +690,7 @@ BotScript* BBPMedicAssist::generate(Bot* bot)
             aim->addStatement(override);
             aim->addStatement(checkPointer(new BAPALookAtObject(
                 bot, m_int0C[bot->getBotId()], 0.0f, checkPointer(new BAPConFalse),
-                equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookArgument)));
+                equipment->getControlInfo()->getLookControls(), m_behaviourId, 0, s_medicLookHeightOffset)));
             BAPTriggerContinously* const trigger = checkPointer(new BAPTriggerContinously(
                 weapon->getWeaponFire(), checkPointer(new BAPConWeaponActive(weaponValue)),
                 checkPointer(new BAPConFalse), checkPointer(new BAPConFalse),

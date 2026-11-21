@@ -770,20 +770,22 @@ public:
     /* +0x38 */ Vec3 m_direction;
 };
 
-// Looks at an object. PE vtable 10283AA8. [INFERRED] name.
+// Looks at an object, or at a plan position when one is given, raised by a height offset.
+// PE vtable 10283AA8. [INFERRED] names.
 class BAPALookAtObject : public BAPALook
 {
 public:
-    // PE 101AD7D0.
+    // PE 101AD7D0. `position` may be null.
     BAPALookAtObject(Bot* bot, unsigned int object, float deadZone, BAPCondition* until,
-                     unsigned long long inputMask, int id, int arg8, int arg9);
+                     unsigned long long inputMask, int id, BotScriptValue<Vec3>* position,
+                     float heightOffset);
     virtual ~BAPALookAtObject();                                       // PE 101AD850
     virtual Vec3 getTarget(bool& valid);                               // PE 101AD890
 
     /* +0x38 */ Bot* m_bot;
     /* +0x3C */ unsigned int m_object;
-    /* +0x40 */ int m_arg40;         // [UNRESOLVED]
-    /* +0x44 */ int m_arg44;         // [UNRESOLVED]
+    /* +0x40 */ BotScriptValue<Vec3>* m_position;
+    /* +0x44 */ float m_heightOffset;
 };
 
 // Type 6: an aim solution that the fire statements query. Executing it directly fails at once;
