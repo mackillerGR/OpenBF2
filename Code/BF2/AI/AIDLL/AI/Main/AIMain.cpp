@@ -5,6 +5,7 @@
 #include <algorithm>   // std::min - spawnBots' bot budget
 #include <string>
 
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"           // updateAIObject
 #include "AIDllFrontier.h"                                        // the twenty named stops below
 #include "../AIUtils/checkPointer.h"                       // the ctor's dead null check
 #include "../AIBotBehaviour/CustomCurve.h"                 // SCurve / JCurve / DecleiningSlopeCurve
@@ -438,9 +439,10 @@ bool AIMain::action()
     return true; // Explicit EAX=1 (ELF) / AL=1 (PE), after every scheduled call returns.
 }
 
+// PE 100D3680.
 bool AIMain::getSAIEnable()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::getSAIEnable");
+    return m_saiEnabled;
 }
 
 // an unchecked side-indexed pointer read.
@@ -449,9 +451,10 @@ SAI* AIMain::getSAI(int side)
     return m_sai[side];
 }
 
-void AIMain::updateAIObject(IAIObject* /*o*/)
+// PE 100D3970. Tells the object its position changed; no null guard.
+void AIMain::updateAIObject(IAIObject* o)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::updateAIObject");
+    o->positionChanged();
 }
 
 void AIMain::reset()
@@ -481,14 +484,17 @@ void AIMain::resetLevel()
     (void)succeeded;
 }
 
-void AIMain::setAISystemQuotient(const double& /*q*/)
+// PE 100D32E0. The range test joins its halves with "or", so every value is stored, as shipped.
+void AIMain::setAISystemQuotient(const double& q)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::setAISystemQuotient");
+    if (!(q < 0.0) || q <= 1.0)
+        m_aiSystemQuotient = q;
 }
 
+// PE 100D6740.
 double AIMain::getAISystemQuotient() const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::getAISystemQuotient");
+    return m_aiSystemQuotient;
 }
 
 void AIMain::setPlayerExitedVehicle(IAIObject* /*o*/, int /*a*/)

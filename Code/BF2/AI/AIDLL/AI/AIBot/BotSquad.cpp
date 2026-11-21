@@ -114,19 +114,19 @@ void BotSquad::recieveMoveSquadOrder()
     BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveMoveSquadOrder");
 }
 
+// PE 101C2650: empty in the shipped image.
 void BotSquad::recieveAttackCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveAttackCommanderOrder");
 }
 
+// PE 101C2660: empty in the shipped image.
 void BotSquad::recieveDefendCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveDefendCommanderOrder");
 }
 
+// PE 101C2670: empty in the shipped image.
 void BotSquad::recieveMoveCommanderOrder()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotSquad::recieveMoveCommanderOrder");
 }
 
 void BotSquad::acceptSquadOrder()

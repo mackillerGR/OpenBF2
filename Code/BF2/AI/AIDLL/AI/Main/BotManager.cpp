@@ -8,6 +8,7 @@
 #include "AIMain.h"                  // IAIMain::m_instance - cached at +60
 #include "AISettingsInterfaces.h"    // IAISettings::getMaxNBots
 #include "../AIBot/BotMain.h"          // the preallocated pool
+#include "../AIBot/BotSquad.h"         // the order forwarders
 #include "../AIBot/BotCallBack.h"      // setBotIsDead / setBotIsAlive report through these
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"          // setBotChangedVehicle
 #include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
@@ -1075,9 +1076,21 @@ void BotManager::setBotIsManDown(int playerId, IAIObject*)
     bot->getBotNavigation()->resetAll();
 }
 
-void BotManager::setBotIsRevived(int, IAIObject*)
+// PE 1018AA70. Indexed by player id; the soldier object is not used. The revived bot leaves man
+// down, resets its navigation and plan, thanks with radio message 8 and is reported to its
+// side's SAI as having changed equipment.
+void BotManager::setBotIsRevived(int playerId, IAIObject*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotIsRevived");
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return;
+    bot->setManDown(false);
+    bot->updateBot();
+    bot->getBotNavigation()->reset();
+    bot->invalidatePlan();
+    bot->getCommunicationAgent()->enqueueRadioMessage(8, 6, 2, 1.0f, -1);
+    if (m_aiMain->getSAIEnable())
+        m_aiMain->getSAI(bot->getSide())->setBotHasChangedEquipment(static_cast<int>(bot->getBotId()));
 }
 
 void BotManager::setBotReceivedRadioMessage(const AIRadioMessageSettings&, int, int)
@@ -1085,34 +1098,46 @@ void BotManager::setBotReceivedRadioMessage(const AIRadioMessageSettings&, int, 
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotReceivedRadioMessage");
 }
 
-void BotManager::setBotRecievedAttackCommanderOrder(int)
+// PE 1018AB50. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedAttackCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedAttackCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveAttackCommanderOrder();
 }
 
-void BotManager::setBotRecievedDefendCommanderOrder(int)
+// PE 1018AB80. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedDefendCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedDefendCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveDefendCommanderOrder();
 }
 
-void BotManager::setBotRecievedMoveCommanderOrder(int)
+// PE 1018ABB0. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedMoveCommanderOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveCommanderOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveMoveCommanderOrder();
 }
 
-void BotManager::setBotRecievedAttackSquadOrder(int)
+// PE 1018ABE0. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedAttackSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedAttackSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveAttackSquadOrder();
 }
 
-void BotManager::setBotRecievedDefendSquadOrder(int)
+// PE 1018AC10. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedDefendSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedDefendSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveDefendSquadOrder();
 }
 
-void BotManager::setBotRecievedMoveSquadOrder(int)
+// PE 1018AC40. Indexed by player id; forwards to the bot's squad record.
+void BotManager::setBotRecievedMoveSquadOrder(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::setBotRecievedMoveSquadOrder");
+    if (Bot* const bot = getBotFromPlayerId(playerId))
+        bot->getBotSquad()->recieveMoveSquadOrder();
 }
 
 // PE 1018AC70. The bot with the first player id (the killer, [INFERRED]) queues radio message 9;
