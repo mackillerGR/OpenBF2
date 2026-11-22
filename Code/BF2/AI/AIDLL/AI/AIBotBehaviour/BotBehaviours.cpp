@@ -567,9 +567,39 @@ BBMoveToFixed::~BBMoveToFixed()
     delete[] m_float24;
 }
 
-float BBMoveToFixed::calculateUrgency(Bot*, bool, float)
+// PE 100EBDF0. The waypoint distance only feeds the bot's move inclination and its behaviour
+// information; the urgency returned is always zero, as shipped. A NaN distance counts as
+// positive. The equipment is not null-checked and the side's SAI is fetched and ignored.
+float BBMoveToFixed::calculateUrgency(Bot* bot, bool flag, float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBMoveToFixed::calculateUrgency");
+    if (!flag)
+    {
+        m_targetChanged[bot->getBotId()] = false;
+        bot->addToMoveInclination(m_float24[bot->getBotId()]);
+        return 0.0f;
+    }
+    Information* const equipment = lookupInformation(bot->getCurrentEquipment());
+    IAIMain::m_instance->getSAI(bot->getSide());
+    WaypointList* const waypoints = bot->getWaypoints();
+    m_float24[bot->getBotId()] = waypoints->update(equipment->getPosition(), bot);
+    if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders())
+    {
+        float& distance = m_float24[bot->getBotId()];
+        distance *= bot->getMemory()->m_float8;
+    }
+    const float distance = m_float24[bot->getBotId()];
+    if (!(distance > 0.0f) && !(distance != distance))
+    {
+        m_targetChanged[bot->getBotId()] = false;
+        return 0.0f;
+    }
+    m_targetChanged[bot->getBotId()] = bot->getWaypoints()->isActive();
+    bot->addToMoveInclination(m_float24[bot->getBotId()]);
+    Vec3 waypoint;
+    waypoint.x = waypoint.y = waypoint.z = 0.0f;
+    if (bot->getWaypoints()->getCurrentWaypoint(waypoint))
+        bot->insertBehaviourInformation(0.5f, waypoint, m_behaviourId);
+    return 0.0f;
 }
 
 BBMedicAssist::BBMedicAssist(int behaviourId, int priority, PlanGenerator* generator, UrgeCurve* urgeCurve,
