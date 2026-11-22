@@ -471,9 +471,85 @@ int EntryTankResetControls::getTargetId()
     return 14;
 }
 
-bool EntryTankResetControls::execute(BotScript *, Bot *, bool&, bool&)
+namespace {
+
+// PE 1006ED90: clamps to [low, high]; an unordered value yields low.
+float clampInput(float value, float low, float high)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTankResetControls::execute");
+    if (!(value >= low))
+        return low;
+    if (value > high)
+        return high;
+    return value;
+}
+
+// The brake limits of the car and tank resets: writable data in the image that nothing writes.
+float s_carBrakeLimit = 0.7f;    // PE 102AE3BC
+float s_tankBrakeLimit = 0.7f;   // PE 102AE1B4
+
+// PE 101CD4F0 (car) and PE 101C74D0 (tank), the same body over their own limit ([INFERRED]
+// name). Releases a vehicle's movement group: inputs 0-2 go to zero and the throttle (input 3)
+// brakes against the forward speed, clamped to the limit in size, at least 0.4 unless the speed
+// is within 0.05 of standing (then released). Look releases inputs 4 and 5; actions release 8,
+// 31, 14-30, 38, 37, 10 and 32. Unbound inputs are skipped.
+bool resetVehicleControls(io::PlayerInput* input, bool movement, bool look, bool actions, float forwardSpeed,
+                          float brakeLimit)
+{
+    if (movement)
+    {
+        input->setInput(static_cast<io::PlayerInputMap>(0), 0.0f);
+        input->setInput(static_cast<io::PlayerInputMap>(2), 0.0f);
+        input->setInput(static_cast<io::PlayerInputMap>(1), 0.0f);
+        const float brake = -clampInput(forwardSpeed, -brakeLimit, brakeLimit);
+        const float size = std::fabs(brake);
+        float throttle;
+        if (!(size > 0.05f))
+            throttle = 0.0f;
+        else if (!(0.4f < size))
+            throttle = signOf(brake) * 0.4f;
+        else
+            throttle = signOf(brake) * size;
+        input->setInput(static_cast<io::PlayerInputMap>(3), throttle);
+    }
+    if (look)
+    {
+        input->setInput(static_cast<io::PlayerInputMap>(4), 0.0f);
+        input->setInput(static_cast<io::PlayerInputMap>(5), 0.0f);
+    }
+    if (!actions)
+        return true;
+    input->setInput(static_cast<io::PlayerInputMap>(8), 0.0f);
+    input->setInput(static_cast<io::PlayerInputMap>(31), 0.0f);
+    for (int each = 14; each <= 30; ++each)
+        input->setInput(static_cast<io::PlayerInputMap>(each), 0.0f);
+    input->setInput(static_cast<io::PlayerInputMap>(38), 0.0f);
+    input->setInput(static_cast<io::PlayerInputMap>(37), 0.0f);
+    input->setInput(static_cast<io::PlayerInputMap>(10), 0.0f);
+    input->setInput(static_cast<io::PlayerInputMap>(32), 0.0f);
+    return true;
+}
+
+} // anonymous namespace
+
+// PE 10138720. As EntryCarResetControls, without the dropped reads and over the tank's limit.
+bool EntryTankResetControls::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
+{
+    BAPResetControls* const reset = static_cast<BAPResetControls*>(script);
+    if (reset->hasInputMask())
+    {
+        bot->playerInput()->setInput(static_cast<io::PlayerInputMap>(reset->m_input), 0.0f);
+        finished = true;
+        failed = true;
+        return true;
+    }
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    failed = true;
+    const Vec3& speed = equipment->getMobile()->getSpeed();
+    const Vec3 facing = equipment->getFaceing();
+    const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+    finished = resetVehicleControls(bot->playerInput(), reset->m_movement, reset->m_look, reset->m_actions, forward,
+                                    s_tankBrakeLimit);
+    return true;
 }
 
 
@@ -573,9 +649,32 @@ int EntryCarResetControls::getTargetId()
     return 14;
 }
 
-bool EntryCarResetControls::execute(BotScript *, Bot *, bool&, bool&)
+
+// PE 10137630. A statement with an input mask releases its one input; any other releases the
+// car's control groups, braking against the speed along the facing, and fails. The equipment is
+// not null-checked, as shipped.
+bool EntryCarResetControls::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryCarResetControls::execute");
+    BAPResetControls* const reset = static_cast<BAPResetControls*>(script);
+    if (reset->hasInputMask())
+    {
+        bot->playerInput()->setInput(static_cast<io::PlayerInputMap>(reset->m_input), 0.0f);
+        finished = true;
+        failed = true;
+        return true;
+    }
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment->getMobile();
+    failed = true;
+    mobile->getSpeed();          // read and dropped, as shipped
+    equipment->getFaceing();     // likewise
+    equipment->getTransformation();
+    const Vec3& speed = mobile->getSpeed();
+    const Vec3 facing = equipment->getFaceing();
+    const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+    finished = resetVehicleControls(bot->playerInput(), reset->m_movement, reset->m_look, reset->m_actions, forward,
+                                    s_carBrakeLimit);
+    return true;
 }
 
 
