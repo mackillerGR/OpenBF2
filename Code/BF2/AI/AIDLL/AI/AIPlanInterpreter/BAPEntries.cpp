@@ -2234,9 +2234,128 @@ int EntryCarMoveToObject::getTargetId()
     return 9;
 }
 
-bool EntryCarMoveToObject::execute(BotScript *, Bot *, bool&, bool&)
+// PE 10137790. EntryCarMoveTo toward the move's object. An unknown object, a missing equipment,
+// mobile or physical part fails unfinished before physics is touched; the control part is read
+// but not checked, and the object is looked up a second time after physics, as shipped. The move
+// is asked whether it has finished on every tick, and the steer direction is normalised past
+// 1e-5 instead of 1e-6.
+bool EntryCarMoveToObject::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryCarMoveToObject::execute");
+    finished = true;
+    failed = false;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    BAPAMove* const move = static_cast<BAPAMove*>(script);
+    if (!informationManager->getInformation(move->getTargetObject()) || !equipment || !equipment->getMobile()
+        || !equipment->getPhysical())
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    IPIMobile* const mobile = equipment->getMobile();
+    IPIPhysical* const physical = equipment->getPhysical();
+    IPIControlInfo* const control = equipment->getControlInfo();
+    IAIObjectPhysical* const physics = equipment->getAIObject()->getPhysical();
+    if (!physics->hasPhysicsEnabled())
+        physics->enablePhysics(equipment->getSide());
+    if (!informationManager->getInformation(move->getTargetObject()))
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    if (move->isFinished(bot))
+    {
+        failed = true;
+        finished = true;
+        return true;
+    }
+
+    failed = false;
+    Vec2 steer;
+    steer.x = steer.y = 0.0f;
+    bool steerFailed;
+    finished = move->getSteering(steer, failed, steerFailed, 0);
+    if (!finished)
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;   // PE 1006EE50
+        finished = resetVehicleControls(input, true, false, false, forward, s_carBrakeLimit);
+        failed = true;
+        return true;
+    }
+    if (steerFailed || failed)
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+        finished = resetVehicleControls(input, true, false, false, forward, s_carBrakeLimit);
+        return true;
+    }
+
+    // Two reads: z comes from the first, x from the second, as shipped.
+    const Vec3& first = equipment->getPosition();
+    Vec2 flatPosition;
+    flatPosition.x = equipment->getPosition().x;
+    flatPosition.y = first.z;
+    equipment->getTransformation();   // read twice and dropped, as shipped
+    equipment->getTransformation();
+    Vec2 direction;
+    direction.x = steer.x - flatPosition.x;
+    direction.y = steer.y - flatPosition.y;
+    const float distance = std::sqrt(direction.y * direction.y + direction.x * direction.x);
+    if (distance > 9.999999747378752e-06f)   // PE 1027C16C
+    {
+        const float inverse = 1.0f / distance;
+        direction.x = direction.x * inverse;
+        direction.y = direction.y * inverse;
+    }
+    float turnFactor = 1.0f;
+    float turn;
+    if (std::fabs(mobile->getSpeedMagnitude()) > 1.0f && move->getPathTurn(turn))
+    {
+        const float sharpness = std::max(std::fabs(turn) - 0.2f, 0.0f) * 1.8f;   // PE 10086630
+        turnFactor = 1.0f - std::min(1.0f, sharpness) * 0.8f;                     // PE 100C1A20
+    }
+    float throttle;
+    float steering;
+    float speedWeight;
+    float maxSpeedFactor;
+    finished = carSteering(bot, equipment, direction, distance, move, throttle, steering, speedWeight,
+                           maxSpeedFactor);
+    if (throttle == 666.0f)
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+        finished = resetVehicleControls(input, true, false, false, forward, s_carBrakeLimit);
+        failed = true;
+        return true;
+    }
+    if (!finished)
+        return true;
+    const float maxSpeed = mobile->getMaxSpeed();
+    float approach = 1.0f;
+    Vec2 flatSpeed;
+    const Vec3& velocity = mobile->getSpeed();
+    flatSpeed.x = velocity.x;   // PE 1014ADC0; read and dropped
+    flatSpeed.y = velocity.z;
+    (void)flatSpeed;
+    const float dx = steer.x - flatPosition.x;
+    const float dz = steer.y - flatPosition.y;
+    const float remaining = std::sqrt(dz * dz + dx * dx);
+    const float clearance = std::max(remaining - physical->getSmallestRadius() - 0.5f, 0.0f);
+    const float clearanceSquared = clearance * clearance;
+    if (clearanceSquared < 225.0f)
+        approach = std::max(0.2f, clearanceSquared * 0.004444444552063942f);
+    const float cruise = std::min(approach, turnFactor) * maxSpeed;
+    finished = driveCar(equipment, control, mobile, physical, bot->playerInput(), cruise, throttle, steering,
+                        speedWeight, maxSpeedFactor);
+    return true;
 }
 
 
