@@ -97,14 +97,60 @@ void SensingAgentNullPattern::reset(int id)
 
 // [FRONTIER] Pattern plan creation and soldier helpers require the look/aim plan runtime.
 // [RETIRE-WHEN: aidll-02-skeleton] Replace each stop when its plan behavior is recovered.
-BotScript* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, const Vec3&)
+namespace {
+
+// Five degrees, from the turret pattern's own degree constant (PE 102AAA80) times 5 (PE 1027B20C).
+const float kTurretDegree = 0.0174532924f;
+
+} // anonymous namespace
+
+// Keeps the agent's plan when it is already the pattern's; otherwise drops it, clears the script
+// variables and fetches the equipment's control info. False with `plan` set to what to return.
+bool SensingAgentTurretPattern::initPlan(SensingAgent* agent, Bot* bot, IPIControlInfo*& control, BotScript*& plan)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
+    ISensingAgentPattern* const pattern = this;
+    plan = agent->m_plan;
+    if (plan)
+    {
+        if (plan->getId() == pattern->getId())
+            return false;
+        delete plan;
+        agent->m_plan = 0;
+    }
+    agent->m_bapContext->clear();
+    plan = 0;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return false;
+    control = equipment->getControlInfo();
+    return control != 0;
 }
 
-BotScript* SensingAgentTurretPattern::createPlan(SensingAgent *, Bot *, unsigned int)
+// PE 1012F1A0. Looks along the direction with a five-degree dead zone until told otherwise.
+BotScript* SensingAgentTurretPattern::createPlan(SensingAgent* agent, Bot* bot, const Vec3& direction)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgentTurretPattern::createPlan");
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return plan;
+    BAPALookDirection* const look = checkPointer(new BAPALookDirection(
+        direction, kTurretDegree * 5.0f, checkPointer(new BAPConFalse), control->getLookControls(), getId()));
+    look->m_owner = this;
+    return look;
+}
+
+// PE 1012F2C0. As above, looking at an object.
+BotScript* SensingAgentTurretPattern::createPlan(SensingAgent* agent, Bot* bot, unsigned int object)
+{
+    IPIControlInfo* control = 0;
+    BotScript* plan = 0;
+    if (!initPlan(agent, bot, control, plan))
+        return plan;
+    BAPALookAtObject* const look = checkPointer(new BAPALookAtObject(
+        bot, object, kTurretDegree * 5.0f, checkPointer(new BAPConFalse), control->getLookControls(), getId(), 0,
+        0.0f));
+    look->m_owner = this;
+    return look;
 }
 
 BotScript* SensingAgentMouseFreeLookPattern::createPlan(SensingAgent *, Bot *, const Vec3&)

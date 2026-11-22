@@ -45,6 +45,11 @@ public:
     virtual BotScript* createPlan(SensingAgent *, Bot *, const Vec3&);
     virtual BotScript* createPlan(SensingAgent *, Bot *, unsigned int);
     virtual int getId() const;
+
+private:
+    // Shared opening of both plans; false with `plan` set to the value to return. [INFERRED]
+    // helper: both shipped bodies inline it.
+    bool initPlan(SensingAgent* agent, Bot* bot, IPIControlInfo*& control, BotScript*& plan);
 };
 
 // The mouse-look aimer, and the heaviest of the four: createPlan 2,293 / .

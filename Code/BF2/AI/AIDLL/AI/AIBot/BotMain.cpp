@@ -1065,18 +1065,18 @@ bool BotMain::updateBotVehicle(bool* changed)
 }
 
 // +0x030
-// PE 101841E0. Files a behaviour under its priority the first time its id is taken and records it
-// at `index`; an id already present leaves both arrays alone. A null behaviour is ignored.
+// PE 101841E0. Files a behaviour under its priority the first time its id is taken, then records
+// it (or null, which clears the slot when the new equipment lacks the behaviour) at `index`.
 void BotMain::addBehaviour(BotBehaviour* behaviour, int index)
 {
-    if (!behaviour)
-        return;
-    const unsigned int priority = behaviour->getPriority();
-    if (m_behavioursByPriority.size() <= priority)
-        m_behavioursByPriority.resize(priority + 1, std::list<unsigned short>());
-    if (m_behaviours[behaviour->getBehaviourId()])
-        return;
-    m_behavioursByPriority[priority].push_back(behaviour->getBehaviourId());
+    if (behaviour)
+    {
+        const unsigned int priority = behaviour->getPriority();
+        if (m_behavioursByPriority.size() <= priority)
+            m_behavioursByPriority.resize(priority + 1, std::list<unsigned short>());
+        if (!m_behaviours[behaviour->getBehaviourId()])
+            m_behavioursByPriority[priority].push_back(behaviour->getBehaviourId());
+    }
     m_behaviours[index] = behaviour;
     m_urgencyGenerators[index] = behaviour;
 }
