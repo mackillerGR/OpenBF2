@@ -19,6 +19,7 @@
 #include "../AIKnowledge/InformationManager.h"
 #include "../AIKnowledge/IPIPhysical.h"
 #include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"            // event_worldReset
 #include "../DrawPrimitives/DPManager.h"                       // event_worldReset
 #include "CommunicationHub.h"                                  // event_worldReset
@@ -54,9 +55,14 @@ AIEventCourier::~AIEventCourier()
 {
 }
 
-void AIEventCourier::eventMissileLock(IAIObject *, world::MissileLockMessage *)
+// PE 100BF240. The locked-on object's unit records lock status 1; the message is not read.
+void AIEventCourier::eventMissileLock(IAIObject* object, world::MissileLockMessage*)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventMissileLock");
+    if (!object)
+        return;
+    IAIObjectUnit* const unit = object->getUnit();
+    if (unit)
+        unit->setMissileLockStatus(1);
 }
 
 // PE 100BF270. No bot-manager null guard.
