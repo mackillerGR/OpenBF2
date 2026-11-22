@@ -296,6 +296,9 @@ public:
 private:
     // Builds the fire plan from the bot's stored target state. PE 10108090.
     BotScript* buildScript(Bot* bot, IPIControlInfo* control);
+    // The fire wrapper around a built plan, sharing the target with the squad. PE 1010C056.
+    BotScript* finishScript(Bot* bot, FireInfanteryTarget* plan, WeaponInfo* weapon, unsigned int targetHandle,
+                            BotScript* root);
     // Builds the aim-and-fire part of a direct fire plan: the aim, the fire solution and heat
     // conditions, the trigger with its skill-scaled hold, and a zoom trigger when the weapon
     // zooms. PE 10106230; [INFERRED] name.
