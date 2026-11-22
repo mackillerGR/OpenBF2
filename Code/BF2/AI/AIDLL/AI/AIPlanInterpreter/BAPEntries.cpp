@@ -414,10 +414,7 @@ int EntryTankMoveTo::getTargetId()
     return 7;
 }
 
-bool EntryTankMoveTo::execute(BotScript *, Bot *, bool&, bool&)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTankMoveTo::execute");
-}
+// EntryTankMoveTo::execute follows the tank reset helper below.
 
 
 EntryTankMoveToObject::EntryTankMoveToObject()
@@ -549,6 +546,219 @@ bool EntryTankResetControls::execute(BotScript* script, Bot* bot, bool& finished
     const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
     finished = resetVehicleControls(bot->playerInput(), reset->m_movement, reset->m_look, reset->m_actions, forward,
                                     s_tankBrakeLimit);
+    return true;
+}
+
+
+namespace {
+
+// The bounds of the tank's speed-sensitive steering: writable data in the image that nothing writes.
+float s_tankSteerMinSpeed = 1.0f;    // PE 102AE1A8
+float s_tankSteerFullSpeed = 2.0f;   // PE 102AE1A4
+
+// Read in place of a tank's physics state test and never written, so the test always runs.
+bool s_forceTankPhysics = false;     // PE 102C05D8 (bss)
+
+// The tank's path-following steering (PE 101C53E0, about 36 KB of disassembly): the tank form of
+// the car's, with the same outputs, or the throttle 666 to ask for a stop. [INFERRED] name and
+// parameter roles, from EntryTankMoveTo's use of them.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: tank-steering] Recover the body from
+// PE 101C53E0 and drive a tank along a Dalian waypoint path.
+bool tankSteering(Bot* /*bot*/, Information* /*equipment*/, const Vec2& /*direction*/, float /*distance*/,
+                  BAPAMove* /*move*/, float& /*throttle*/, float& /*steering*/, float& /*speedWeight*/,
+                  float& /*maxSpeedFactor*/)
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::EntryTankMoveTo::execute (tank steering, PE 101C53E0)");
+}
+
+// 1, -1 or 0 by the sign. PE 100DE7B0.
+float tankSign(float value)
+{
+    if (value > 0.0f)
+        return 1.0f;
+    if (value < 0.0f)
+        return -1.0f;
+    return 0.0f;
+}
+
+// Steers and throttles a tank (PE 101C7020; [INFERRED] name). As driveCar, except: steering
+// fades in with the speed (none below s_tankSteerMinSpeed, full from s_tankSteerFullSpeed, as
+// the square of the fraction); turning in place is not negated; there is no easing for roll or
+// pitch; and the throttle chases the target speed with a signed square. The equipment's flat axes
+// are read and dropped, and the direction is not read, as shipped. Always true.
+bool driveTank(Information* equipment, IPIControlInfo* control, IPIMobile* mobile, IPIPhysical* /*physical*/,
+               io::PlayerInput* input, const Vec2* /*direction*/, float cruise, float throttle, float steering,
+               float speedWeight, float maxSpeedFactor)
+{
+    const Mat4& transformation = equipment->getTransformation();
+    (void)transformation;
+    const Vec3& velocity = mobile->getSpeed();
+    const float speed = std::sqrt(velocity.z * velocity.z + velocity.x * velocity.x);
+    float steer = steering;
+    if (throttle != 0.0f && speedWeight != throttle && speed > 1.0f)
+        steer = steering * -1.0f;
+    const float speedSize = std::fabs(speed);
+    if (!(speedSize >= s_tankSteerMinSpeed))
+        steer = 0.0f;
+    float fraction = speedSize / s_tankSteerFullSpeed;
+    if (!(1.0f >= fraction))
+        fraction = 1.0f;
+    steer = fraction * fraction * steer;
+    const float direction = steer > 0.0f ? 1.0f : (steer < 0.0f ? -1.0f : 0.0f);
+    if (cruise != 0.0f)
+    {
+        IAIObjectPhysical* const physics = equipment->getAIObject()->getPhysical();
+        physics->enablePhysics(1);
+        physics->enablePhysics(2);
+    }
+    if (throttle == 0.0f)
+    {
+        float size = std::fabs(steer);
+        if (throttle == -1.0f)
+            size = size - 3.1415927410125732f;
+        float lock = std::fabs(size * 3.0f);
+        if (!(1.0f >= lock))
+            lock = 1.0f;
+        input->setInput(control->getDriveTurnControl(), lock * direction);
+        input->setInput(control->getDriveThrottleControl(), throttle);
+        return true;
+    }
+    float wheel = steer * 3.0f;
+    if (-1.0f > wheel)
+        wheel = -1.0f;
+    else if (!(1.0f >= wheel))
+        wheel = 1.0f;
+    input->setInput(control->getDriveTurnControl(), wheel);
+    float target = cruise * throttle;
+    if (std::fabs(target) > maxSpeedFactor)
+        target = tankSign(target) * maxSpeedFactor;
+    const float chase = (target - speed * speedWeight) * 0.3333333432674408f;
+    float size;
+    float sign;
+    if (!(1.0f >= chase))
+    {
+        size = 1.0f;
+        sign = 1.0f;
+    }
+    else
+    {
+        size = chase;
+        sign = chase > 0.0f ? 1.0f : (chase < 0.0f ? -1.0f : 0.0f);
+    }
+    float pedal = clampInput(sign * size * size + target * 0.06666667014360428f, -1.0f, 1.0f);
+    if (pedal != 0.0f && speedSize < 1.5f)
+        pedal = tankSign(pedal);
+    input->setInput(control->getDriveThrottleControl(), pedal);
+    return true;
+}
+
+} // anonymous namespace
+
+// PE 10139250. The tank form of EntryCarMoveTo: the same flow over the tank's helpers, without
+// the up-front finished/failed defaults or an equipment null check, as shipped. Physics is
+// enabled when off. The turn factor applies while faster than 3 (sharpness past 0.35, times 2.5,
+// slowing by up to 0.7), and the approach factor uses the squared distance to the steer point
+// less the smallest radius and 0.5, over 196, never below 0.35.
+bool EntryTankMoveTo::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment->getMobile();
+    IPIControlInfo* const control = equipment->getControlInfo();
+    IPIPhysical* const physical = equipment->getPhysical();
+    if (!mobile || !control || !physical)
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    IAIObjectPhysical* const physics = equipment->getAIObject()->getPhysical();
+    if (s_forceTankPhysics || !physics->hasPhysicsEnabled())
+        physics->enablePhysics(equipment->getSide());
+    BAPAMove* const move = static_cast<BAPAMove*>(script);
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const double lastCheck = static_cast<BotMain*>(bot)->getLastCheckMoveToFinishedTime();
+    failed = false;
+    if (now - lastCheck > 1.0)
+    {
+        static_cast<BotMain*>(bot)->setLastCheckMoveToFinishedTime(now);
+        if (move->isFinished(bot))
+        {
+            failed = true;
+            finished = true;
+            return true;
+        }
+    }
+
+    Vec2 steer;
+    steer.x = steer.y = 0.0f;
+    bool steerFailed;
+    finished = move->getSteering(steer, failed, steerFailed, 0);
+    if (!finished || steerFailed || failed)
+    {
+        const bool stop = !finished;
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;   // PE 1006EE50
+        finished = resetVehicleControls(input, true, false, false, forward, s_tankBrakeLimit);
+        if (stop)
+            failed = true;
+        return true;
+    }
+
+    // Two reads: z comes from the first, x from the second, as shipped.
+    const Vec3& first = equipment->getPosition();
+    Vec2 flatPosition;
+    flatPosition.x = equipment->getPosition().x;
+    flatPosition.y = first.z;
+    equipment->getTransformation();   // read twice and dropped, as shipped
+    equipment->getTransformation();
+    Vec2 direction;
+    direction.x = steer.x - flatPosition.x;
+    direction.y = steer.y - flatPosition.y;
+    const float distance = std::sqrt(direction.y * direction.y + direction.x * direction.x);
+    if (distance > 9.999999747378752e-06f)
+    {
+        const float inverse = 1.0f / distance;
+        direction.x = direction.x * inverse;
+        direction.y = direction.y * inverse;
+    }
+    float turnFactor = 1.0f;
+    float turn;
+    if (std::fabs(mobile->getSpeedMagnitude()) > 3.0f && move->getPathTurn(turn))
+    {
+        const float sharpness = std::max(std::fabs(turn) - 0.35f, 0.0f) * 2.5f;   // PE 10086630
+        turnFactor = 1.0f - std::min(1.0f, sharpness) * 0.7f;                     // PE 100C1A20
+    }
+    float throttle;
+    float steering;
+    float speedWeight;
+    float maxSpeedFactor;
+    finished = tankSteering(bot, equipment, direction, distance, move, throttle, steering, speedWeight,
+                            maxSpeedFactor);
+    if (throttle == 666.0f)
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+        finished = resetVehicleControls(input, true, false, false, forward, s_tankBrakeLimit);
+        failed = true;
+        return true;
+    }
+    if (!finished)
+        return true;
+    const float maxSpeed = mobile->getMaxSpeed();
+    const float dx = steer.x - flatPosition.x;
+    const float dz = steer.y - flatPosition.y;
+    const float remainingSquared = dz * dz + dx * dx;
+    float approach = 1.0f;
+    const float clearance = remainingSquared - physical->getSmallestRadius() - 0.5f;
+    if (clearance < 196.0f)
+        approach = std::max(0.35f, clearance / 196.0f);
+    const float cruise = std::min(approach, turnFactor) * maxSpeed;
+    finished = driveTank(equipment, control, mobile, physical, bot->playerInput(), &direction, cruise, throttle,
+                         steering, speedWeight, maxSpeedFactor);
     return true;
 }
 
