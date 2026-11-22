@@ -1023,17 +1023,21 @@ void steerNormaliseFlat(Vec2& value)
     value.y *= scale;
 }
 
-// Normalises a Vec3 in place. PE 1006EEC0.
+// The conditional Vec3 normaliser. PE 1006EEC0.
 void steerNormalise(Vec3& value)
 {
-    const float length = std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
-    if (length > 0.0f)
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
     {
-        const float inverse = 1.0f / length;
-        value.x *= inverse;
-        value.y *= inverse;
-        value.z *= inverse;
+        value.x = value.y = value.z = 0.0f;
+        return;
     }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
 }
 
 // The signed angle of a flat target against a forward direction and its right-hand

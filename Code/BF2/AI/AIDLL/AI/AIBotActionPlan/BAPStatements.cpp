@@ -664,6 +664,45 @@ bool BAPAMove::getAvoidanceSteering(Bot* bot, Vec2 steer, Vec2& out, Information
 // ---- BAPMoveToFinding ----------------------------------------------------------------------
 
 
+BAPMoveToPoint::BAPMoveToPoint(Bot* bot, const Vec3& target, float float60, float float64, BAPCondition* until,
+                     unsigned long long inputMask, int id)
+    : BAPAMove(bot), m_bot(bot)
+{
+    m_flatTarget.x = m_flatTarget.y = 0.0f;
+    m_id = id;
+    m_target = target;
+    m_float60 = float60;
+    m_float64 = float64;
+    m_until = until;
+    if (until)
+        until->m_owner = this;
+    m_int70 = 0;
+    m_flag6C = true;
+    m_flatTarget.x = target.x;   // PE 1014ADC0
+    m_flatTarget.y = target.z;
+    m_inputMask = inputMask;
+}
+
+BAPMoveToPoint::~BAPMoveToPoint() {}
+
+bool BAPMoveToPoint::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+bool BAPMoveToPoint::getSteering(Vec2& point, bool& arrived, bool& failed, int)
+{
+    point = m_flatTarget;
+    arrived = false;
+    failed = false;
+    return true;
+}
+
+bool BAPMoveToPoint::slot18() { return false; }
+bool BAPMoveToPoint::isWithinRange() { return false; }
+
 BAPMoveToFinding::BAPMoveToFinding(Bot* bot, const Vec3& target, float float60, float float64,
                                    BAPCondition* until, unsigned long long inputMask, int id, float maxRange,
                                    float minRange)

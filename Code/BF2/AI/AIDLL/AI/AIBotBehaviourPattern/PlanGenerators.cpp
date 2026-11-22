@@ -21,6 +21,9 @@
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"
 #include "../AIUtils/checkPointer.h"
 #include "../AIBot/BotNavigation.h"
+#include "../Main/AIRandom.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../Game/Objects/IPlayer.h"
 #include "../AIBot/CommunicationAgent.h"
 #include "../AIBot/SensingAgent.h"
 #include "../AIKnowledge/IPIMobile.h"
@@ -38,6 +41,54 @@ namespace hfe {
 namespace ai {
 
 static void releaseScriptState(Bot* bot);
+namespace {
+void dropPlan(Bot* bot);   // defined with the waypoint helpers
+
+// Component-wise equality within FLT_EPSILON. PE 100D2910.
+bool isSamePosition(const Vec3& a, const Vec3& b)
+{
+    return std::fabs(a.x - b.x) <= 1.1920929e-07f && std::fabs(a.y - b.y) <= 1.1920929e-07f
+        && std::fabs(a.z - b.z) <= 1.1920929e-07f;
+}
+
+// The shared zero vector. PE 101E5390.
+const Vec3& zeroVector()
+{
+    static const Vec3 zero = {0.0f, 0.0f, 0.0f};
+    return zero;
+}
+
+// The conditional Vec3 normaliser. PE 1006EEC0.
+void normaliseVector(Vec3& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y + value.z * value.z;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f)) {
+        value.x = value.y = value.z = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+    value.z *= scale;
+}
+
+// The conditional Vec2 normaliser. PE 100E9DE0.
+void normaliseFlat(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f)) {
+        value.x = value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+}
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-plan-generators] Each generate
 // body below stops by name until its retail body is recovered and a bot runs the plan it builds.
@@ -153,9 +204,143 @@ BotScript* BBPAvoidCollision3d::generate(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::BBPAvoidCollision3d::generate");
 }
 
-BotScript* BBPAvoidCollisionInfantery::generate(Bot*)
+// PE 100EF0C0. Steps a soldier aside: past a moving obstacle (perpendicular to its motion, or
+// its facing when it stands still, on the bot's side, 10 away), or, with no obstacle (range 15)
+// or one without a direction, back from the point to avoid or to one side or the other (a coin
+// toss) wherever the pathfinding trace first comes back clear. The step runs straight (no path
+// search) until it ends within 2 of the traced point or the time runs out: the obstacle's stored
+// distance read as seconds, or with no obstacle the navigation's avoid time (5 s when gassed).
+// The sensing agent is overridden and the soldier's inputs merged while it moves, between a
+// turn lock and its release. Without an obstacle, a navigation avoid position or gas, no plan.
+BotScript* BBPAvoidCollisionInfantery::generate(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPAvoidCollisionInfantery::generate");
+    Vec2 flatHit;
+    flatHit.x = flatHit.y = 0.0f;
+    Vec2 flatTarget;
+    flatTarget.x = flatTarget.y = 0.0f;
+    world::IPlayer* const player = bot->getPlayer()->getPlayer();
+    if (!m_hasPlan[bot->getBotId()])
+        return 0;
+    bot->getSquadMember()->clearRequest();
+    dropPlan(bot);
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPAvoidCollisionInfantery::generate (script debugger reset)");
+    bot->getScriptContext()->clear();
+    const bool noObstacle = m_obstacles[bot->getBotId()] == static_cast<unsigned int>(-1);
+    Information* const obstacle = informationManager->getInformation(m_obstacles[bot->getBotId()]);
+    Information* const own = informationManager->getInformation(bot->getCurrentEquipment());   // not checked
+    IPIMobile* const ownMobile = own->getMobile();
+    const Vec3& position = own->getPosition();
+    const Vec2 flatOwn = { position.x, position.z };   // PE 1014ADC0
+    double timeout = 0.0;   // PE 1026CB40
+    Vec3 avoid = {0.0f, 0.0f, 0.0f};
+    const Vec3* point;
+    if (obstacle) {
+        point = &obstacle->getPosition();
+    } else if (player->getIsGassed()) {
+        // Retail flees from the player's gas point (engine Player floats +0x330..+0x338, plus 1
+        // on each axis) for 5 s. The field has no accessor in this tree.
+        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: player-gas-point]
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPAvoidCollisionInfantery::generate (gas point)");
+    } else {
+        if (!static_cast<BotMain*>(bot)->getBotNavigation()->getAvoidPosition(avoid, timeout))
+            return 0;
+        point = &avoid;
+    }
+    flatTarget.x = point->x;
+    flatTarget.y = point->z;
+    const float range = noObstacle ? 15.0f : 10.0f;
+    own->getMobile()->getVehicleNumber();   // read and dropped, as shipped
+    const unsigned long long driveControls = own->getControlInfo()->getDriveControls();
+    Vec3 hit = {0.0f, 0.0f, 0.0f};
+    const float maxSpeed = ownMobile->getMaxSpeed();
+    const unsigned int draw = AIRandom::m_instance->next();
+    float side = 1.0f;
+    if (!(static_cast<float>(draw) * 2.3283064365386963e-10f > 0.5f))
+        side = -1.0f;
+    const int equipmentType = own->getUnit()->getEquipmentType();
+    bool noDirection = false;
+    if (!noObstacle) {
+        const Vec2& direction = m_directions[bot->getBotId()];
+        noDirection = !(std::fabs(direction.y) + std::fabs(direction.x) > 1.1920928955078125e-07f);
+    }
+    Vec3 step = {0.0f, 0.0f, 0.0f};
+    unsigned int handle;
+    BotNavigation* navigation;
+    if (!noDirection && !noObstacle) {
+        Vec3 motion = obstacle->getMobile()->getSpeed();
+        if (isSamePosition(motion, zeroVector())) {
+            const Vec3 facing = obstacle->getFaceing();
+            motion.x = facing.x;
+            motion.z = facing.z;
+        }
+        const Vec3& obstaclePosition = obstacle->getPosition();
+        const Vec3 away = {position.x - obstaclePosition.x, position.y - obstaclePosition.y,
+                           position.z - obstaclePosition.z};
+        Vec3 across = {motion.z, 0.0f, -motion.x};
+        normaliseVector(across);   // PE 1006EEC0
+        across.x *= range;
+        across.y *= range;
+        across.z *= range;
+        if (away.z * across.z + across.x * away.x + across.y * 0.0f > 0.0f) {
+            step.x = across.x + position.x;
+            step.y = across.y + position.y;
+            step.z = across.z + position.z;
+        } else {
+            step.x = position.x - across.x;
+            step.y = position.y - across.y;
+            step.z = position.z - across.z;
+        }
+        navigation = static_cast<BotMain*>(bot)->getBotNavigation();
+        IAIPathfinding::instance->trace(navigation, false, step, hit, handle, equipmentType, -1, 0.0f, 0, 0);
+        timeout = m_distances[bot->getBotId()];
+    } else {
+        Vec2 toward = { flatTarget.x - flatOwn.x, flatTarget.y - flatOwn.y };
+        normaliseFlat(toward);   // PE 100E9DE0
+        const Vec2 across = { toward.y * range, -toward.x * range };
+        const Vec2 back = { -toward.x * range, -toward.y * range };
+        step = position;
+        step.x += back.x;   // PE 1014AE80
+        step.z += back.y;
+        navigation = static_cast<BotMain*>(bot)->getBotNavigation();
+        if (!IAIPathfinding::instance->trace(navigation, false, step, hit, handle, equipmentType, -1, 0.0f, 0, 0)) {
+            step = position;
+            step.x += across.x * side;
+            step.z += across.y * side;
+            navigation = static_cast<BotMain*>(bot)->getBotNavigation();
+            if (!IAIPathfinding::instance->trace(navigation, false, step, hit, handle, equipmentType, -1, 0.0f, 0,
+                                                 0)) {
+                const float other = -side;
+                step = position;
+                step.x += across.x * other;
+                step.z += across.y * other;
+                navigation = static_cast<BotMain*>(bot)->getBotNavigation();
+                IAIPathfinding::instance->trace(navigation, false, step, hit, handle, equipmentType, -1, 0.0f, 0, 0);
+            }
+        }
+        if (!noObstacle)
+            timeout = m_distances[bot->getBotId()];
+    }
+    BAPConTimer* const timer = checkPointer(new BAPConTimer(timeout, false, false, false));
+    flatHit.x = hit.x;   // PE 1014ADC0
+    flatHit.y = hit.z;
+    BAPConPosition* const arrived = checkPointer(new BAPConPosition(flatHit, 2.0f));
+    BAPConOr* const done = checkPointer(new BAPConOr);
+    done->addCondition(timer);
+    done->addCondition(arrived);
+    BAPMoveToPoint* const move = checkPointer(new BAPMoveToPoint(bot, hit, maxSpeed, maxSpeed, done, driveControls,
+                                                                 m_behaviourId));
+    move->setFocus(bot, true, hit, static_cast<unsigned int>(-1));
+    BAPSerial* const serial = checkPointer(new BAPSerial(m_behaviourId, -1));
+    serial->addStatement(checkPointer(new BAPICTurnLock(true)));
+    BAPParallel* const together = checkPointer(new BAPParallel(m_behaviourId, true, -1, false));
+    together->addStatement(checkPointer(new BAPOverrideSensingAgent));
+    together->addStatement(move);
+    together->addStatement(checkPointer(new BAPMergeSoldierInputs(m_behaviourId)));
+    serial->addStatement(together);
+    serial->addStatement(checkPointer(new BAPICTurnLock(false)));
+    serial->m_owner = this;
+    return serial;
 }
 
 // ---- Waypoint family -----------------------------------------------------------------------

@@ -422,6 +422,27 @@ bool findObstacleToAvoid(Bot* bot, const Vec2& towards, const Vec3& target, unsi
 // Follows a path from the bot's navigation to a position until it is within the range band
 // or the stop condition holds. Type 7. PE vtable 10283250 (pose selector at +0x18: 10283210).
 // The class name follows the debug output "MoveToFinding(" with the tree's BAP prefix
+// Moves straight toward a position, without a path search: the move entries steer at it.
+// Statement type 7. PE vtable 10282DD0. [INFERRED] name (the tree's BAPMoveTo is the plane form, PE vtable 10282EB8).
+class BAPMoveToPoint : public BAPAMove
+{
+public:
+    // PE 1019BC40.
+    BAPMoveToPoint(Bot* bot, const Vec3& target, float float60, float float64, BAPCondition* until,
+              unsigned long long inputMask, int id);
+    virtual ~BAPMoveToPoint();                                              // PE 1019BCE0
+
+    // Never driven directly: unfinished and failed. PE 1019BC10.
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);
+    // The target's ground position, never arrived and never failed. PE 1019BD10.
+    virtual bool getSteering(Vec2& point, bool& arrived, bool& failed, int arg);
+    virtual bool slot18();                                             // PE 1019BBF0: false
+    virtual bool isWithinRange();                                      // PE 1019BC00: false
+
+    /* +0xC8 */ Vec2 m_flatTarget;
+    /* +0xD0 */ Bot* m_bot;
+};
+
 // [INFERRED].
 class BAPMoveToFinding : public BAPAMove
 {
