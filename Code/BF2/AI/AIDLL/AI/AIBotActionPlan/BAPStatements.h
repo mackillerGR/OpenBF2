@@ -18,9 +18,11 @@
 
 namespace dice {
 namespace hfe {
+namespace io { class PlayerInput; }
 namespace ai {
 
 class BAPCondition;
+class Information;
 class WeaponInfo;
 
 // A statement with a list of child statements. PE vtable 10282BA4 adds the pure eighth slot.
@@ -1170,6 +1172,16 @@ public:
     /* +0x34 */ Bot* m_bot;
     /* +0x38 */ bool m_useStaticAttack;     // the bot's setting at construction
 };
+
+class IPIControlInfo;
+class IPIMobile;
+class IPIPhysical;
+
+// Steers and throttles a car toward a steering angle; shared by the car move entries and the
+// run-over statement. PE 101CD1B0; [INFERRED] name. See the definition for the full contract.
+bool driveCar(Information* equipment, IPIControlInfo* control, IPIMobile* mobile, IPIPhysical* physical,
+              io::PlayerInput* input, float cruise, float throttle, float steering, float speedWeight,
+              float maxSpeedFactor);
 
 // Drives a car at a soldier, aiming where the soldier will be when the car arrives. Finishes
 // at once each tick; fails when the target is gone or no vehicle path reaches it. Type 41.

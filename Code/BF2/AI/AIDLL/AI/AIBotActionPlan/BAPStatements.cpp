@@ -3529,6 +3529,8 @@ float signedFlatAngle(const Vec2& forward, const Vec2& right, const Vec2& target
     return angle;
 }
 
+} // anonymous namespace
+
 // Steers and throttles a car (PE 101CD1B0; [INFERRED] name). The steering angle turns the wheel
 // at three times its size, clamped to full lock. With a zero throttle the car turns in place and
 // the throttle input gets that zero; otherwise the target speed (cruise times throttle) eases off
@@ -3600,7 +3602,6 @@ bool driveCar(Information* equipment, IPIControlInfo* control, IPIMobile* mobile
     return true;
 }
 
-} // anonymous namespace
 
 BAPRunOverObject::BAPRunOverObject(unsigned int target, unsigned long long inputMask, int id)
     : m_target(target)

@@ -115,7 +115,11 @@ float ClusterGraph::getPortalToPortalCost(unsigned short cluster, unsigned short
     const int rest = static_cast<unsigned short>(count - low);
     const int tail = (rest - 1) * rest / 2;
     const unsigned short within = static_cast<unsigned short>(pairs - tail - low + high);
-    const unsigned int index = within + static_cast<unsigned short>(pairs) * costType + entry.m_firstPortalCost;
+    const int index = within + static_cast<unsigned short>(pairs) * costType + entry.m_firstPortalCost;
+    // [PLATFORM] The x86 images index `costs + index * 4 - 4` in 32-bit address arithmetic, so a
+    // portal paired with itself in the first cluster (index 0) reads the word just before the
+    // table. Signed arithmetic keeps that same element on a 64-bit port instead of wrapping the
+    // unsigned index to 2^32 - 1.
     return m_portalCosts[index - 1];
 }
 
