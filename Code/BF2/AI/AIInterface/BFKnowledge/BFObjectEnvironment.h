@@ -112,8 +112,11 @@ public:
 
 private:
     /* +0x00 */ // vptr
-    // [UNRESOLVED] Three pointer-vector fields remain opaque. The trailing clock value is a double.
-    /* +0x04 */ unsigned char m_opaque[0x24];      // three std::vector members, zeroed as retail does
+    // [UNRESOLVED] The second and third pointer-vector fields remain opaque. The trailing clock
+    // value is a double.
+    // The engine parts of the object being sensed, refilled by every pickRandomSensePosition call.
+    /* +0x04 */ std::vector<world::IObject*> m_senseParts;   // [INFERRED] name
+    /* +0x10 */ unsigned char m_opaque[0x18];      // two std::vector members, zeroed as retail does
     /* +0x28 */ unsigned char m_byte28;            // [UNRESOLVED] ctor 0
     /* +0x2C */ double m_lastSevereDamageTime;     // [CHOSEN] name; ELF +0x2C / PE +0x38, ctor 0.0
 };

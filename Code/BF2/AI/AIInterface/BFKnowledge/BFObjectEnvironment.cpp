@@ -31,6 +31,9 @@
 #include "../../../Game/Objects/Game/Soldier.h"                      // getCameras
 #include "../../../Game/Objects/ICameraObject.h"
 #include "IAIObjectPlugIn.h"
+#include "../../../Core/Random.h"                                    // g_random
+#include "../../../Game/Objects/ObjectLayoutAccess.h"                   // the +0x40 collision mesh
+#include "../../../Physics/ICollisionMesh.h"
 
 namespace dice {
 namespace hfe {
@@ -63,11 +66,11 @@ IAIObjectEnvironment::~IAIObjectEnvironment()
     }
 }
 
-// Zeroes the opaque vector storage, flag, and severe-damage timestamp separately.
+// Zeroes the sense-part vector, the opaque vector storage, flag, and severe-damage timestamp separately.
 // Leaves padding at +0x29..+0x2B untouched.
 BFObjectEnvironment::BFObjectEnvironment()
 {
-    std::memset(m_opaque, 0, sizeof(m_opaque));  // +0x04 .. +0x27, the three vectors
+    std::memset(m_opaque, 0, sizeof(m_opaque));  // +0x10 .. +0x27, the other two vectors
     m_byte28 = 0;                                // +0x28, a byte
     m_lastSevereDamageTime = 0.0;                // +0x2C, a double
 }
@@ -410,9 +413,139 @@ bool BFObjectEnvironment::hasIndirectLineOfFire(IWeapon* weapon, const Vec3& fro
     BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::hasIndirectLineOfFire");
 }
 
-void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, Vec3 hint, IAIObject* object)
+namespace {
+
+// The engine's process-global Random draw before scaling: `(raw | 0x80) sar 7, + 1`.
+float rawRandom()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFObjectEnvironment::pickRandomSensePosition");
+    return static_cast<float>(static_cast<int>(((g_random.getRaw() >> 7) | 1u) + 1u));
+}
+
+// The same draw scaled to (0, 1] by 2^-24.
+float unitRandom()
+{
+    return rawRandom() * 0.000000059604645f;
+}
+
+// A random index in [0, count - 1], rounded to nearest: draw * (count - 1) * 2^-24 + 0.5, truncated.
+unsigned int randomIndex(float countMinusOne)
+{
+    return static_cast<unsigned int>(static_cast<int>(rawRandom() * countMinusOne * 0.000000059604645f + 0.5f));
+}
+
+// Out = in transformed by the row-vector matrix, translation included (Client PE 0x505DE1). The
+// input is read in full before the output is written, so the two may alias. [INFERRED] name.
+void transformCoordinate(const Mat4& m, const Vec3& in, Vec3& out)
+{
+    const float x = in.x * m.m[0] + in.y * m.m[4] + in.z * m.m[8] + m.m[12];
+    const float y = in.x * m.m[1] + in.y * m.m[5] + in.z * m.m[9] + m.m[13];
+    const float z = in.x * m.m[2] + in.y * m.m[6] + in.z * m.m[10] + m.m[14];
+    out.x = x;
+    out.y = y;
+    out.z = z;
+}
+
+// The part collector (Client PE 0x81B8A0): the object itself when it has a collision lod 0, then
+// each object down its getChild chain, each collected recursively. A child is reached again from
+// every ancestor on the chain, as shipped, so parts can repeat.
+void collectSenseParts(world::IObject* object, std::vector<world::IObject*>& parts)
+{
+    if (object->hasCollisionLod(0))   // the predicate's only slot (Client PE 0x818D40)
+        parts.push_back(object);
+    for (world::IObject* child = object->getChild(); child; child = child->getChild())
+        collectSenseParts(child, parts);
+}
+
+// One face of a collision mesh: three vertex indices, padded to eight bytes.
+struct SenseFace
+{
+    unsigned short vertex[3];
+    unsigned short padding;
+};
+
+} // anonymous namespace
+
+// Client PE 0x81B9C0. Picks a random point on the object's collision geometry: a random part with
+// collision lod 0, then a random point on a random face of its lod-0 mesh (or a random vertex when
+// the mesh has no faces). position receives the world point and normal the same point in the
+// object's own frame. Without parts or vertices it falls back to the AI object's position and a
+// zero normal. The hint is not read. A lone part without lod 0 leaves no mesh, which is
+// dereferenced as shipped; with several parts the random draws repeat until one has a mesh.
+void BFObjectEnvironment::pickRandomSensePosition(Vec3& position, Vec3& normal, Vec3 /*hint*/, IAIObject* object)
+{
+    world::IObject* const engineObject = object->getObject();
+    m_senseParts.resize(0);
+    collectSenseParts(engineObject, m_senseParts);
+    if (!m_senseParts.empty())
+    {
+        Mat4 toObject = engineObject->getAbsoluteTransformation();
+        const Mat4 absolute = toObject;
+        toObject.setInverse(absolute);
+
+        world::ICollisionMesh* mesh = 0;
+        world::IObject* part = 0;
+        for (;;)
+        {
+            if (m_senseParts.size() <= 1)
+            {
+                part = m_senseParts[0];
+                if (part->hasCollisionLod(0) == 1)
+                    mesh = static_cast<world::ICollisionMesh*>(world::object_detail::LayoutAccess::collisionMesh(part));
+                break;
+            }
+            const float countMinusOne = static_cast<float>(static_cast<unsigned int>(m_senseParts.size())) - 1.0f;
+            part = m_senseParts[randomIndex(countMinusOne)];
+            if (part->hasCollisionLod(0) == 1)
+            {
+                mesh = static_cast<world::ICollisionMesh*>(world::object_detail::LayoutAccess::collisionMesh(part));
+                if (mesh)
+                    break;
+            }
+        }
+
+        const unsigned int faceCount = static_cast<unsigned int>(mesh->getFaceCount(0));
+        const unsigned int vertexCount = mesh->getVertexCount(0);
+        if (faceCount > 0)
+        {
+            const unsigned int face = randomIndex(static_cast<float>(faceCount) - 1.0f);
+            float u = unitRandom();
+            float v = unitRandom();
+            if (u + v > 1.0f)
+            {
+                u = 1.0f - u;
+                v = 1.0f - v;
+            }
+            const SenseFace* const faces = static_cast<const SenseFace*>(mesh->getFaceVector(0));
+            const Vec3* const vertices = static_cast<const Vec3*>(mesh->getVertexVector(0));
+            const Vec3& a = vertices[faces[face].vertex[0]];
+            const Vec3& b = vertices[faces[face].vertex[1]];
+            const Vec3& c = vertices[faces[face].vertex[2]];
+            normal.x = (b.x - a.x) * u + a.x + (c.x - a.x) * v;
+            normal.y = (b.y - a.y) * u + a.y + (c.y - a.y) * v;
+            normal.z = (b.z - a.z) * u + a.z + (c.z - a.z) * v;
+        }
+        else
+        {
+            if (vertexCount == 0)
+            {
+                object->getBoundingRadius();   // read and dropped, as shipped
+                normal.x = normal.y = normal.z = 0.0f;
+                position = object->getPosition();
+                return;
+            }
+            const unsigned int vertex = randomIndex(static_cast<float>(vertexCount - 1));
+            normal = static_cast<const Vec3*>(mesh->getVertexVector(0))[vertex];
+        }
+        Vec3 world;
+        world.x = world.y = world.z = 0.0f;
+        transformCoordinate(part->getAbsoluteTransformation(), normal, world);
+        position = world;
+        transformCoordinate(toObject, position, normal);
+        return;
+    }
+    object->getBoundingRadius();   // read and dropped, as shipped
+    normal.x = normal.y = normal.z = 0.0f;
+    position = object->getPosition();
 }
 
 namespace {
