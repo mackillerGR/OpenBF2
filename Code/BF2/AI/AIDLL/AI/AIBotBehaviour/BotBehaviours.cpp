@@ -1886,13 +1886,13 @@ BBFireUnarmed::BBFireUnarmed(int behaviourId, int priority)
     m_behaviourId = static_cast<unsigned char>(behaviourId);
     m_priority = static_cast<unsigned char>(priority);
     const int bots = configuredBotCount();
-    m_int24 = checkPointer(new int[bots]);
+    m_inclination = checkPointer(new float[bots]);
     m_targets = checkPointer(new unsigned int[bots]);
     m_generator = 0;
     for (int i = 0; i < bots; ++i)
     {
         m_urgency[i] = 0.0f;
-        m_int24[i] = 0;
+        m_inclination[i] = 0.0f;
         m_targets[i] = static_cast<unsigned int>(-1);
     }
 }
@@ -1900,12 +1900,189 @@ BBFireUnarmed::BBFireUnarmed(int behaviourId, int priority)
 BBFireUnarmed::~BBFireUnarmed()
 {
     delete[] m_targets;
-    delete[] m_int24;
+    delete[] m_inclination;
 }
 
-float BBFireUnarmed::calculateUrgency(Bot*, bool, float)
+// PE 100ED2A0. The strongest incoming fire against the equipment's strength type, times 10. The
+// fire list is copied, as shipped.
+float BBFireUnarmed::incomingFireThreat(Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBFireUnarmed::calculateUrgency");
+    float strongest = 0.0f;
+    const std::list<std::pair<FireObject*, unsigned int> > fire =
+        *static_cast<std::list<std::pair<FireObject*, unsigned int> >*>(bot->getIncommingFire());
+    IPIPhysical* const physical = lookupInformation(bot->getCurrentEquipment())->getPhysical();
+    for (std::list<std::pair<FireObject*, unsigned int> >::const_iterator it = fire.begin(); it != fire.end(); ++it)
+    {
+        const float strength = it->first->getStrength(physical->getStrengthType());
+        if (strength > strongest)
+            strongest = strength;
+    }
+    return strongest * 10.0f;
+}
+
+// PE 100ED370. A passenger without weapons scores the enemies it senses within 250 m, picks the
+// most threatening one as its target and adds the threat, plus the incoming fire, to the bot's
+// fire inclination. It never asks for a plan, so it always answers 0. The equipment is not
+// null-checked, as shipped.
+float BBFireUnarmed::calculateUrgency(Bot* bot, bool flag, float elapsed)
+{
+    if (!flag)
+    {
+        if (!lookupInformation(m_targets[bot->getBotId()]))
+        {
+            m_targetChanged[bot->getBotId()] = true;
+            m_inclination[bot->getBotId()] = 0.0f;
+            return 0.0f;
+        }
+        m_targetChanged[bot->getBotId()] = false;
+        bot->addToFireInclination(m_inclination[bot->getBotId()]);
+        return 0.0f;
+    }
+
+    const float* const armourClassValues =
+        static_cast<IAISettings*>(CommonSingletonServer::m_iaiSettings)->getArmourClassValues();
+    Information* const equipment = lookupInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment->getMobile();
+    const int strengthType = equipment->getPhysical()->getStrengthType();
+    const Vec3 position = equipment->getPosition();
+    unsigned int ordersMatched = 0;
+    float best = 0.0f;
+    float previousUrgency = 0.0f;
+    const int side = bot->getSide();
+    const unsigned int previousTarget = m_targets[bot->getBotId()];
+    // Built and dropped, as shipped.
+    std::vector<IAIObject*> ignored;
+    ignored.push_back(equipment->getAIObject());
+    ignored.push_back(0);
+    bool keepPrevious = false;
+    ISAI* const sai = IAIMain::m_instance->getSAI(side);
+    AIStrategicObject* const orderedObject = AIStrategicObjectManager::getInstance()->getStrategicObject(
+        sai->getBotOrderedPos(bot->getBotId()));
+    float areaFactor = 1.0f;
+    if (orderedObject && !static_cast<AIStrategicArea*>(orderedObject)->isInsideArea(position))
+        areaFactor = 0.75f;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+
+    const std::map<unsigned int, SensedObject*>& sensed = bot->getSensedObjects();
+    for (std::map<unsigned int, SensedObject*>::const_iterator it = sensed.begin(); it != sensed.end(); ++it)
+    {
+        SensedObject* const sense = it->second;
+        if (!(sense->m_senseFlags & 4))
+            continue;
+        Information* const target = lookupInformation(sense->m_handle);
+        if (!target || target->getSide() == side)
+            continue;
+        IPIPhysical* const targetPhysical = target->getPhysical();
+        if (!targetPhysical)
+            continue;
+        const unsigned int targetFlags = target->getObjectTypeFlags();
+        if (((targetFlags >> 17) & 1) || ((targetFlags >> 20) & 1) || ((targetFlags >> 23) & 1))
+            continue;
+        const float health = targetPhysical->getHealth();
+        if (health < 0.0f || health == 0.0f)
+            continue;
+        Vec3 targetPosition;
+        targetPosition.x = targetPosition.y = targetPosition.z = 0.0f;
+        if (target->getMobile())
+            target->getMobile()->getPositionEstimate(targetPosition);
+        else
+            targetPosition = target->getPosition();
+        Vec3 direction;
+        direction.x = targetPosition.x - position.x;
+        direction.y = targetPosition.y - position.y;
+        direction.z = targetPosition.z - position.z;
+        const float distance = std::max(
+            std::sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z), 0.5f);
+        if (distance > 250.0f)
+            continue;
+        const float inverse = 1.0f / distance;   // PE 1009B6B0; the direction is not read again
+        direction.x *= inverse;
+        direction.y *= inverse;
+        direction.z *= inverse;
+        float freshness = 1.0f;
+        if (sense->m_senseFlags & 8)
+            freshness = 1.0f / (static_cast<float>(now - sense->m_firstSensed) * 0.05f + 1.0f);
+        if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+            && ordersMatched < bot->getOrderList(m_behaviourId)->size())
+        {
+            std::list<unsigned int>* const orders = bot->getOrderList(m_behaviourId);
+            if (std::find(orders->begin(), orders->end(), sense->m_handle) != orders->end())
+                ++ordersMatched;
+        }
+        float placementFactor = areaFactor;
+        if (mobile && orderedObject && !static_cast<AIStrategicArea*>(orderedObject)->isInsideArea(targetPosition))
+            placementFactor = areaFactor * 0.75f;
+        if (!target->getUnit() || !isOccupiedObject(sense->m_handle, side))
+            continue;
+
+        float occupants = 0.0f;
+        float threat = 0.0f;
+        int iterator = target->getFirstSecondaryObjectIterator();
+        const int targetStrengthType = target->getPhysical()->getStrengthType();
+        Information* current = target;
+        do
+        {
+            IPIUnit* const unit = current->getUnit();   // not null-checked, as shipped
+            occupants = occupants + unit->getBattleStrengths()[strengthType];
+            float orderFactor = 1.0f;
+            if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+                && ordersMatched < bot->getOrderList(m_behaviourId)->size())
+            {
+                std::list<unsigned int>* const orders = bot->getOrderList(m_behaviourId);
+                if (std::find(orders->begin(), orders->end(), sense->m_handle) != orders->end())
+                {
+                    ++ordersMatched;
+                    orderFactor = bot->getMemory()->m_float8;
+                }
+            }
+            threat = (unit->getBattleStrengths()[strengthType] + current->getStrength())
+                         * armourClassValues[targetStrengthType] * orderFactor * placementFactor
+                     + threat;
+            current = lookupInformation(target->getSecondaryObject(iterator, side));
+        } while (current);
+        threat = threat / std::max(distance * 0.3f, 0.1f) * freshness;
+        if (static_cast<float>(static_cast<BotMain*>(bot)->getInt40()) >= occupants)
+            threat = threat * 0.33f;
+        if (!target->getUnit())
+            continue;
+        if (previousTarget == sense->m_handle)
+        {
+            keepPrevious = true;
+            previousUrgency = threat;
+        }
+        if (threat > best)
+        {
+            best = threat;
+            m_targets[bot->getBotId()] = sense->m_handle;
+        }
+    }
+
+    if (best > 0.0f)
+    {
+        if (keepPrevious && previousUrgency * 1.2f > best)
+        {
+            m_targets[bot->getBotId()] = previousTarget;
+        }
+        else
+        {
+            bot->getBotId();   // read and dropped, as shipped
+            keepPrevious = false;
+        }
+        if (bot->isOrderedBehaviour(m_behaviourId) && bot->isTakingOrders()
+            && bot->getOrderList(m_behaviourId)->size() == 0)
+            best = best * bot->getMemory()->m_float8;
+        m_targetChanged[bot->getBotId()] = !keepPrevious;
+        m_inclination[bot->getBotId()] = DecleiningSlopeCurve::calculate(best + best) * elapsed;
+    }
+    else
+    {
+        m_targetChanged[bot->getBotId()] = !keepPrevious;
+        m_inclination[bot->getBotId()] = 0.0f;
+    }
+    float* const inclination = &m_inclination[bot->getBotId()];
+    *inclination = incomingFireThreat(bot) + *inclination;
+    bot->addToFireInclination(m_inclination[bot->getBotId()]);
+    return 0.0f;
 }
 
 BBFireLargeBore::BBFireLargeBore(int behaviourId, int priority, PlanGenerator* generator,

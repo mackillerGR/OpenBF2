@@ -194,7 +194,11 @@ public:
     virtual float calculateUrgency(Bot* bot, bool flag, float elapsed);  // PE 100ED370
 
 protected:
-    /* +0x24 */ int* m_int24;   // 0
+    // The incoming-fire threat of the strongest attacker, times 10. PE 100ED2A0; [INFERRED] name.
+    float incomingFireThreat(Bot* bot);
+
+    // The fire inclination this behaviour adds for each bot (it never asks for a plan itself).
+    /* +0x24 */ float* m_inclination;   // 0
 };
 
 class BBFireLargeBore : public BotBehaviour
