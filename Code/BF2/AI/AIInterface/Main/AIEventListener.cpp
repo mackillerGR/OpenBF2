@@ -93,6 +93,28 @@ void unwrittenArm(const char* what, int category, unsigned int id)
     std::abort();
 }
 
+// Whether anyone occupies the vehicle a seat belongs to: its primary object (when that is not
+// the seat itself) or any other secondary object. A vehicle whose primary object is no unit
+// counts as empty. PE 008259C0; [INFERRED] name and placement.
+bool isOtherSeatOccupied(IAIObject* seat)
+{
+    IAIObject* const primary = seat->getPrimaryObject();
+    IAIObjectUnit* const unit = primary->getUnit();
+    if (!unit)
+        return false;
+    if (seat != primary && unit->isOccupied())
+        return true;
+    int iterator;
+    for (IAIObject* other = primary->getFirstSecondaryObject(iterator); other;
+         other = primary->getSecondaryObject(iterator))
+    {
+        IAIObjectUnit* const otherUnit = other->getUnit();   // not null-checked, as shipped
+        if (seat != other && otherUnit->isOccupied())
+            return true;
+    }
+    return false;
+}
+
 } // anonymous namespace
 
 void AIEventListener::handleEvent(EventCategory category,
@@ -335,10 +357,39 @@ void AIEventListener::handleEvent(EventCategory category,
             }
             return;
         case 2u:
-            unwrittenArm("category 3 id 2 - player exited vehicle", (int)category, id);
+            {
+                // PE 00815136. Ladders and the like are ignored. A seat that lent its occupant's
+                // armament gives it back, and a vehicle left with no one aboard turns neutral;
+                // then the object the player left in is put back in the grid.
+                const AIEventOccupancyPayload* const p =
+                    static_cast<const AIEventOccupancyPayload*>(userData);
+                if (p->specialContainer)
+                    return;
+                IAIObject* const seat = static_cast<IAIObject*>(p->other);
+                IAIObject* const object = static_cast<IAIObject*>(p->object);
+                if (seat)
+                {
+                    if (seat->getUnit() && seat->getUnit()->mustBorrowArmament(seat))
+                    {
+                        seat->resetArmament();
+                        IAIInformationCourier* const information = static_cast<IAIInformationCourier*>(
+                            CommonSingletonServer::m_iaiInformationCourier);
+                        information->resetArmament(seat->getHandle(1));
+                        information->resetArmament(seat->getHandle(2));
+                    }
+                    if (!isOtherSeatOccupied(seat))
+                        seat->setSide(0);
+                }
+                if (object)
+                    object->reInsertInGrid();
+            }
             return;
         case 3u:
-            unwrittenArm("category 3 id 3 - eventPlayerExitVehicle", (int)category, id);
+            {
+                // PE 008151E5.
+                const AIEventPlayerExitPayload* const p = static_cast<const AIEventPlayerExitPayload*>(userData);
+                courier->eventPlayerExitVehicle(static_cast<IAIObject*>(p->aiObject), p->playerId);
+            }
             return;
         case 5u:
             // PE 00815248. A soldier picked up a kit; its AI object refreshes.
