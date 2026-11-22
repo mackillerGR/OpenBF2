@@ -174,9 +174,181 @@ void BBPGotoWaypoint2d::setWaypoint(Bot* bot)
     m_hasPlan[bot->getBotId()] = true;
 }
 
-BotScript* BBPGotoWaypoint2d::generate(Bot*)
+namespace {
+
+BAPUseFlareOnMissileLock* newFlareStatement(Bot* bot, int id);   // defined with BBPChange
+void dropPlan(Bot* bot);                                          // defined below
+void clearPlan(Bot* bot);                                         // defined below
+
+// The common tail of the land-vehicle waypoint plans (PE 100F3860): the serial gets the move,
+// then a parallel runs a flare-on-lock statement beside it, wrapped as the MoveTo behaviour at
+// the waypoint.
+BotScript* finishVehicleWaypointPlan(Bot* bot, BAPSerial* serial, BotScript* move, const Vec3& position,
+                                     int behaviourId, PlanGenerator* owner)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypoint2d::generate");
+    serial->addStatement(move);
+    BAPParallel* const parallel = checkPointer(new BAPParallel(behaviourId, true, -1, false));
+    parallel->addStatement(newFlareStatement(bot, behaviourId));
+    parallel->addStatement(serial);
+    BAPMoveToWrapper* const wrapper = checkPointer(new BAPMoveToWrapper(position, parallel, behaviourId));
+    wrapper->m_owner = owner;
+    return wrapper;
+}
+
+// The serial that first turns the sensing agent towards the waypoint (PE 100F3860).
+BAPSerial* newVehicleWaypointSerial(Information* equipment, const Vec3& position, int behaviourId)
+{
+    BAPSerial* const serial = checkPointer(new BAPSerial(behaviourId, -1));
+    const Vec3& from = equipment->getPosition();
+    Vec3 direction;
+    direction.x = position.x - from.x;
+    direction.y = position.y - from.y;
+    direction.z = position.z - from.z;
+    serial->addStatement(checkPointer(new BAPSetSensingAgentFocus(0.5f, direction, behaviourId, false)));
+    return serial;
+}
+
+// Type-0 waypoint lists would hold an object handle (+0x10) and get the MoveToObject plan
+// (PE 100F3CDA..100F3F7E and 100F428C..100F4410). No waypoint-list class in the image reports
+// type 0, so the branch is unreachable in retail; it stops by name rather than invent the class.
+// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-move-to-object] Recover the list
+// class if one is found and build the plan as those ranges do.
+BotScript* vehicleObjectWaypointPlan()
+{
+    BF2_AI_FRONTIER("dice::hfe::ai::BBPGotoWaypoint2d::generate (object waypoint)");
+}
+
+// The 2-component flat part of a position, read and dropped by the waypoint generators.
+Vec2 waypointFlat(const Vec3& position)   // PE 1014ADC0
+{
+    Vec2 flat;
+    flat.x = position.x;
+    flat.y = position.z;
+    return flat;
+}
+
+} // anonymous namespace
+
+// PE 100F3860. The land-vehicle form of the waypoint plan. A current MoveTo plan of this
+// behaviour is kept while its waypoint list does not ask for a new one, and for a type-2 list
+// unless the waypoint came within four times the squad member's speed of the planned position
+// along x (the planned x is compared with the waypoint's x twice, as shipped). Position
+// waypoints (types 1 and 2) get a path-following plan within the list's tolerance, halved for
+// type-1 lists; object waypoints (type 0) stop by name; other lists get none. Every plan drops flares on a missile lock. The equipment
+// is not null-checked, as shipped.
+BotScript* BBPGotoWaypoint2d::generate(Bot* bot)
+{
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        releaseScriptState(bot);
+        dropPlan(bot);
+        return 0;
+    }
+    const float speed = bot->getSquadMember()->getMaxSpeed();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIControlInfo* const control = equipment->getControlInfo();
+
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId)
+    {
+        if (!bot->getWaypoints()->isActive() || bot->getWaypoints()->isPaused())
+            return bot->getPlan();
+        bot->getWaypoints()->setActive(false);
+        if (static_cast<BAPWrapper*>(bot->getPlan())->getWrapperIndex() == 2)
+        {
+            WaypointList* const waypoints = bot->getWaypoints();
+            const unsigned long long inputMask = control->getDriveControls();
+            // Only the object-waypoint branch uses the range.
+            const float range = equipment->getPhysical()->getRadius() * 4.0f;
+            (void)range;
+            switch (waypoints->getType())
+            {
+            case 0:
+                return vehicleObjectWaypointPlan();
+            case 1:
+            {
+                Vec3 position;
+                position.x = position.y = position.z = 0.0f;
+                if (!waypoints->getCurrentWaypoint(position))
+                    return 0;
+                waypointFlat(position);
+                clearPlan(bot);
+                releaseScriptState(bot);
+                BAPSerial* const serial = newVehicleWaypointSerial(equipment, position, m_behaviourId);
+                BAPMoveToFinding* const move = checkPointer(new BAPMoveToFinding(
+                    bot, position, speed, speed, 0, inputMask, m_behaviourId, waypoints->getTolerance() * 0.5f,
+                    0.0f));
+                return finishVehicleWaypointPlan(bot, serial, move, position, m_behaviourId, this);
+            }
+            case 2:
+            {
+                Vec3 position;
+                position.x = position.y = position.z = 0.0f;
+                if (!waypoints->getCurrentWaypoint(position))
+                    return 0;
+                const Vec2 flat = waypointFlat(position);
+                const float first = static_cast<BAPMoveToWrapper*>(bot->getPlan())->m_position.x - flat.x;
+                const float second = static_cast<BAPMoveToWrapper*>(bot->getPlan())->m_position.x - flat.x;
+                const float reach = speed * 4.0f;
+                if (reach * reach < second * second + first * first)
+                    return bot->getPlan();
+                clearPlan(bot);
+                releaseScriptState(bot);
+                BAPSerial* const serial = newVehicleWaypointSerial(equipment, position, m_behaviourId);
+                BAPMoveToFinding* const move = checkPointer(new BAPMoveToFinding(
+                    bot, position, speed, speed, 0, inputMask, m_behaviourId, waypoints->getTolerance(), 0.0f));
+                return finishVehicleWaypointPlan(bot, serial, move, position, m_behaviourId, this);
+            }
+            default:
+                dropPlan(bot);
+                return 0;
+            }
+        }
+        clearPlan(bot);
+    }
+    else
+    {
+        dropPlan(bot);
+    }
+    releaseScriptState(bot);
+    if (bot->getWaypoints()->isPaused())
+        return 0;
+    WaypointList* const waypoints = bot->getWaypoints();
+    const unsigned long long inputMask = control->getDriveControls();
+    const float range = equipment->getPhysical()->getRadius() * 4.0f;
+    (void)range;
+    bot->getWaypoints()->setActive(false);
+    bot->getSquadMember()->clearRequest();
+    Vec3 position;
+    position.x = position.y = position.z = 0.0f;
+    switch (waypoints->getType())
+    {
+    case 0:
+        return vehicleObjectWaypointPlan();
+    case 1:
+    {
+        if (!waypoints->getCurrentWaypoint(position))
+            return 0;
+        if (!waypoints->getCurrentWaypoint(position))
+            return 0;
+        BAPSerial* const serial = newVehicleWaypointSerial(equipment, position, m_behaviourId);
+        waypointFlat(position);
+        BAPMoveToFinding* const move = checkPointer(new BAPMoveToFinding(
+            bot, position, speed, speed, 0, inputMask, m_behaviourId, waypoints->getTolerance() * 0.5f, 0.0f));
+        return finishVehicleWaypointPlan(bot, serial, move, position, m_behaviourId, this);
+    }
+    case 2:
+    {
+        if (!waypoints->getCurrentWaypoint(position))
+            return 0;
+        BAPSerial* const serial = newVehicleWaypointSerial(equipment, position, m_behaviourId);
+        waypointFlat(position);
+        BAPMoveToFinding* const move = checkPointer(new BAPMoveToFinding(
+            bot, position, speed, speed, 0, inputMask, m_behaviourId, waypoints->getTolerance(), 0.0f));
+        return finishVehicleWaypointPlan(bot, serial, move, position, m_behaviourId, this);
+    }
+    default:
+        return 0;
+    }
 }
 
 BBPGotoWaypointBoat::BBPGotoWaypointBoat(int behaviourId)
