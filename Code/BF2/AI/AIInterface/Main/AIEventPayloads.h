@@ -39,6 +39,14 @@ struct AIEventSoldierStatePayload
     int playerId;
 };
 
+// Event 17, bridge destroyed: the id of the first player who damaged the segment, or -1, and the
+// segment's AI object.
+struct AIEventBridgeDestroyedPayload
+{
+    int playerId;
+    void* segmentAiObject;
+};
+
 // Player exit notification from ServerGameLogic: the player's id and the vehicle's AI object.
 struct AIEventPlayerExitPayload
 {

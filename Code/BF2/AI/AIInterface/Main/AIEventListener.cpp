@@ -379,10 +379,25 @@ void AIEventListener::handleEvent(EventCategory category,
                          " a 68-byte payload struct", (int)category, id);
             return;
         case 0x11u:
-            unwrittenArm("category 3 id 17 - bridge destroyed", (int)category, id);
+            {
+                // PE 00815416. Only while a round is playing: the segment's pathfinding part is
+                // destroyed, then the strategic layer marks the segment.
+                if (!static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->isPlaying())
+                    return;
+                const AIEventBridgeDestroyedPayload* const p =
+                    static_cast<const AIEventBridgeDestroyedPayload*>(userData);
+                IAIObject* const segment = static_cast<IAIObject*>(p->segmentAiObject);
+                courier->event_pathfindingMapIdDestroyed(segment->getPhysical()->getMapPosId(), 0);
+                courier->event_bridgeDestroyed(segment, p->playerId);
+            }
             return;
         case 0x12u:
-            unwrittenArm("category 3 id 18 - bridge repaired", (int)category, id);
+            {
+                // PE 00815471. The payload is the segment's AI object; there is no round check.
+                IAIObject* const segment = static_cast<IAIObject*>(userData);
+                courier->event_pathfindingMapIdRestored(segment->getPhysical()->getMapPosId());
+                courier->event_bridgeRepaired(segment);
+            }
             return;
         case 0x13u:
             unwrittenArm("category 3 id 19 - object slot +204", (int)category, id);
