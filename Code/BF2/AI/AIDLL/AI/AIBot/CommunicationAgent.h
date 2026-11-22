@@ -96,6 +96,9 @@ public:
     // [UNRESOLVED] meaning; reset stores -1. BBIdle compares a requester's equipment player id
     // against it. [INFERRED] accessor; read inline.
     int getInt92() const { return m_int92; }
+    // BBPChange stores the player id of the vehicle's occupant here (255 when no bot occupies it).
+    // [INFERRED] accessor; written inline at PE +0x70.
+    void setInt92(int value) { m_int92 = value; }
 
 private:
     void expireReceivedMessages(double time);

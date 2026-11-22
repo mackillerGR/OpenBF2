@@ -195,6 +195,37 @@ public:
     virtual bool isComposite();                                        // PE 101AC5D0: true
 };
 
+// Moves an aircraft toward an object; the per-vehicle MoveToObject entries drive it. Never
+// driven directly: unfinished and failed. Type 9. PE vtable 102832F8. [INFERRED] names; the
+// fields after the stop condition are [UNRESOLVED] working state.
+class BAPAirMoveToObject : public BotScript
+{
+public:
+    // PE 101A7D40. Owns the stop condition and becomes its owner.
+    BAPAirMoveToObject(unsigned int target, float range, float speed, float cruiseSpeed,
+                       float altitude, BAPCondition* until, unsigned long long inputMask, int id);
+    virtual ~BAPAirMoveToObject();                                     // PE 101A7E50
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101A7D20
+    virtual BAPStatementType getType();                                // PE 101A7CD0: 9
+    virtual bool isComposite();                                        // PE 101A7CE0: false
+    // Whether the stop condition holds; false without one. PE 101A7CF0.
+    virtual bool isFinished(Bot* bot);
+
+    /* +0x18 */ unsigned int m_target;
+    /* +0x1C */ float m_range;
+    /* +0x20 */ float m_speed;
+    /* +0x24 */ float m_cruiseSpeed;
+    /* +0x28 */ BAPCondition* m_until;
+    /* +0x2C */ float m_state2C[10];         // zeroed
+    /* +0x54 */ float m_altitude;
+    /* +0x58 */ float m_state58[2];          // left unset, as shipped
+    /* +0x60 */ float m_state60[9];          // zero except +0x64, +0x74 and +0x78 = 1
+    // Whether the target was a known mobile object at construction.
+    /* +0x84 */ bool m_targetMobile;
+    /* +0x88 */ int m_int88;                 // zeroed
+};
+
 // Fires a flare once the equipment's missile-lock status turns positive, after a second's delay
 // for equipment with type flag 4, then clears the status. Type 40. PE vtable 10283338.
 // [INFERRED] name.
@@ -687,6 +718,22 @@ public:
     virtual int getWrapperIndex();
 
     /* +0x18 */ BotScript* m_child;
+};
+
+// The root of a change plan: books the target vehicle for the player while it lives. On
+// destruction it cancels the booking and, when the bot sits in the target, thanks the occupant
+// that asked for the ride (radio message 8) or reports the vehicle full (11), then deletes the
+// child. PE vtable 10283960. [INFERRED] name.
+class BAPChangeWrapper : public BAPWrapper
+{
+public:
+    // PE 101ACE20. Books the target, even when it is unknown (the booking then has no object).
+    BAPChangeWrapper(unsigned int target, BotScript* child, int id, int playerId);
+    virtual ~BAPChangeWrapper();                                       // PE 101ACEB0
+    virtual int getWrapperIndex();                                     // PE 101ACEA0: 8
+
+    /* +0x20 */ unsigned int m_target;
+    /* +0x24 */ int m_playerId;
 };
 
 // The root of a generated plan: remembers where it was made and marks the bot's squad member

@@ -2749,6 +2749,112 @@ bool BAPOverrideSensingAgent::execute(Bot* bot, bool& finished, bool& failed)
 BAPStatementType BAPOverrideSensingAgent::getType() { return BAPSTOverrideSensingAgent; }
 bool BAPOverrideSensingAgent::isComposite() { return false; }
 
+// ---- BAPChangeWrapper -----------------------------------------------------------------------
+
+BAPChangeWrapper::BAPChangeWrapper(unsigned int target, BotScript* child, int id, int playerId)
+    : BAPWrapper(child, id), m_target(target), m_playerId(playerId)
+{
+    // An unknown target books through a null information, as shipped.
+    informationManager->getInformation(target)->bookVehicle(playerId);
+    m_child->m_owner = this;
+}
+
+// The bot of the player is not null-checked, as shipped.
+BAPChangeWrapper::~BAPChangeWrapper()
+{
+    Information* target = informationManager->getInformation(m_target);
+    if (target && target->isBooked())
+        target->cancelBookVehicle();
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(m_playerId);
+    CommunicationAgent* const communication = bot->getCommunicationAgent();
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (target && equipment && bot->getCurrentEquipment() == m_target)
+    {
+        bool thank = false;
+        Information* const targetPrimary =
+            informationManager->getInformation(target->getPrimaryObject(bot->getSide()));
+        Information* const equipmentPrimary =
+            informationManager->getInformation(equipment->getPrimaryObject(bot->getSide()));
+        int player = targetPrimary->getPlayerId();
+        if (player >= 0 && communication->hasMessage(static_cast<AIRadioMessageType>(1), player)
+            && equipmentPrimary == targetPrimary)
+            thank = true;
+        bool full = !equipment->isPrimary() && targetPrimary->getUnit()->isOccupied()
+                    && equipmentPrimary == targetPrimary;
+        int iterator;
+        Information* part = informationManager->getInformation(
+            targetPrimary->getFirstSecondaryObject(iterator, bot->getSide()));
+        bool broke = false;
+        while (part)
+        {
+            player = part->getPlayerId();
+            if (player >= 0 && communication->hasMessage(static_cast<AIRadioMessageType>(1), player)
+                && equipmentPrimary == targetPrimary)
+                thank = true;
+            full = full && !part->isBooked();
+            if (thank && !full)
+            {
+                broke = true;
+                break;
+            }
+            part = informationManager->getInformation(
+                targetPrimary->getSecondaryObject(iterator, bot->getSide()));
+        }
+        if (!broke && full)
+            communication->enqueueRadioMessage(11, 7, 3, 1.0f, -1);
+        else if (thank)
+            communication->enqueueRadioMessage(8, 7, 3, 1.0f, -1);
+    }
+    if (m_child)
+        delete m_child;
+}
+
+int BAPChangeWrapper::getWrapperIndex() { return 8; }
+
+// ---- BAPAirMoveToObject ---------------------------------------------------------------------
+
+BAPAirMoveToObject::BAPAirMoveToObject(unsigned int target, float range, float speed,
+                                       float cruiseSpeed, float altitude, BAPCondition* until,
+                                       unsigned long long inputMask, int id)
+    : m_target(target), m_range(range), m_speed(speed), m_cruiseSpeed(cruiseSpeed), m_until(until),
+      m_altitude(altitude), m_targetMobile(false), m_int88(0)
+{
+    for (int i = 0; i < 10; ++i)
+        m_state2C[i] = 0.0f;
+    m_id = id;
+    m_inputMask = inputMask;
+    if (m_until)
+        m_until->m_owner = this;
+    if (Information* const object = informationManager->getInformation(m_target))
+        m_targetMobile = object->getMobile() != 0;
+    for (int i = 0; i < 9; ++i)
+        m_state60[i] = 0.0f;
+    m_state60[1] = 1.0f;   // +0x64
+    m_state60[5] = 1.0f;   // +0x74
+    m_state60[6] = 1.0f;   // +0x78
+}
+
+BAPAirMoveToObject::~BAPAirMoveToObject()
+{
+    if (m_until)
+        delete m_until;
+}
+
+bool BAPAirMoveToObject::execute(Bot*, bool& finished, bool& failed)
+{
+    finished = false;
+    failed = true;
+    return false;
+}
+
+BAPStatementType BAPAirMoveToObject::getType() { return BAPSTMoveToObject; }
+bool BAPAirMoveToObject::isComposite() { return false; }
+
+bool BAPAirMoveToObject::isFinished(Bot* bot)
+{
+    return m_until && m_until->evaluate(bot);
+}
+
 // ---- BAPRevive -------------------------------------------------------------------------------
 
 BAPRevive::BAPRevive(int id) : m_pressed(false)

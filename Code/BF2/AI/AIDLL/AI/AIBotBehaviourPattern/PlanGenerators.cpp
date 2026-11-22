@@ -893,9 +893,303 @@ void BBPChange::offerChange(unsigned int target, const Vec3* entry, bool samePri
     m_bool18[bot->getBotId()] = viaRequest;
 }
 
-BotScript* BBPChange::generate(Bot*)
+namespace {
+
+// The radius of the object's primary object (the object itself when it is primary).
+float primaryRadius(Information* object, Bot* bot)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::generate");
+    IPIPhysical* physical;
+    if (object->isPrimary())
+        physical = object->getPhysical();
+    else
+        physical = informationManager->getInformation(object->getPrimaryObject(bot->getSide()))->getPhysical();
+    return physical->getRadius();
+}
+
+// Whether the target should be approached as a moving object rather than at a position.
+bool approachAsMobile(Information* target, IPIUnit* targetUnit, Bot* bot)
+{
+    if (!targetUnit->useNoPathfindingToGetToObject() && target->getMobile())
+        return true;
+    if (target->isPrimary())
+        return false;
+    return informationManager->getInformation(target->getPrimaryObject(bot->getSide()))->getMobile() != 0;
+}
+
+const unsigned long long kExitVehicleMask = 1ULL << 10;
+const unsigned long long kFlareMask = 0x800000000000ULL;
+
+BAPUseFlareOnMissileLock* newFlareStatement(Bot* bot, int id)
+{
+    // The first argument is the bot pointer in retail, stored and never read. [PLATFORM]
+    return new BAPUseFlareOnMissileLock(static_cast<int>(reinterpret_cast<std::size_t>(bot)), kFlareMask, id);
+}
+
+} // anonymous namespace
+
+// PE 100F95E0. Builds the plan that takes the bot into the offered vehicle or seat (or out of its
+// vehicle into its soldier): a seat in the same vehicle is selected with its key; a stationary
+// vehicle is left with the exit input; otherwise the bot drives or walks up to the target and
+// changes into it, guarded by occupancy conditions. The plan is wrapped so the target stays booked
+// for the bot, and a vehicle crew adds missile-lock flares. A current plan of this behaviour on
+// the same target is kept and only answers the ride request.
+BotScript* BBPChange::generate(Bot* bot)
+{
+    const int botId = bot->getBotId();
+    CommunicationAgent* const communication = bot->getCommunicationAgent();
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::generate (script debugger reset)");
+        bot->getScriptContext()->clear();
+        dropPlan(bot);
+        return 0;
+    }
+    if (bot->getPlan() && bot->getPlan()->getId() == m_behaviourId
+        && static_cast<BAPChangeWrapper*>(bot->getPlan())->m_target == static_cast<unsigned int>(m_int0C[botId]))
+    {
+        if (m_bool18[botId] && communication->handleMessages(static_cast<AIRadioMessageType>(1)))
+            communication->enqueueRadioMessage(6, 6, 3, 1.0f, -1);
+        return bot->getPlan();
+    }
+
+    static_cast<BotMain*>(bot)->resetAllControls(true, true, true);
+    // The equipment is not null-checked, as shipped.
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment->getMobile();
+    IPIPhysical* const physical = equipment->getPhysical();
+    const unsigned long long drive = equipment->getControlInfo()->getDriveControls();
+    Information* const target = informationManager->getInformation(m_int0C[bot->getBotId()]);
+    if (!target)
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::generate (script debugger reset)");
+        dropPlan(bot);
+        bot->getScriptContext()->clear();
+        return 0;
+    }
+    IPIUnit* const targetUnit = target->getUnit();
+    const float targetRadius = primaryRadius(target, bot);
+    const float equipmentRadius = primaryRadius(equipment, bot);
+    const float reach = equipmentRadius + targetRadius;
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::generate (script debugger reset)");
+    dropPlan(bot);
+    bot->getScriptContext()->clear();
+    bot->getSquadMember()->clearRequest();
+
+    const bool inSoldier = (equipment->getObjectTypeFlags() >> 21 & 1) != 0;
+    BotScript* body;
+
+    if (!inSoldier)
+    {
+        BAPSerial* const serial = checkPointer(new BAPSerial(m_behaviourId, -1));
+        IAIObject* const soldier = bot->getPlayer()->getSoldier();
+        const unsigned int soldierHandle = soldier->getInformation(bot->getSide());
+        if (static_cast<unsigned int>(m_int0C[bot->getBotId()]) == soldierHandle
+            && communication->handleMessages(static_cast<AIRadioMessageType>(0)))
+            serial->addStatement(checkPointer(new BAPSendRadioMessage(6, 7, 3, 1.0f, m_behaviourId, -1)));
+
+        if (m_bool14[bot->getBotId()] || !equipment->getMobile())
+        {
+            BAPSerial* const change = checkPointer(new BAPSerial(m_behaviourId, -1));
+            if (m_bool14[bot->getBotId()])
+            {
+                // Another seat of the same vehicle: press its select key.
+                change->addStatement(checkPointer(new BAPTrigger(
+                    targetUnit->getSelectKey(), checkPointer(new BAPConTrue), checkPointer(new BAPConFalse),
+                    1ULL << targetUnit->getSelectKey(), m_behaviourId, 0.0, false)));
+            }
+            else
+            {
+                // A stationary vehicle: press exit.
+                change->addStatement(checkPointer(new BAPTrigger(
+                    10, checkPointer(new BAPConTrue), checkPointer(new BAPConFalse), kExitVehicleMask,
+                    m_behaviourId, 0.0, false)));
+            }
+            change->addStatement(checkPointer(new BAPICChangeVehicle(m_int0C[bot->getBotId()])));
+            serial->addStatement(change);
+            body = serial;
+        }
+        else
+        {
+            Vec2 centre;
+            const Vec3& first = target->getPosition();
+            const Vec3& second = target->getPosition();
+            centre.x = second.x;
+            centre.y = first.z;
+            BAPConPosition* const near = checkPointer(new BAPConPosition(centre, reach * 1.2f + 50.0f));
+            const bool aircraft = (equipment->getObjectTypeFlags() >> 4 & 1) != 0;
+            BotScript* approach;
+            if (approachAsMobile(target, targetUnit, bot))
+            {
+                if (aircraft)
+                {
+                    approach = checkPointer(new BAPAirMoveToObject(
+                        m_int0C[bot->getBotId()], 0.5f, mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.5f,
+                        25.0f, near, drive, m_behaviourId));
+                }
+                else
+                {
+                    bool beside = false;
+                    Vec3 position;
+                    if ((target->getObjectTypeFlags() >> 4 & 1) && !(target->getObjectTypeFlags() >> 5 & 1))
+                    {
+                        position = target->getPosition();
+                        // [FRONTIER] PE 100F9360, which looks for a free position beside the
+                        // aircraft, is not recovered.
+                        BF2_AI_FRONTIER("dice::hfe::ai::BBPChange::findPositionBeside (PE 100F9360)");
+                    }
+                    if (beside)
+                    {
+                        Vec2 point;
+                        point.x = position.x;
+                        point.y = position.z;
+                        BAPConPosition* const there = checkPointer(new BAPConPosition(point, equipmentRadius));
+                        approach = checkPointer(new BAPMoveToFinding(
+                            bot, position, mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.5f, there, drive,
+                            m_behaviourId, 0.0f, 0.0f));
+                    }
+                    else
+                    {
+                        BAPConAnd* const stop = checkPointer(new BAPConAnd);
+                        stop->addCondition(checkPointer(
+                            new BAPConObjectDistance(m_int0C[bot->getBotId()], 20.0f, true, false, false)));
+                        stop->addCondition(checkPointer(new BAPConObjectMoved(m_int0C[bot->getBotId()], 10.0f)));
+                        approach = checkPointer(new BAPMoveToObjectFinding(
+                            bot, m_int0C[bot->getBotId()], 0.5f, mobile->getMaxSpeed(),
+                            mobile->getMaxSpeed() * 0.5f, near, drive, m_behaviourId, stop, 0.0f, -1));
+                    }
+                }
+            }
+            else if (aircraft)
+            {
+                approach = checkPointer(new BAPMoveTo(
+                    bot, target->getPosition(), mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.75f, near,
+                    drive, 25.0f, m_behaviourId));
+            }
+            else
+            {
+                BAPConAnd* const arrived = checkPointer(new BAPConAnd);
+                arrived->addCondition(near);
+                arrived->addCondition(checkPointer(new BAPConObjectBehind(m_int0C[bot->getBotId()], -0.95f, false)));
+                approach = checkPointer(new BAPMoveToFinding(
+                    bot, m_vec10[bot->getBotId()], mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.75f, arrived,
+                    drive, m_behaviourId, 0.0f, 0.0f));
+            }
+            serial->addStatement(approach);
+
+            BAPUpdateVehicle* const update = checkPointer(new BAPUpdateVehicle(m_behaviourId));
+            BAPConObjectEnemyOccupied* const enemy =
+                checkPointer(new BAPConObjectEnemyOccupied(m_int0C[bot->getBotId()]));
+            BAPTrigger* const exit = checkPointer(new BAPTrigger(
+                10, checkPointer(new BAPConTrue), enemy, kExitVehicleMask, m_behaviourId, 0.0, false));
+            if ((target->getObjectTypeFlags() >> 21 & 1) && equipment->isPrimary()
+                && !(equipment->getObjectTypeFlags() >> 4 & 1) && !(equipment->getObjectTypeFlags() >> 5 & 1))
+            {
+                // Bailing out of a damaged vehicle into the soldier: press input 47 first.
+                const float health = physical->getHealth();
+                if (IBotManager::instance->getVehicleBailValue() > health)
+                {
+                    serial->addStatement(checkPointer(new BAPTrigger(
+                        47, checkPointer(new BAPConTrue), checkPointer(new BAPConFalse), 1ULL << 47,
+                        m_behaviourId, 0.0, false)));
+                }
+            }
+            serial->addStatement(checkPointer(new BAPICTurnLock(true)));
+            serial->addStatement(exit);
+            serial->addStatement(update);
+            serial->addStatement(checkPointer(new BAPICTurnLock(false)));
+            BAPParallel* const both = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+            both->addStatement(checkPointer(new BAPICChangeVehicle(m_int0C[bot->getBotId()])));
+            both->addStatement(serial);
+            body = both;
+        }
+    }
+    else
+    {
+        BAPParallel* const walk = checkPointer(new BAPParallel(m_behaviourId, false, -1, false));
+        BAPConObjectOccupied* const occupied = checkPointer(new BAPConObjectOccupied(m_int0C[bot->getBotId()]));
+        BAPConObjectEnemyOccupied* const enemy =
+            checkPointer(new BAPConObjectEnemyOccupied(m_int0C[bot->getBotId()]));
+        BAPConOr* const taken = checkPointer(new BAPConOr);
+        taken->addCondition(occupied);
+        taken->addCondition(enemy);
+        BotScript* approach;
+        if (approachAsMobile(target, targetUnit, bot))
+        {
+            BAPConAnd* const stop = checkPointer(new BAPConAnd);
+            stop->addCondition(checkPointer(new BAPConObjectDistance(m_int0C[bot->getBotId()], 10.0f, true, false, false)));
+            stop->addCondition(checkPointer(new BAPConObjectMoved(m_int0C[bot->getBotId()], 5.0f)));
+            approach = checkPointer(new BAPMoveToObjectFinding(
+                bot, m_int0C[bot->getBotId()], 0.0f, mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.5f, taken,
+                drive, m_behaviourId, stop, 0.0f, -1));
+        }
+        else
+        {
+            approach = checkPointer(new BAPMoveToFinding(
+                bot, m_vec10[bot->getBotId()], mobile->getMaxSpeed(), mobile->getMaxSpeed() * 0.75f, taken, drive,
+                m_behaviourId, 0.5f, 0.0f));
+        }
+        walk->addStatement(approach);
+
+        BAPCondition* close = checkPointer(new BAPConObjectDistance(m_int0C[bot->getBotId()], reach + 1.0f, false, false, false));
+        if (targetUnit->useNoPathfindingToGetToObject())
+        {
+            BAPConAnd* const behind = checkPointer(new BAPConAnd);
+            behind->addCondition(close);
+            behind->addCondition(checkPointer(new BAPConObjectBehind(m_int0C[bot->getBotId()], -0.8f, false)));
+            close = behind;
+        }
+        BAPTrigger* const enter =
+            checkPointer(new BAPTrigger(10, close, 0, kExitVehicleMask, m_behaviourId, 0.0, false));
+        BAPUpdateVehicle* const update = checkPointer(new BAPUpdateVehicle(m_behaviourId));
+        walk->addStatement(enter);
+
+        BAPSerial* const sequence = checkPointer(new BAPSerial(m_behaviourId, -1));
+        const bool askedForRide = communication->getReceivedMessages(static_cast<AIRadioMessageType>(1)).size() != 0;
+        const bool askedForExit = communication->getReceivedMessages(static_cast<AIRadioMessageType>(0)).size() != 0;
+        Information* const primary = informationManager->getInformation(target->getPrimaryObject(bot->getSide()));
+        IAIObject* const primaryObject = primary->getAIObject();
+        Bot* const occupantBot = IBotManager::instance->getBot(primaryObject);
+        if (!m_bool14[bot->getBotId()] && inSoldier && primaryObject->getPlayerId() >= 0 && primary->getMobile()
+            && !askedForRide && !askedForExit)
+        {
+            // Ask the driver for a ride while the vehicle is occupied.
+            BAPConObjectOccupied* const driven = checkPointer(new BAPConObjectOccupied(primary->getHandle()));
+            BAPSendRadioMessage* const ask = checkPointer(
+                new BAPSendRadioMessage(2, 6, 3, 0.0f, m_behaviourId, primaryObject->getPlayerId()));
+            sequence->addStatement(checkPointer(new BAPIf(driven, ask, 0, m_behaviourId, false, false)));
+            if (occupantBot)
+                communication->setInt92(primaryObject->getPlayerId());
+            else
+                communication->setInt92(0xFF);
+        }
+        sequence->addStatement(checkPointer(new BAPWhile(
+            checkPointer(new BAPConNot(checkPointer(new BAPConObjectOccupied(m_int0C[bot->getBotId()])))), walk,
+            false, m_behaviourId)));
+        sequence->addStatement(update);
+        BAPParallel* const both = checkPointer(new BAPParallel(m_behaviourId, -1, false));
+        both->addStatement(checkPointer(new BAPICChangeVehicle(m_int0C[bot->getBotId()])));
+        both->addStatement(sequence);
+        BAPSerial* const outer = checkPointer(new BAPSerial(m_behaviourId, -1));
+        if (m_bool18[bot->getBotId()] && communication->handleMessages(static_cast<AIRadioMessageType>(1)))
+            outer->addStatement(checkPointer(new BAPSendRadioMessage(6, 6, 2, 1.0f, m_behaviourId, -1)));
+        outer->addStatement(both);
+        body = outer;
+    }
+
+    if (!inSoldier)
+    {
+        BAPParallel* const crew = checkPointer(new BAPParallel(m_behaviourId, true, -1, false));
+        crew->addStatement(newFlareStatement(bot, m_behaviourId));
+        crew->addStatement(body);
+        body = crew;
+    }
+    BAPChangeWrapper* const script = checkPointer(new BAPChangeWrapper(
+        static_cast<unsigned int>(m_int0C[bot->getBotId()]), body, m_behaviourId, bot->getPlayerId()));
+    script->m_owner = this;
+    return script;
 }
 
 BBPChangeLandingCraft::BBPChangeLandingCraft(int behaviourId)
