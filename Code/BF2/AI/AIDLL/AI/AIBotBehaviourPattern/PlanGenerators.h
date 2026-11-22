@@ -481,8 +481,10 @@ public:
     explicit BBPRunOverSoldier(int behaviourId);                      // PE 10125C90
     virtual ~BBPRunOverSoldier();                                     // PE 10125CD0
     virtual BotScript* generate(Bot* bot);                            // PE 10125D10
+    // Offers the run-over plan against the target. PE 10125BE0; [INFERRED] name.
+    void offerTarget(Bot* bot, unsigned int target);
 private:
-    /* +0x0C */ int* m_int0C;
+    /* +0x0C */ unsigned int* m_targets;   // the soldier to run over, per bot
 };
 
 class BBPBridgeRepair : public PlanGenerator

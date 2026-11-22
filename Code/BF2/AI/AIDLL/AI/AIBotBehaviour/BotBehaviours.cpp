@@ -3596,9 +3596,78 @@ BBRunOverSoldier::~BBRunOverSoldier()
     delete[] m_targets;
 }
 
-float BBRunOverSoldier::calculateUrgency(Bot*, bool, float)
+// PE 10125870. A driver moving faster than 10 looks for a sensed, live enemy soldier straight
+// ahead (within a cone of cos 0.85) and no further than 50 that its vehicle can trace a path to,
+// and asks for a run-over plan with urgency 65. Without one the previous target is offered
+// again, with urgency 0. The equipment is not null-checked, as shipped.
+float BBRunOverSoldier::calculateUrgency(Bot* bot, bool flag, float)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBRunOverSoldier::calculateUrgency");
+    if (!flag)
+    {
+        m_urgency[bot->getBotId()] = 0.0f;
+        return m_urgency[bot->getBotId()];
+    }
+    Information* const equipment = lookupInformation(bot->getCurrentEquipment());
+    m_urgency[bot->getBotId()] = 0.0f;
+    const int equipmentType = equipment->getUnit()->getEquipmentType();
+    IPIMobile* const mobile = equipment->getMobile();
+    if (!(mobile->getSpeedMagnitude() >= 10.0f))
+    {
+        m_urgency[bot->getBotId()] = 0.0f;
+        return m_urgency[bot->getBotId()];
+    }
+    const Vec3& position = equipment->getPosition();
+    const std::map<unsigned int, SensedObject*>& sensed = bot->getSensedObjects();
+    for (std::map<unsigned int, SensedObject*>::const_iterator it = sensed.begin(); it != sensed.end(); ++it)
+    {
+        const unsigned int flags = it->second->m_senseFlags;
+        if (!(flags & 2) || !(flags & 4) || (flags & 8))
+            continue;
+        Information* const target = lookupInformation(it->second->m_handle);
+        if (!target || !((target->getObjectTypeFlags() >> 21) & 1))
+            continue;
+        const int side = bot->getSide();
+        if (target->getSide() == side || !target->getSide())
+            continue;
+        IPIPhysical* const targetPhysical = target->getPhysical();
+        if (!targetPhysical)
+            continue;
+        IPIMobile* const targetMobile = target->getMobile();
+        if (!(targetPhysical->getHealth() > 0.0f) || !targetMobile)
+            continue;
+        Vec3 direction = vectorFrom(position, target->getPosition());
+        const float distance = vectorLength(direction);
+        if (!(distance > 0.0001f))
+            continue;
+        const float inverse = 1.0f / distance;   // PE 1009B6B0
+        direction.x *= inverse;
+        direction.y *= inverse;
+        direction.z *= inverse;
+        const Mat4& transformation = equipment->getTransformation();
+        if (direction.z * transformation.m[10] + direction.y * transformation.m[9]
+                + direction.x * transformation.m[8] < 0.85f)
+            continue;
+        if (!(std::max(distance, 1.0f) <= 50.0f))   // PE 10086630
+            continue;
+        const IPIMobile::ValidPos& targetValid = targetMobile->getLastValidPosition(mobile->getVehicleNumber());
+        if (targetValid.quadTree == static_cast<unsigned int>(-1)
+            || targetValid.polygon == static_cast<unsigned int>(-1))
+            continue;
+        const IPIMobile::ValidPos& ownValid = mobile->getLastValidPosition();
+        Vec3 hit;
+        hit.x = hit.y = hit.z = 0.0f;
+        unsigned int hitHandle;
+        if (IAIPathfinding::instance->trace(ownValid.polygon, ownValid.quadTree, mobile->getVehicleNumber(),
+                                            ownValid.position, targetValid.position, hit, hitHandle,
+                                            equipmentType, -1, 0.0f, 5, 0))
+        {
+            m_targets[bot->getBotId()] = it->first;
+            m_urgency[bot->getBotId()] = 65.0f;
+            break;
+        }
+    }
+    static_cast<BBPRunOverSoldier*>(m_generator)->offerTarget(bot, m_targets[bot->getBotId()]);
+    return m_urgency[bot->getBotId()];
 }
 
 // PE 10125740.

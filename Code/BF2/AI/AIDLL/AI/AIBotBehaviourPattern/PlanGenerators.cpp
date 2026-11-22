@@ -1491,17 +1491,56 @@ BotScript* BBPC4::generate(Bot* bot)
 BBPRunOverSoldier::BBPRunOverSoldier(int behaviourId)
 {
     m_behaviourId = behaviourId;
-    m_int0C = checkPointer(new int[configuredBotCount()]);
+    m_targets = checkPointer(new unsigned int[configuredBotCount()]);
 }
 
 BBPRunOverSoldier::~BBPRunOverSoldier()
 {
-    delete[] m_int0C;
+    delete[] m_targets;
 }
 
-BotScript* BBPRunOverSoldier::generate(Bot*)
+// PE 10125BE0.
+void BBPRunOverSoldier::offerTarget(Bot* bot, unsigned int target)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BBPRunOverSoldier::generate");
+    const unsigned int id = bot->getBotId();
+    m_hasPlan[id] = true;
+    m_targets[id] = target;
+}
+
+// PE 10125D10. Keeps a running run-over plan against the same target; otherwise drives at the
+// target under a fire wrapper (weapon 4).
+BotScript* BBPRunOverSoldier::generate(Bot* bot)
+{
+    if (!m_hasPlan[bot->getBotId()])
+    {
+        if (bot->getDebugger())
+            BF2_AI_FRONTIER("dice::hfe::ai::BBPRunOverSoldier::generate (script debugger reset)");
+        bot->getScriptContext()->clear();
+        dropPlan(bot);
+        return 0;
+    }
+    if (bot->getDebugger())
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPRunOverSoldier::generate (script debugger reset)");
+    bot->getScriptContext()->clear();
+    bot->getCurrentEquipment();   // read and dropped, as shipped
+    if (bot->hasPlan() && bot->getPlan()->getId() == m_behaviourId
+        && bot->getPlan()->getType() == static_cast<BAPStatementType>(15)
+        && static_cast<BAPWrapper*>(bot->getPlan())->getWrapperIndex() == 0
+        && static_cast<BAPFireWrapper*>(bot->getPlan())->m_target == m_targets[bot->getBotId()])
+        return bot->getPlan();
+    dropPlan(bot);
+
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment || !equipment->getUnit() || !equipment->getMobile())
+        return 0;
+    IPIControlInfo* const control = equipment->getControlInfo();
+    BAPRunOverObject* const runOver = checkPointer(
+        new BAPRunOverObject(m_targets[bot->getBotId()], control->getDriveControls(), m_behaviourId));
+    BAPFireWrapper* const script = checkPointer(new BAPFireWrapper(
+        bot, m_targets[bot->getBotId()], true, false, 4, -1, runOver, m_behaviourId));
+    script->m_owner = this;
+    static_cast<BotMain*>(bot)->resetAllControls(true, true, true);
+    return script;
 }
 
 BBPRandom::BBPRandom(int behaviourId)

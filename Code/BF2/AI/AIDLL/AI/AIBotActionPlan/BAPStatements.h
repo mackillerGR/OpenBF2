@@ -1171,6 +1171,25 @@ public:
     /* +0x38 */ bool m_useStaticAttack;     // the bot's setting at construction
 };
 
+// Drives a car at a soldier, aiming where the soldier will be when the car arrives. Finishes
+// at once each tick; fails when the target is gone or no vehicle path reaches it. Type 41.
+// PE vtable 10284B60. [INFERRED] class name from the statement type.
+class BAPRunOverObject : public BotScript
+{
+public:
+    // PE 101C1F50.
+    BAPRunOverObject(unsigned int target, unsigned long long inputMask, int id);
+    virtual ~BAPRunOverObject();                                       // PE 101C1FB0
+
+    virtual bool execute(Bot* bot, bool& finished, bool& failed);      // PE 101C1FF0
+    virtual BAPStatementType getType();                                // PE 101C1FA0: 41
+    virtual bool isComposite();                                        // PE 101C1F90: false
+
+    /* +0x18 */ unsigned int m_target;
+    // [UNRESOLVED] no reader: the generator passes the vehicle's drive controls.
+    /* +0x20 */ unsigned long long m_driveControls;
+};
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice

@@ -28,6 +28,8 @@ public:
     // Read through to the engine object's control info. PE 1019CA90 / 1019CAB0 / 1019CAD0.
     float getCameraRelativeDofRotationOffset() const;
     unsigned long long getDriveControls() const;     // PE 1019C6B0
+    io::PlayerInputMap getDriveThrottleControl() const;    // PE 1019C9B0
+    io::PlayerInputMap getDriveTurnControl() const;        // PE 1019C9D0
     unsigned long long getAimControls() const;       // PE 1019C6D0
     unsigned long long getLookControls() const;      // PE 1019C6F0
     io::PlayerInputMap getLookVerticalControl() const;     // PE 1019CA30
@@ -75,6 +77,16 @@ inline float IPIControlInfo::getCameraRelativeDofRotationOffset() const
 inline unsigned long long IPIControlInfo::getDriveControls() const
 {
     return m_information->getAIObject()->getControlInfo()->getDriveControls();
+}
+
+inline io::PlayerInputMap IPIControlInfo::getDriveThrottleControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDriveThrottleControl();
+}
+
+inline io::PlayerInputMap IPIControlInfo::getDriveTurnControl() const
+{
+    return m_information->getAIObject()->getControlInfo()->getDriveTurnControl();
 }
 
 inline unsigned long long IPIControlInfo::getAimControls() const

@@ -3446,6 +3446,244 @@ BAPFireWrapper::~BAPFireWrapper()
 
 int BAPFireWrapper::getWrapperIndex() { return 0; }
 
+namespace {
+
+// The horizontal part (x, z) of a position. PE 1014ADC0.
+Vec2 runOverFlat(const Vec3& position)
+{
+    Vec2 flat;
+    flat.x = position.x;
+    flat.y = position.z;
+    return flat;
+}
+
+// The conditional Vec2 normaliser. PE 100E9DE0.
+void runOverNormalise(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+
+// The vector a quarter turn from a flat direction: (y, -x). PE 1014AE20.
+Vec2 runOverPerpendicular(const Vec2& value)
+{
+    Vec2 out;
+    out.x = value.y;
+    out.y = -value.x;
+    return out;
+}
+
+// 1, -1 or 0 by the sign. PE 100DE7B0.
+float runOverSign(float value)
+{
+    if (value > 0.0f)
+        return 1.0f;
+    if (value < 0.0f)
+        return -1.0f;
+    return 0.0f;
+}
+
+// Clamps to [low, high]; an unordered value yields low. PE 1006ED90.
+float runOverClamp(float value, float low, float high)
+{
+    if (value < low)
+        return low;
+    if (value > high)
+        return high;
+    if (value >= low)
+        return value;
+    return low;
+}
+
+// The signed angle of a flat target against a forward direction and its right-hand
+// perpendicular, in (-pi, pi]. The target is not normalised; the sine is clamped twice, as
+// shipped. PE 1014B730; [INFERRED] name.
+float signedFlatAngle(const Vec2& forward, const Vec2& right, const Vec2& target)
+{
+    float sine = right.y * target.y + right.x * target.x;
+    if (-1.0f > sine)
+        sine = -1.0f;
+    else if (!(1.0f >= sine))
+        sine = 1.0f;
+    float angle = static_cast<float>(1.5707963705062866
+                                     - std::acos(static_cast<double>(runOverClamp(sine, -1.0f, 1.0f))));
+    if (forward.y * target.y + forward.x * target.x < 0.0f)
+    {
+        if (angle > 0.0f)
+            angle = 1.0f * 3.1415927410125732f - angle;
+        else if (angle < 0.0f)
+            angle = -1.0f * 3.1415927410125732f - angle;
+        else
+            angle = 0.0f * 3.1415927410125732f - angle;
+    }
+    return angle;
+}
+
+// Steers and throttles a car (PE 101CD1B0; [INFERRED] name). The steering angle turns the wheel
+// at three times its size, clamped to full lock. With a zero throttle the car turns in place and
+// the throttle input gets that zero; otherwise the target speed (cruise times throttle) eases off
+// while the car rolls or pitches faster than 0.15, is capped to maxSpeedFactor in size, and the
+// throttle chases it. A nonzero cruise speed wakes the vehicle's physics on both sides. The
+// equipment's flat axes and maximum speed are read and dropped, as shipped. Always true.
+bool driveCar(Information* equipment, IPIControlInfo* control, IPIMobile* mobile, IPIPhysical* /*physical*/,
+              io::PlayerInput* input, float cruise, float throttle, float steering, float speedWeight,
+              float maxSpeedFactor)
+{
+    const Mat4& transformation = equipment->getTransformation();
+    const Vec2 forward = runOverFlat(*reinterpret_cast<const Vec3*>(&transformation.m[8]));
+    const Vec2 right = runOverFlat(*reinterpret_cast<const Vec3*>(&transformation.m[0]));
+    const Vec2 origin = runOverFlat(*reinterpret_cast<const Vec3*>(&transformation.m[12]));
+    (void)forward;
+    (void)right;
+    (void)origin;
+    mobile->getMaxSpeed();
+    const Vec2 velocity = runOverFlat(mobile->getSpeed());
+    const float speed = std::sqrt(velocity.y * velocity.y + velocity.x * velocity.x);
+    if (throttle != 0.0f && speedWeight != throttle && speed > 1.0f)
+        steering = steering * -1.0f;
+    if (cruise != 0.0f)
+    {
+        IAIObjectPhysical* const physics = equipment->getAIObject()->getPhysical();
+        physics->enablePhysics(1);
+        physics->enablePhysics(2);
+    }
+    const float direction = steering > 0.0f ? 1.0f : (steering < 0.0f ? -1.0f : 0.0f);
+    if (throttle == 0.0f)
+    {
+        float size = std::fabs(steering);
+        if (throttle == -1.0f)
+            size = size - 3.1415927410125732f;
+        float lock = std::fabs(size * 3.0f);
+        if (!(1.0f >= lock))
+            lock = 1.0f;
+        input->setInput(control->getDriveTurnControl(), -(lock * direction));
+        input->setInput(control->getDriveThrottleControl(), throttle);
+        return true;
+    }
+    float wheel = steering * 3.0f;
+    if (-1.0f > wheel)
+        wheel = -1.0f;
+    else if (!(1.0f >= wheel))
+        wheel = 1.0f;
+    input->setInput(control->getDriveTurnControl(), wheel);
+    float target = cruise * throttle;
+    const Vec3& rotation = mobile->getRotationalSpeed();
+    const float rollRate = std::fabs(rotation.x);
+    const float pitchRate = std::fabs(rotation.z);
+    const float turning = rollRate >= pitchRate ? rollRate : pitchRate;
+    if (turning > 0.15f)
+    {
+        float ease = (turning - 0.15f) * 1.4285714626312256f;
+        if (!(1.0f >= ease))
+            ease = 1.0f;
+        target = (1.0f - ease * 0.8f) * target;
+    }
+    if (std::fabs(target) > maxSpeedFactor)
+        target = runOverSign(target) * maxSpeedFactor;
+    float chase = (target - speed * speedWeight) * 0.3333333432674408f;
+    if (!(1.0f >= chase))
+        chase = 1.0f;
+    float pedal = runOverClamp(target * 0.06666667014360428f + chase, -1.0f, 1.0f);
+    if (pedal != 0.0f && std::fabs(speed) < 1.5f)
+        pedal = runOverSign(pedal);
+    input->setInput(control->getDriveThrottleControl(), pedal);
+    return true;
+}
+
+} // anonymous namespace
+
+BAPRunOverObject::BAPRunOverObject(unsigned int target, unsigned long long inputMask, int id)
+    : m_target(target)
+    , m_driveControls(inputMask)
+{
+    m_id = id;
+}
+
+BAPRunOverObject::~BAPRunOverObject() {}
+
+// PE 101C1FF0. Each tick traces a vehicle path to the target; with one, it predicts where the
+// target will be (twice, each time from the time the car needs at its current speed) and steers
+// at that point at cruise 50. The speed is divided without a zero check, as shipped.
+bool BAPRunOverObject::execute(Bot* bot, bool& finished, bool& failed)
+{
+    finished = true;
+    failed = false;
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    if (!equipment)
+        return false;
+    IPIPhysical* const physical = equipment->getPhysical();
+    IPIMobile* const mobile = equipment->getMobile();
+    Information* const target = informationManager->getInformation(m_target);
+    if (!target)
+    {
+        failed = true;
+        return true;
+    }
+    IPIMobile* const targetMobile = target->getMobile();
+    const IPIMobile::ValidPos& targetValid = targetMobile->getLastValidPosition(mobile->getVehicleNumber());
+    const IPIMobile::ValidPos& ownValid = mobile->getLastValidPosition();
+    Vec3 hit;
+    hit.x = hit.y = hit.z = 0.0f;
+    unsigned int hitHandle;
+    const int equipmentType = equipment->getUnit()->getEquipmentType();
+    if (!IAIPathfinding::instance->trace(ownValid.polygon, ownValid.quadTree, mobile->getVehicleNumber(),
+                                         ownValid.position, targetValid.position, hit, hitHandle,
+                                         equipmentType, -1, 0.0f, 5, 0))
+    {
+        failed = true;
+        return true;
+    }
+
+    const Vec3& position = equipment->getPosition();
+    const Vec3& targetPosition = target->getPosition();
+    Vec3 toTarget;
+    toTarget.x = targetPosition.x - position.x;
+    toTarget.y = targetPosition.y - position.y;
+    toTarget.z = targetPosition.z - position.z;
+    const float distanceSquared = toTarget.x * toTarget.x + toTarget.y * toTarget.y + toTarget.z * toTarget.z;
+    const float inverseSpeed = 1.0f / mobile->getSpeedMagnitude();
+    float time = std::sqrt(distanceSquared) * inverseSpeed;
+    const Vec3& velocity = targetMobile->getSpeed();
+    Vec3 predicted;
+    predicted.x = time * velocity.x + targetPosition.x;
+    predicted.y = time * velocity.y + targetPosition.y;
+    predicted.z = time * velocity.z + targetPosition.z;
+    toTarget.x = predicted.x - position.x;
+    toTarget.y = predicted.y - position.y;
+    toTarget.z = predicted.z - position.z;
+    time = std::sqrt(toTarget.x * toTarget.x + toTarget.y * toTarget.y + toTarget.z * toTarget.z) * inverseSpeed;
+    const Vec3& velocityAgain = targetMobile->getSpeed();
+    predicted.x = time * velocityAgain.x + targetPosition.x;
+    predicted.y = time * velocityAgain.y + targetPosition.y;
+    predicted.z = time * velocityAgain.z + targetPosition.z;
+    Vec3 aim;
+    aim.x = predicted.x - position.x;
+    aim.y = predicted.y - position.y;
+    aim.z = predicted.z - position.z;
+
+    const Vec2 flatAim = runOverFlat(aim);
+    Vec2 facing = runOverFlat(equipment->getFaceing());
+    runOverNormalise(facing);
+    const Vec2 right = runOverPerpendicular(facing);
+    const float steering = signedFlatAngle(facing, right, flatAim);
+    finished = driveCar(equipment, equipment->getControlInfo(), mobile, physical,
+                        static_cast<BotMain*>(bot)->playerInput(), 50.0f, 1.0f, steering, 1.0f, 1.0f);
+    return true;
+}
+
+BAPStatementType BAPRunOverObject::getType() { return BAPSTRunOverObject; }
+bool BAPRunOverObject::isComposite() { return false; }
+
 } // namespace ai
 } // namespace hfe
 } // namespace dice
