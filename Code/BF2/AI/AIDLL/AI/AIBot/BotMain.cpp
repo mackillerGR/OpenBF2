@@ -2215,9 +2215,12 @@ unsigned int BotMain::getCollidedObject() const
 }
 
 // +0x250
+// PE 10183E70.
 void BotMain::setCollidedObjectPosition(const Vec3& v)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::setCollidedObjectPosition");
+    m_collidedObjectPosition[0] = v.x;
+    m_collidedObjectPosition[1] = v.y;
+    m_collidedObjectPosition[2] = v.z;
 }
 
 // +0x254

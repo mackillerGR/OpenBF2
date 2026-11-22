@@ -372,7 +372,7 @@ public:
     virtual void setMoveToStatus(int status);                                                     // +0x244
     virtual void setCollidedObject(unsigned int h);                                               // +0x248
     virtual unsigned int getCollidedObject() const;                                               // +0x24C
-    virtual void setCollidedObjectPosition(const Vec3& v);                                        // +0x250 [FRONTIER]
+    virtual void setCollidedObjectPosition(const Vec3& v);                                        // +0x250
     virtual const Vec3& getCollidedObjectPosition() const;                                        // +0x254
     virtual void setIgnoreObstacles(bool b);                                                      // +0x258
     virtual bool getIgnoreObstacles() const;                                                      // +0x25C

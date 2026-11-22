@@ -15,6 +15,9 @@
 #include "../../../../IO/Input/PlayerInput.h"
 #include "../Main/CommonSingletonServer.h"
 #include "../Main/CommunicationHub.h"
+#include "../Main/IBotManager.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayer.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"
 #include "../../../AIInterface/Module/BFConsole.h"   // IBFModuleCourier, AIRadioMessageSettings
 
 namespace dice {
@@ -310,6 +313,47 @@ void CommunicationAgent::sendRadioMessageNow(int type, int channel, unsigned int
     message.m_priority = priority;
     message.m_delay = 0.0f;
     sendRadioMessage(message);
+}
+
+namespace {
+const double s_aiBlockerWarnInterval = 20.0;      // PE 1027B270
+const double s_humanBlockerWarnInterval = 5.0;    // PE 1027E4D0
+}
+
+// PE 10147710. The player id is read twice, as shipped; the bot's own equipment is not
+// null-checked.
+void CommunicationAgent::warnBlocker(Information* blocker)
+{
+    if (!blocker)
+        return;
+    const double now = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    const int playerId = blocker->getPlayerId();
+    IAIPlayer* const player = static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)
+                                  ->getPlayerFromId(blocker->getPlayerId());
+    if (!player)
+        return;
+    const double interval = player->getIsAIPlayer() ? s_aiBlockerWarnInterval : s_humanBlockerWarnInterval;
+    if (now - m_double104 < interval)
+        return;
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    if ((equipment->getObjectTypeFlags() >> 26) & 1)
+    {
+        io::PlayerInput* const input = m_bot->playerInput();
+        if (input->mappingFlags & (1ULL << 8))
+            input->inputs[8] = 1.0f;
+    }
+    else
+    {
+        sendRadioMessageNow(11, 6, 3, playerId);
+    }
+    m_double104 = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    if (!((blocker->getObjectTypeFlags() >> 21) & 1))
+        return;
+    Bot* const blockerBot = IBotManager::instance->getBot(blocker->getAIObject());
+    if (!blockerBot)
+        return;
+    const double stamp = static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime();
+    blockerBot->getCommunicationAgent()->m_double96 = stamp;
 }
 
 // PE 10146270. The player id is read twice, as shipped.

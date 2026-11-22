@@ -75,6 +75,10 @@ public:
     void enqueueRadioMessage(int type, int channel, unsigned int priority, float delay, int flag);
     // Sends a message at once, stamped with the current time. PE 10146F10; [INFERRED] name.
     void sendRadioMessageNow(int type, int channel, unsigned int priority, int flag);
+    // Asks a friendly unit blocking the bot's vehicle to move: a vehicle with type flag 26 honks
+    // (input 8) instead of radioing. At most once per interval (shorter for an AI blocker); a
+    // soldier blocker's own agent records the time. PE 10147710; [INFERRED] name.
+    void warnBlocker(Information* blocker);
 
     // attested by a 7-byte body: `return m_receivedMessages.data + type;`
     const std::list<AIRadioMessageInfo>& getReceivedMessages(AIRadioMessageType type) const

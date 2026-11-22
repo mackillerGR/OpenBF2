@@ -25,6 +25,7 @@
 #include "../../../../Math/Mat4.h"
 #include "../AIBot/BotNavigation.h"
 #include "../AIBot/SquadMember.h"
+#include "../AIBot/CommunicationAgent.h"
 #include "../AIKnowledge/IPIArmament.h"
 #include "../AIKnowledge/IPIMobile.h"
 #include "../AIKnowledge/IPIPhysical.h"
@@ -559,16 +560,1155 @@ float s_tankSteerFullSpeed = 2.0f;   // PE 102AE1A4
 // Read in place of a tank's physics state test and never written, so the test always runs.
 bool s_forceTankPhysics = false;     // PE 102C05D8 (bss)
 
-// The tank's path-following steering (PE 101C53E0, about 36 KB of disassembly): the tank form of
-// the car's, with the same outputs, or the throttle 666 to ask for a stop. [INFERRED] name and
-// parameter roles, from EntryTankMoveTo's use of them.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: tank-steering] Recover the body from
-// PE 101C53E0 and drive a tank along a Dalian waypoint path.
-bool tankSteering(Bot* /*bot*/, Information* /*equipment*/, const Vec2& /*direction*/, float /*distance*/,
-                  BAPAMove* /*move*/, float& /*throttle*/, float& /*steering*/, float& /*speedWeight*/,
-                  float& /*maxSpeedFactor*/)
+// Shortens the free distances ahead of and behind `origin` along `direction` to the nearest
+// obstacle the bot's navigation lists (other than `ignore`, the bot's own equipment and soldiers)
+// whose smallest radius reaches the line: the distance along the line to where its circle meets
+// it. PE 101E1970; [INFERRED] name.
+void obstacleClearance(Bot* bot, const Vec3& origin, const Vec3& direction, float& front, float& back,
+                       unsigned int ignore)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTankMoveTo::execute (tank steering, PE 101C53E0)");
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    const std::vector<unsigned int>& obstacles = bot->getBotNavigation()->getObstacles();
+    for (unsigned int i = 0; i < obstacles.size(); ++i)
+    {
+        if (obstacles[i] == ignore)
+            continue;
+        Information* const obstacle = informationManager->getInformation(obstacles[i]);
+        if (equipment == obstacle || !obstacle)
+            continue;
+        IPIPhysical* const physical = obstacle->getPhysical();
+        if (!physical || ((obstacle->getObjectTypeFlags() >> 21) & 1))
+            continue;
+        const float radius = physical->getSmallestRadius();
+        const Vec3& position = obstacle->getPosition();
+        Vec3 offset;
+        offset.x = position.x - origin.x;
+        offset.y = position.y - origin.y;
+        offset.z = position.z - origin.z;
+        const float along = offset.x * direction.x + offset.y * direction.y + offset.z * direction.z;
+        if (along > 0.0f)
+        {
+            if (radius + front < along)
+                continue;
+            Vec3 onLine;
+            onLine.x = along * direction.x;
+            onLine.y = along * direction.y;
+            onLine.z = along * direction.z;
+            const float dx = offset.x - onLine.x;
+            const float dy = offset.y - onLine.y;
+            const float dz = offset.z - onLine.z;
+            const float lateral = std::sqrt(dx * dx + dy * dy + dz * dz);   // PE 1006EE90
+            if (lateral > radius)
+                continue;
+            const float hit = along - std::sqrt(radius * radius - lateral * lateral);
+            if (hit > front)
+                continue;
+            front = hit;
+        }
+        else
+        {
+            const float behind = -along;
+            if (behind > radius + back)
+                continue;
+            Vec3 onLine;
+            onLine.x = along * direction.x;
+            onLine.y = along * direction.y;
+            onLine.z = along * direction.z;
+            const float dx = offset.x - onLine.x;
+            const float dy = offset.y - onLine.y;
+            const float dz = offset.z - onLine.z;
+            const float lateral = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (lateral > radius)
+                continue;
+            const float hit = behind - std::sqrt(radius * radius - lateral * lateral);
+            if (hit > back)
+                continue;
+            back = hit;
+        }
+    }
+}
+
+// The obstacle ahead to slow down for (PE 101E2210; [INFERRED] name). Below speed 2 nothing is
+// sought (answers 9999). Otherwise every unit the navigation lists within 15 beyond the two
+// smallest radii and in the vehicle's lane (moving direction, facing signed by the speed) is
+// weighed: a live friendly soldier ahead becomes the blocker to warn; a vehicle ahead (or close
+// and moving) answers its speed along the lane less 1 (at least 0), or -20 when the two closing
+// speeds differ by more than 10 and the bot's move status is 0, which also sets `stopped`. A
+// friendly vehicle within 5 becomes the blocker. The lowest answer wins and its handle becomes
+// the bot's slow-down target. The bot's change target (unless primary) is passed over, as is the
+// collided object while obstacles are ignored and the speeds close slowly.
+float findSlowDownTarget(Bot* bot, Information* equipment, const Vec3& velocity, float speed, const Vec3& position,
+                         bool& stopped)
+{
+    stopped = false;
+    if (!(speed > 2.0f))
+        return 9999.0f;
+    const std::vector<unsigned int>& obstacles = bot->getBotNavigation()->getObstacles();
+    const Vec3 facing = equipment->getFaceing();
+    const float heading = facing.z * velocity.z + facing.y * velocity.y + velocity.x * facing.x;
+    float sign;
+    if (heading > 0.0f)
+        sign = 1.0f;
+    else if (heading < 0.0f)
+        sign = -1.0f;
+    else
+        sign = 0.0f;
+    const Vec3 lane0 = equipment->getFaceing();
+    Vec3 lane;
+    lane.x = sign * lane0.x;
+    lane.y = sign * lane0.y;
+    lane.z = sign * lane0.z;
+    IPIPhysical* const ownPhysical = equipment->getPhysical();
+    IPIMobile* const ownMobile = equipment->getMobile();
+    float best = 9999.0f;
+    unsigned int bestHandle = static_cast<unsigned int>(-1);
+    Information* blocker = 0;
+    for (unsigned int i = 0; i < obstacles.size(); ++i)
+    {
+        Information* const other = informationManager->getInformation(obstacles[i]);
+        if (!other || other == equipment)
+            continue;
+        IPIPhysical* const physical = other->getPhysical();
+        if (!physical)
+            continue;
+        const bool soldier = (other->getObjectTypeFlags() >> 21) & 1;
+        if (soldier && !(physical->getHealth() > 0.0f))
+            continue;
+        IPIMobile* const mobile = other->getMobile();
+        if (!mobile)
+            continue;
+        Information* const changeTarget = informationManager->getInformation(bot->getChangeTarget());
+        if (changeTarget && !changeTarget->isPrimary()
+            && changeTarget->getPrimaryObject(bot->getSide()) == obstacles[i])
+            continue;
+        Vec3 offset;
+        offset.x = offset.y = offset.z = 0.0f;
+        const Vec3 local = physical->getSphereLocalOffset();
+        const Mat4& transformation = other->getTransformation();   // PE 100EDB40: rotation only
+        offset.x = local.z * transformation.m[8] + local.y * transformation.m[4] + local.x * transformation.m[0];
+        offset.y = transformation.m[1] * local.x + transformation.m[9] * local.z + transformation.m[5] * local.y;
+        offset.z = transformation.m[2] * local.x + transformation.m[10] * local.z + transformation.m[6] * local.y;
+        const Vec3& otherPosition = other->getPosition();
+        Vec3 centre;
+        centre.x = offset.x + otherPosition.x;
+        centre.y = offset.y + otherPosition.y;
+        centre.z = offset.z + otherPosition.z;
+        Vec3 toward;
+        toward.x = centre.x - position.x;
+        toward.y = centre.y - position.y;
+        toward.z = centre.z - position.z;
+        float gap = std::sqrt(toward.z * toward.z + toward.y * toward.y + toward.x * toward.x);
+        const float ownRadius = ownPhysical->getSmallestRadius();
+        const float radii = physical->getSmallestRadius() + ownRadius;
+        if (gap > 9.999999747378752e-06f)
+        {
+            const float inverse = 1.0f / gap;
+            toward.x = toward.x * inverse;
+            toward.y = toward.y * inverse;
+            toward.z = toward.z * inverse;
+        }
+        gap = gap - radii;
+        if (gap > 15.0f)
+            continue;
+        const float otherSpeed = mobile->getSpeedMagnitude();
+        const float along = toward.z * lane.z + toward.y * lane.y + toward.x * lane.x;
+        const float reach = radii + gap;
+        Vec3 ahead;
+        ahead.x = lane.x * along * reach + position.x;
+        ahead.y = lane.y * along * reach + position.y;
+        ahead.z = lane.z * along * reach + position.z;
+        const float sx = centre.x - ahead.x;
+        const float sy = centre.y - ahead.y;
+        const float sz = centre.z - ahead.z;
+        if (radii * radii < sx * sx + sy * sy + sz * sz)
+            continue;
+        if (soldier)
+        {
+            if (!(along > 0.0f))
+                continue;
+            if (other->getSide() != equipment->getSide())
+                continue;
+            blocker = other;
+            continue;
+        }
+        if (!(along >= 0.75f))
+        {
+            if (!(gap < 2.0f) || !(along > 0.0f) || !(otherSpeed > 2.0f))
+                continue;
+        }
+        Vec3 otherVelocity = mobile->getSpeed();
+        const bool moving = otherSpeed > 0.5f;
+        float answer = std::max(0.0f, otherVelocity.z * lane.z + otherVelocity.y * lane.y
+                                          + otherVelocity.x * lane.x - 1.0f);   // PE 10086630
+        if (moving)
+        {
+            const float inverse = 1.0f / otherSpeed;   // PE 1009B6B0
+            otherVelocity.x *= inverse;
+            otherVelocity.y *= inverse;
+            otherVelocity.z *= inverse;
+        }
+        const Vec3& ownVelocity = ownMobile->getSpeed();
+        const Vec3& theirVelocity = mobile->getSpeed();
+        const float cx = theirVelocity.x - ownVelocity.x;   // PE 1007A380
+        const float cy = theirVelocity.y - ownVelocity.y;
+        const float cz = theirVelocity.z - ownVelocity.z;
+        bool closingFast;
+        if (cx * cx + cy * cy + cz * cz > 100.0f)
+        {
+            closingFast = true;
+            if (!static_cast<BotMain*>(bot)->getMoveToStatus())
+            {
+                answer = -20.0f;
+                stopped = true;
+            }
+        }
+        else
+        {
+            closingFast = false;
+        }
+        if (!(gap <= 8.0f) && !closingFast)
+            continue;
+        if (moving)
+        {
+            const float facingAlong = otherVelocity.z * lane.z + otherVelocity.y * lane.y + otherVelocity.x * lane.x;
+            if (facingAlong < 0.6f && !(facingAlong <= -0.75f) && !closingFast)
+                continue;
+        }
+        if (static_cast<BotMain*>(bot)->getIgnoreObstacles()
+            && static_cast<BotMain*>(bot)->getCollidedObject() == obstacles[i] && !closingFast)
+            continue;
+        if (other->getSide() == equipment->getSide() && gap < 5.0f)
+            blocker = other;
+        if (answer < best)
+        {
+            best = answer;
+            bestHandle = obstacles[i];
+        }
+    }
+    if (blocker && equipment->getUnit()->isOccupied())
+        bot->getCommunicationAgent()->warnBlocker(blocker);
+    static_cast<BotMain*>(bot)->setSlowDownToTarget(bestHandle);
+    return best;
+}
+
+// The signed angle from one unit vector to another, in (-pi, pi]. PE 1014B650 (a file-local copy
+// also lives in BotNavigation.cpp).
+float steerFlatAngle(const Vec2& from, const Vec2& to)
+{
+    float cross = from.y * to.x - from.x * to.y;
+    if (-1.0f > cross)
+        cross = -1.0f;
+    else if (1.0f < cross)
+        cross = 1.0f;
+    cross = cross < -1.0f ? -1.0f : (cross > 1.0f ? 1.0f : cross);
+    float angle = static_cast<float>(1.5707963705062866 - std::acos(static_cast<double>(cross)));
+    if (to.y * from.y + from.x * to.x < 0.0f)
+    {
+        if (angle > 0.0f)
+            angle = 1.0f * 3.1415927410125732f - angle;
+        else if (angle < 0.0f)
+            angle = -1.0f * 3.1415927410125732f - angle;
+        else
+            angle = 0.0f * 3.1415927410125732f - angle;
+    }
+    return angle;
+}
+
+// Picks the obstacle to steer around (PE 101E1BA0; [INFERRED] name and parameter names). While
+// driving forward, the navigation's obstacles (not soldiers, not the equipment) within the look
+// distance ahead (the speed along the facing plus max(own radius, 5) plus both radii), in front
+// and whose circle crosses the facing line are candidates, the one nearest that line winning; one
+// more than 60 degrees off the facing only counts when it is the collided object or there is
+// none. Without a candidate the collided object is used if it was among the obstacles. For the
+// chosen one: `cosine` is the facing's cosine toward it, `touching` whether the radii overlap,
+// `avoidAngle` the heading that passes it on the avoid side (`tangentAngle` its centre, or -666
+// when already inside the avoidance circle), `offFacing` and `offPath` whether the facing and
+// path lines clear its circle (the path also counts as clear when it turns back and the bot drives
+// forward), and `pathAngle` the angle from the path (or the facing, when the two are not within
+// cos 0.85) to it. An obstacle behind the path while the facing agrees with the path clears the
+// collided object and the avoid handle and reports both lines clear, answering false. True with
+// `avoidHandle` set when an obstacle was chosen.
+bool chooseAvoidObstacle(Bot* bot, Information* equipment, IPIPhysical* ownPhysical, const Vec2& facing,
+                         float& cosine, float& pathAngle, bool& offFacing, const Vec2& target, const Vec2& path,
+                         float distance, bool& offPath, unsigned int& avoidHandle, unsigned int& collided,
+                         bool& collidedSeen, float& avoidAngle, float& tangentAngle, float speedWeight,
+                         bool& touching, int avoidSide, bool closeLook)
+{
+    IPIMobile* const mobile = equipment->getMobile();
+    const float ownRadius = ownPhysical->getRadius();
+    const std::vector<unsigned int>& obstacles = bot->getBotNavigation()->getObstacles();
+    cosine = 0.0f;
+    collidedSeen = false;
+    unsigned int best = static_cast<unsigned int>(-1);
+    float bestSide = 99999.0f;
+    for (unsigned int i = 0; i < obstacles.size(); ++i)
+    {
+        const unsigned int handle = obstacles[i];
+        if (collided != static_cast<unsigned int>(-1) && collided == handle)
+            collidedSeen = true;
+        if (speedWeight < 0.0f)
+            continue;
+        Information* const other = informationManager->getInformation(handle);
+        if (equipment == other || !other)
+            continue;
+        IPIPhysical* const physical = other->getPhysical();
+        if (!physical || ((other->getObjectTypeFlags() >> 21) & 1))
+            continue;
+        const float radii = physical->getRadius() + ownRadius;
+        const Vec3& otherPosition = other->getPosition();
+        const Vec3& ownPosition = equipment->getPosition();
+        Vec3 offset;
+        offset.x = otherPosition.x - ownPosition.x;
+        offset.y = otherPosition.y - ownPosition.y;
+        offset.z = otherPosition.z - ownPosition.z;
+        const float xSquared = offset.x * offset.x;
+        const float zSquared = offset.z * offset.z;
+        const float distanceSquared = offset.y * offset.y + zSquared + xSquared;
+        const Vec3 facing3 = equipment->getFaceing();
+        const Vec3& velocity = mobile->getSpeed();
+        const float margin = (5.0f >= ownRadius) ? 5.0f : ownRadius;
+        const float look = facing3.z * velocity.z + facing3.y * velocity.y + facing3.x * velocity.x + margin + radii;
+        if (look * look < distanceSquared)
+            continue;
+        if (!(distance * distance >= distanceSquared))
+        {
+            const float qx = offset.x - target.x;
+            const float qz = offset.z - target.y;
+            if (radii * radii < qx * qx + qz * qz)
+                continue;
+        }
+        const float ahead = offset.x * facing.x + offset.z * facing.y;
+        if (ahead < 0.0f)
+            continue;
+        const float sx = offset.x - facing.x * ahead;
+        const float sz = offset.z - facing.y * ahead;
+        const float side = sx * sx + sz * sz;
+        if (radii * radii < side)
+            continue;
+        if (ahead / std::sqrt(zSquared + xSquared) < 0.5f && handle != collided
+            && collided != static_cast<unsigned int>(-1))
+            continue;
+        if (side < bestSide)
+        {
+            bestSide = side;
+            best = handle;
+        }
+    }
+    if (best == static_cast<unsigned int>(-1))
+    {
+        if (!collidedSeen)
+            return false;
+        const unsigned int handle = collided;
+        if (!informationManager->getInformation(handle) || handle == static_cast<unsigned int>(-1))
+            return false;
+        best = handle;
+    }
+    Information* const obstacle = informationManager->getInformation(best);
+    if (!obstacle)
+        return false;
+    if (IPIMobile* const obstacleMobile = obstacle->getMobile())
+        obstacleMobile->getSpeedMagnitude();   // read and dropped, as shipped
+    IPIPhysical* const physical = obstacle->getPhysical();   // not null-checked, as shipped
+    const float avoidRadius = physical->getRadius() * 0.8f + ownRadius;
+    const float avoidRadiusSquared = avoidRadius * avoidRadius;
+    const Vec3& ownFirst = equipment->getPosition();
+    Vec2 own;
+    own.x = equipment->getPosition().x;
+    own.y = ownFirst.z;
+    const Vec3& otherFirst = obstacle->getPosition();
+    Vec2 centre;
+    centre.x = obstacle->getPosition().x;
+    centre.y = otherFirst.z;
+    const float dx = centre.x - own.x;
+    const float dz = centre.y - own.y;
+    const float length = std::sqrt(dz * dz + dx * dx);
+    if (!(length >= 9.999999747378752e-06f))
+        return false;
+    const float inverse = 1.0f / length;
+    Vec2 toward;
+    toward.x = dx * inverse;
+    toward.y = dz * inverse;
+    cosine = toward.y * facing.y + toward.x * facing.x;
+    touching = physical->getRadius() + ownRadius > length;
+    const float lead = closeLook ? 0.25f : 0.5f;
+    const float predictedX = lead * mobile->getSpeed().x + own.x;
+    const float predictedZ = lead * mobile->getSpeed().z + own.y;
+    const float vx = centre.x - predictedX;
+    const float vz = centre.y - predictedZ;
+    const float span = std::sqrt(vz * vz + vx * vx);
+    const float spanInverse = 1.0f / span;
+    Vec2 unit;
+    unit.x = vx * spanInverse;
+    unit.y = vz * spanInverse;
+    if (avoidRadius > span)
+    {
+        Vec2 tangent;
+        if (avoidSide == 2)
+        {
+            tangent.x = unit.y;
+            tangent.y = -unit.x;
+        }
+        else
+        {
+            tangent.y = unit.x;
+            tangent.x = -unit.y;
+        }
+        avoidAngle = steerFlatAngle(facing, tangent);
+        tangentAngle = -666.0f;
+    }
+    else
+    {
+        float ratio = avoidRadius / span;
+        ratio = ratio < -1.0f ? -1.0f : (ratio > 1.0f ? 1.0f : ratio);   // PE 1006ED90
+        avoidAngle = static_cast<float>(std::asin(static_cast<double>(ratio)));
+        const float centreAngle = steerFlatAngle(facing, unit);
+        tangentAngle = centreAngle;
+        if (avoidSide == 2)
+            avoidAngle = centreAngle + avoidAngle;
+        else
+            avoidAngle = centreAngle - avoidAngle;
+    }
+    const float reachFacing = cosine;
+    const float fx = facing.x * reachFacing * length + own.x - centre.x;
+    const float fz = facing.y * reachFacing * length + own.y - centre.y;
+    offFacing = avoidRadiusSquared * 0.7f < fx * fx + fz * fz;
+    const float reachPath = toward.y * path.y + toward.x * path.x;
+    const float px = path.x * reachPath * length + own.x - centre.x;
+    const float pz = path.y * reachPath * length + own.y - centre.y;
+    if (px * px + pz * pz > avoidRadiusSquared)
+        offPath = true;
+    else if (!(reachPath < -0.1f))
+        offPath = false;
+    else
+        offPath = speedWeight > 0.0f;
+    if (toward.y * path.y + toward.x * path.x < 0.0f && facing.y * path.y + path.x * facing.x > 0.0f)
+    {
+        collided = static_cast<unsigned int>(-1);
+        avoidHandle = static_cast<unsigned int>(-1);
+        offPath = true;
+        offFacing = true;
+        return false;
+    }
+    if (std::fabs(facing.y * path.y + path.x * facing.x) > 0.85f)
+        pathAngle = steerFlatAngle(path, toward);
+    else
+        pathAngle = steerFlatAngle(facing, toward);
+    avoidHandle = best;
+    return true;
+}
+
+// The horizontal part (x, z) of a position. PE 1014ADC0.
+Vec2 steerFlat(const Vec3& position)
+{
+    Vec2 flat;
+    flat.x = position.x;
+    flat.y = position.z;
+    return flat;
+}
+
+// The conditional Vec2 normaliser. PE 100E9DE0.
+void steerNormaliseFlat(Vec2& value)
+{
+    const float lengthSquared = value.x * value.x + value.y * value.y;
+    if (std::fabs(lengthSquared - 1.0f) < 1.1920928955078125e-07f)
+        return;
+    if (!(std::fabs(lengthSquared) > 1.4210854715202004e-14f))
+    {
+        value.x = 0.0f;
+        value.y = 0.0f;
+        return;
+    }
+    const float scale = 1.0f / std::sqrt(lengthSquared);
+    value.x *= scale;
+    value.y *= scale;
+}
+
+// Normalises a Vec3 in place. PE 1006EEC0.
+void steerNormalise(Vec3& value)
+{
+    const float length = std::sqrt(value.x * value.x + value.y * value.y + value.z * value.z);
+    if (length > 0.0f)
+    {
+        const float inverse = 1.0f / length;
+        value.x *= inverse;
+        value.y *= inverse;
+        value.z *= inverse;
+    }
+}
+
+// The signed angle of a flat target against a forward direction and its right-hand
+// perpendicular. PE 1014B730 (a copy lives with the run-over statement).
+float steerSignedAngle(const Vec2& forward, const Vec2& right, const Vec2& target)
+{
+    float sine = right.y * target.y + right.x * target.x;
+    if (-1.0f > sine)
+        sine = -1.0f;
+    else if (!(1.0f >= sine))
+        sine = 1.0f;
+    sine = clampInput(sine, -1.0f, 1.0f);
+    float angle = static_cast<float>(1.5707963705062866 - std::acos(static_cast<double>(sine)));
+    if (forward.y * target.y + forward.x * target.x < 0.0f)
+    {
+        if (angle > 0.0f)
+            angle = 1.0f * 3.1415927410125732f - angle;
+        else if (angle < 0.0f)
+            angle = -1.0f * 3.1415927410125732f - angle;
+        else
+            angle = 0.0f * 3.1415927410125732f - angle;
+    }
+    return angle;
+}
+
+// A probe along the pathfinding map from `from` toward `to`; the distance to the hit, or `miss`
+// when the trace leaves no hit point. With `material`, material 4 answers `water` instead.
+float steerProbe(BotNavigation* navigation, const Vec3& from, const Vec3& to, int equipmentType, bool* water)
+{
+    Vec3 hit;
+    hit.x = hit.y = hit.z = 0.0f;
+    unsigned int handle;
+    unsigned char material;
+    IAIPathfinding::instance->trace(navigation, true, to, hit, handle, equipmentType, -1, 0.0f, 6,
+                                    water ? &material : 0);
+    if (water)
+        *water = material == 4;
+    const float eps = 1.1920928955078125e-07f;   // PE 1027C5A0
+    if (std::fabs(hit.x) > eps || std::fabs(hit.y) > eps || std::fabs(hit.z) > eps)
+    {
+        const float dx = hit.x - from.x;
+        const float dy = hit.y - from.y;
+        const float dz = hit.z - from.z;
+        return std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    return -1.0f;
+}
+
+// The fraction of the radius within which a probe counts as blocked. Writable data that nothing
+// writes. PE 102AE1A0.
+float s_tankCloseRange = 1.3f;
+float s_carCloseRange = 1.3f;    // PE 102AE3B8
+
+// Reverse and turn the short way back toward the path (the status 8 and 12 fallback): beyond a
+// quarter turn the steering wraps to the angle left to a half turn.
+void reverseTurn(float& throttle, float& steering)
+{
+    throttle = -1.0f;
+    const float size = std::fabs(steering);
+    if (size > 1.5707963705062866f)
+        steering = (steering > 0.0f ? 1.0f : (steering < 0.0f ? -1.0f : 0.0f)) * (3.1415927410125732f - size);
+}
+
+// The path-following steering of tanks (PE 101C53E0) and cars (PE 101CB5C0): two copies of one
+// body in the image, differing only where `car` is tested below ([CHOSEN, not recovered]
+// packaging as one function). [INFERRED] name and parameter roles, from the move entries' use. It probes the pathfinding map around the tank (ahead, behind
+// and to both sides, at its corners), picks an obstacle to steer around, and runs the bot's
+// move-to status machine (0 drive on; 2/3 turn while reversing; 4/5/13/14 back off and turn
+// around an obstacle; 6 steer around it; 8 reverse toward the path; 9/11 turn in place; 12 make
+// room), writing the throttle (or 666 to stop at an occupied steer point), steering angle, speed
+// weight (+-1 by the driving direction) and maximum speed factor. False only without mobile or
+// physical information.
+bool vehicleSteering(bool car, Bot* bot, Information* equipment, const Vec2& direction, float distance,
+                     BAPAMove* move, float& throttle, float& steering, float& speedWeight, float& maxSpeedFactor)
+{
+    IPIMobile* const mobile = equipment->getMobile();
+    IPIPhysical* const ownPhysical = equipment->getPhysical();
+    if (!mobile || !ownPhysical)
+        return false;
+    const float radius = ownPhysical->getRadius();
+    const Vec2 path = direction;
+    const Vec3& ownPosition = equipment->getPosition();
+    Vec2 flatPosition = steerFlat(ownPosition);
+    Vec2 facing = steerFlat(equipment->getFaceing());
+    steerNormaliseFlat(facing);
+    Vec2 right;
+    right.x = facing.y;   // PE 1014AE20
+    right.y = -facing.x;
+    const Vec2 movePoint = steerFlat(move->m_target);   // PE 1019B1F0
+    float remaining = move->slot14();
+    if (remaining == 0.0f)
+    {
+        const float dx = flatPosition.x - movePoint.x;
+        const float dy = flatPosition.y - movePoint.y;
+        remaining = std::sqrt(dx * dx + dy * dy);
+    }
+    const float probeRadius = radius * (car ? 10.0f : 5.0f);
+    const float facingPathDot = facing.x * path.x + facing.y * path.y;
+    steering = steerSignedAngle(facing, right, path);
+    const bool turningLeft = steering < 0.0f;
+    float speedSigned = mobile->getSpeedMagnitude();
+    const Vec3& velocity = mobile->getSpeed();
+    const Vec3 facing3 = equipment->getFaceing();
+    speedWeight = (facing3.z * velocity.z + facing3.y * velocity.y + velocity.x * facing3.x < 0.0f) ? -1.0f : 1.0f;
+    speedSigned = speedSigned * speedWeight;
+    bool stoppedForUnit;
+    const float slowDown = findSlowDownTarget(bot, equipment, velocity, speedSigned, ownPosition, stoppedForUnit);
+    Vec3 forward;   // PE 1014ADD0
+    forward.x = facing.x;
+    forward.y = 0.0f;
+    forward.z = facing.y;
+    throttle = 1.0f;
+    const int vehicleNumber = mobile->getVehicleNumber();
+    BotNavigation* const navigation = bot->getBotNavigation();
+    const float probeLength = radius + 10.0f;
+    const IPIMobile::ValidPos& valid =
+        mobile->getLastValidPosition(IAIPathfinding::instance->getTraceMapIndex());
+    const int equipmentType = equipment->getUnit()->getEquipmentType();
+    int status = static_cast<BotMain*>(bot)->getMoveToStatus();
+    const bool reversing = status >= 8;
+    float backClear = 0.0f;
+    float frontClear = 0.0f;
+    // [CHOSEN, not recovered] const_cast: the tree declares the box const; retail refreshes it.
+    LocalBoundingBox* const box = const_cast<LocalBoundingBox*>(ownPhysical->getLocalBoundingBox());
+    if (box->m_derivedDataDirty)
+        box->calcRadius();
+    const float length = box->m_size.z;
+    const float width = box->m_size.x;
+    const Vec3 base = valid.position;
+    Vec3 sideways;
+    sideways.x = right.x * width;
+    sideways.y = width * 0.0f;
+    sideways.z = right.y * width;
+    float sideFront = sideways.y;   // a reused slot: the obstacle checks below start from it
+    Vec3 cornerLeft;
+    cornerLeft.x = forward.x * length - sideways.x;
+    cornerLeft.y = 0.0f * length - sideways.y;
+    cornerLeft.z = forward.z * length - sideways.z;
+    steerNormalise(cornerLeft);
+    Vec3 cornerRight;
+    cornerRight.x = forward.x * length + sideways.x;
+    cornerRight.y = 0.0f * length + sideways.y;
+    cornerRight.z = forward.z * length + sideways.z;
+    steerNormalise(cornerRight);
+
+    Vec3 point;
+    point.x = forward.x * probeLength + base.x;
+    point.y = probeLength * 0.0f + base.y;
+    point.z = forward.z * probeLength + base.z;
+    float probe = steerProbe(navigation, base, point, equipmentType, 0);
+    if (probe >= 0.0f)
+        frontClear = probe;
+    bool water;
+    const Vec3* const corners[2] = { &cornerLeft, &cornerRight };
+    for (int c = 0; c < 2; ++c)
+    {
+        point.x = corners[c]->x * probeLength + base.x;
+        point.y = corners[c]->y * probeLength + base.y;
+        point.z = corners[c]->z * probeLength + base.z;
+        probe = steerProbe(navigation, base, point, equipmentType, &water);
+        if (!water && probe >= 0.0f)
+            frontClear = std::min(frontClear, probe);   // PE 100C1A20
+    }
+    point.x = base.x - forward.x * probeLength;
+    point.y = base.y - probeLength * 0.0f;
+    point.z = base.z - forward.z * probeLength;
+    probe = steerProbe(navigation, base, point, equipmentType, 0);
+    if (probe >= 0.0f)
+        backClear = probe;
+    obstacleClearance(bot, base, forward, sideFront, backClear, static_cast<unsigned int>(-1));
+    for (int c = 0; c < 2; ++c)
+    {
+        point.x = base.x - corners[c]->x * probeLength;
+        point.y = base.y - corners[c]->y * probeLength;
+        point.z = base.z - corners[c]->z * probeLength;
+        probe = steerProbe(navigation, base, point, equipmentType, &water);
+        if (!water && probe >= 0.0f)
+            backClear = std::min(backClear, probe);
+        obstacleClearance(bot, base, *corners[c], sideFront, backClear, static_cast<unsigned int>(-1));
+    }
+    // The two sideways probes: material 4 counts as fully clear, no hit as blocked.
+    point.x = right.x * probeLength + base.x;
+    point.y = probeLength * 0.0f + base.y;
+    point.z = right.y * probeLength + base.z;
+    probe = steerProbe(navigation, base, point, equipmentType, &water);
+    const float rightClear = water ? probeLength : (probe >= 0.0f ? probe : 0.0f);
+    point.x = base.x - right.x * probeLength;
+    point.y = base.y - probeLength * 0.0f;
+    point.z = base.z - right.y * probeLength;
+    probe = steerProbe(navigation, base, point, equipmentType, &water);
+    const float leftClear = water ? probeLength : (probe >= 0.0f ? probe : 0.0f);
+    (void)vehicleNumber;
+
+    const float closeRange = (car ? s_carCloseRange : s_tankCloseRange) * radius;
+    unsigned int avoidHandle = static_cast<unsigned int>(-1);
+    unsigned int collided = static_cast<BotMain*>(bot)->getCollidedObject();
+    int avoidSide = static_cast<BotMain*>(bot)->getAvoidSide();
+    Vec2 target;
+    target.x = distance * direction.x;
+    target.y = distance * direction.y;
+    float cosine;
+    float pathAngle;
+    bool offFacing;
+    bool offPath;
+    bool collidedSeen;
+    float avoidAngle;
+    float tangentAngle;
+    bool touching;
+    bool avoiding = chooseAvoidObstacle(bot, equipment, ownPhysical, facing, cosine, pathAngle, offFacing, target,
+                                        path, distance, offPath, avoidHandle, collided, collidedSeen, avoidAngle,
+                                        tangentAngle, speedWeight, touching, avoidSide, car);
+    bool clearCollided = false;
+    if (collided != static_cast<unsigned int>(-1) && !collidedSeen)
+    {
+        avoiding = false;
+        clearCollided = true;
+    }
+    else if (!avoiding)
+    {
+        clearCollided = true;
+    }
+    else
+    {
+        Information* const obstacle = informationManager->getInformation(avoidHandle);
+        const float settle = static_cast<BotMain*>(bot)->getIgnoreObstacles() ? 6.25f : 1.0f;
+        if (avoidHandle == collided && collided != static_cast<unsigned int>(-1))
+        {
+            const Vec3& now = obstacle->getPosition();
+            const Vec3& then = static_cast<BotMain*>(bot)->getCollidedObjectPosition();
+            const float mx = now.x - then.x;
+            const float my = now.y - then.y;
+            const float mz = now.z - then.z;
+            if (!(mx * mx + my * my + mz * mz <= settle))
+            {
+                avoiding = false;
+                clearCollided = true;
+            }
+        }
+        else
+        {
+            static_cast<BotMain*>(bot)->setCollidedObjectPosition(obstacle->getPosition());
+        }
+    }
+    bool sidesBlocked = false;
+    if (clearCollided)
+    {
+        static_cast<BotMain*>(bot)->setCollidedObject(static_cast<unsigned int>(-1));
+        avoidHandle = static_cast<unsigned int>(-1);
+        collided = static_cast<unsigned int>(-1);
+    }
+    if (!avoiding)
+    {
+        static_cast<BotMain*>(bot)->setAvoidSide(0);
+    }
+    else
+    {
+        static_cast<BotMain*>(bot)->setCollidedObject(avoidHandle);
+        collided = avoidHandle;
+        if (!avoidSide)
+        {
+            bool goRight = true;
+            Information* const obstacle = informationManager->getInformation(avoidHandle);
+            IPIMobile* const obstacleMobile = obstacle->getMobile();
+            IPIPhysical* const obstaclePhysical = obstacle->getPhysical();
+            const IPIMobile::ValidPos* obstacleValid = 0;
+            int number = 0;
+            float halfWidth = 0.0f;
+            float reach = 0.0f;
+            if (obstacleMobile)
+            {
+                halfWidth = obstaclePhysical->getSmallestRadius() * 0.5f + radius;
+                reach = halfWidth + 0.5f;
+                number = mobile->getVehicleNumber();
+                obstacleValid = &obstacleMobile->getLastValidPosition(number);
+                if (obstacleValid->polygon == static_cast<unsigned int>(-1)
+                    || obstacleValid->quadTree == static_cast<unsigned int>(-1))
+                    obstacleValid = 0;
+            }
+            if (obstacleValid)
+            {
+                Vec3 hitA;
+                hitA.x = hitA.y = hitA.z = 0.0f;
+                Vec3 hitB;
+                hitB.x = hitB.y = hitB.z = 0.0f;
+                unsigned int handle;
+                const Vec3& axis = *reinterpret_cast<const Vec3*>(&equipment->getTransformation().m[0]);
+                Vec3 end;
+                end.x = obstacleValid->position.x + axis.x * reach;   // PE 10070A70 / 10070A40
+                end.y = obstacleValid->position.y + axis.y * reach;
+                end.z = obstacleValid->position.z + axis.z * reach;
+                IAIPathfinding::instance->trace(obstacleValid->polygon, obstacleValid->quadTree, number,
+                                                obstacleValid->position, end, hitA, handle, equipmentType, -1,
+                                                0.0f, 0, 0);
+                const float eps = 1.1920928955078125e-07f;
+                float spaceA = 0.0f;
+                if (std::fabs(hitA.x) > eps || std::fabs(hitA.y) > eps || std::fabs(hitA.z) > eps)
+                {
+                    const float dx = hitA.x - obstacleValid->position.x;
+                    const float dy = hitA.y - obstacleValid->position.y;
+                    const float dz = hitA.z - obstacleValid->position.z;
+                    spaceA = std::sqrt(dx * dx + dy * dy + dz * dz);
+                }
+                const Vec3& axisAgain = *reinterpret_cast<const Vec3*>(&equipment->getTransformation().m[0]);
+                end.x = obstacleValid->position.x - axisAgain.x * reach;   // PE 1007A380
+                end.y = obstacleValid->position.y - axisAgain.y * reach;
+                end.z = obstacleValid->position.z - axisAgain.z * reach;
+                IAIPathfinding::instance->trace(obstacleValid->polygon, obstacleValid->quadTree, number,
+                                                obstacleValid->position, end, hitB, handle, equipmentType, -1,
+                                                0.0f, 0, 0);
+                float spaceB = 0.0f;
+                if (std::fabs(hitB.x) > eps || std::fabs(hitB.y) > eps || std::fabs(hitB.z) > eps)
+                {
+                    const float dx = hitB.x - obstacleValid->position.x;
+                    const float dy = hitB.y - obstacleValid->position.y;
+                    const float dz = hitB.z - obstacleValid->position.z;
+                    spaceB = std::sqrt(dx * dx + dy * dy + dz * dz);
+                }
+                const bool moreOnB = spaceB > spaceA;
+                const Vec3& axisThird = *reinterpret_cast<const Vec3*>(&equipment->getTransformation().m[0]);
+                obstacleClearance(bot, obstacleValid->position, axisThird, spaceA, spaceB, collided);
+                const bool bothRoomy = std::min(spaceB, spaceA) > halfWidth;
+                const float wider = std::max(spaceB, spaceA);
+                sidesBlocked = wider < halfWidth;
+                const bool tooNarrow = wider < halfWidth * 0.7f;
+                if (bothRoomy)
+                {
+                    Vec2 across;
+                    across.x = path.y;   // PE 1014AE20
+                    across.y = -path.x;
+                    const float dx = obstacleValid->position.x - flatPosition.x;
+                    const float dz = obstacleValid->position.z - flatPosition.y;
+                    goRight = across.y * dz + dx * across.x > 0.0f;
+                }
+                else if (tooNarrow)
+                {
+                    goRight = moreOnB;
+                }
+                else
+                {
+                    goRight = spaceB > spaceA;
+                }
+            }
+            const int side = goRight ? 1 : 2;
+            avoidSide = side;
+            if (static_cast<BotMain*>(bot)->setAvoidSide(side) && !static_cast<BotMain*>(bot)->getIgnoreObstacles())
+            {
+                status = 0;
+                static_cast<BotMain*>(bot)->setMoveToStatus(0);
+                static_cast<BotMain*>(bot)->setIgnoreObstacles(true);
+            }
+        }
+    }
+
+    // Recomputed below; both default to false when no side was chosen this tick.
+    bool hasCollided = collided != static_cast<unsigned int>(-1);
+    static_cast<BotMain*>(bot)->setUnresolvedCollisionObject(collided);
+    if (hasCollided)
+    {
+        Information* const obstacle = informationManager->getInformation(collided);
+        if (!obstacle)
+        {
+            hasCollided = false;
+            collided = static_cast<unsigned int>(-1);
+        }
+        else
+        {
+            const Vec2 centre = steerFlat(*reinterpret_cast<const Vec3*>(&obstacle->getTransformation().m[12]));
+            const float obstacleRadius = obstacle->getPhysical()->getRadius();
+            const float tx = movePoint.x - centre.x;
+            const float ty = movePoint.y - centre.y;
+            if (!(obstacleRadius * obstacleRadius <= ty * ty + tx * tx))
+            {
+                const float ox = centre.x - flatPosition.x;
+                const float oy = centre.y - flatPosition.y;
+                const float near = obstacle->getPhysical()->getRadius() + radius + 3.0f;
+                if (!(near * near <= oy * oy + ox * ox))
+                {
+                    throttle = 666.0f;
+                    steering = 0.0f;
+                    return true;
+                }
+            }
+        }
+    }
+    else
+    {
+        avoidSide = 0;
+        static_cast<BotMain*>(bot)->setAvoidSide(0);
+    }
+
+    const bool pathLeft = pathAngle < 0.0f;
+    const float roomA = radius * 2.7f;
+    const float sideSum = leftClear + rightClear;
+    const bool roomyA = sideSum > roomA && backClear + frontClear > roomA;
+    const float roomB = radius * 3.0f;
+    const bool roomyB = sideSum > roomB && backClear + frontClear > roomB;
+    const float frontFraction = (frontClear - closeRange) / (probeLength - closeRange);
+    const float backFraction = (backClear - closeRange) / (probeLength - closeRange);
+    bool openGround;
+    if (frontClear == 0.0f && backClear == 0.0f)
+    {
+        openGround = true;
+        status = facingPathDot > 0.0f ? 0 : 8;
+    }
+    else
+    {
+        openGround = false;
+    }
+    const float maxSpeed = mobile->getMaxSpeed();
+    const float halfSpeed = 0.5f * maxSpeed;
+    if (!car)
+        maxSpeedFactor = maxSpeed - (1.0f - (reversing ? backFraction : frontFraction)) * (maxSpeed - halfSpeed);
+    else if (reversing)
+        maxSpeedFactor = 5.0f - (1.0f - backFraction) * 3.0f;
+    else if (!(frontFraction >= 0.95f))
+        maxSpeedFactor = 5.0f - (1.0f - frontFraction) * 3.0f;
+    else
+        maxSpeedFactor = maxSpeed - (1.0f - frontFraction) * (maxSpeed - 2.0f);
+    if (sidesBlocked && !(maxSpeedFactor < 7.0f))
+        maxSpeedFactor = 7.0f;
+    if (!hasCollided)
+    {
+        static_cast<BotMain*>(bot)->setIgnoreObstacles(false);
+        static_cast<BotMain*>(bot)->setAvoidSide(0);
+    }
+    bool ignoring = static_cast<BotMain*>(bot)->getIgnoreObstacles();
+    if (ignoring)
+    {
+        bool humanBlocker = false;
+        if (hasCollided)
+        {
+            Information* const obstacle = informationManager->getInformation(collided);
+            IAIObjectPhysical* const physics = obstacle->getAIObject()->getPhysical();
+            physics->enablePhysics(1);
+            physics->enablePhysics(2);
+            if (static_cast<BotMain*>(bot)->getSlowDownToTarget() == collided)
+                ignoring = true;
+            if (obstacle->getAIObject() && !IBotManager::instance->getBot(obstacle->getAIObject())
+                && obstacle->getUnit() && obstacle->getUnit()->isOccupied())
+            {
+                humanBlocker = true;
+                ignoring = false;
+            }
+        }
+        if (!humanBlocker && ignoring
+            && (status == 4 || status == 5 || status == 6 || status == 13 || status == 14))
+        {
+            status = 0;
+            static_cast<BotMain*>(bot)->setMoveToStatus(0);
+        }
+    }
+
+    BotMain* const main = static_cast<BotMain*>(bot);
+    // The throttle and steering for a turn on the spot away from an obstacle, by the speed.
+    const float turnStep = std::min(1.0f, std::fabs(speedSigned));   // PE 100C1A20
+    const bool frontOpen = !(frontClear < closeRange);
+    const bool backOpen = !(backClear < closeRange);
+    // Whether the obstacle ahead still blocks a forward turn (the case 2/3 guards).
+    const bool blockedAhead = cosine > 0.5f && hasCollided && !offFacing && !ignoring;
+    switch (status)
+    {
+    case 0:
+        if (openGround)
+        {
+            throttle = 1.0f;
+            maxSpeedFactor = halfSpeed;
+            break;
+        }
+        if (!(facingPathDot < 0.0f) && frontOpen)
+        {
+            if (avoiding && !ignoring)
+                main->setMoveToStatus(6);
+            else
+                throttle = 1.0f;
+            break;
+        }
+        if (remaining <= probeRadius && facingPathDot < -0.6f && backClear > closeRange)
+        {
+            main->setMoveToStatus(8);
+            break;
+        }
+        if (facingPathDot < 0.0f && !roomyA)
+        {
+            main->setMoveToStatus(12);
+            break;
+        }
+        main->setMoveToStatus(turningLeft ? 9 : 11);
+        break;
+    case 12:
+        if (facingPathDot > 0.0f)
+        {
+            main->setMoveToStatus(0);
+            break;
+        }
+        if (remaining <= probeRadius && facingPathDot < -0.6f && backClear > closeRange)
+        {
+            main->setMoveToStatus(8);
+            break;
+        }
+        if (!roomyB)
+        {
+            reverseTurn(throttle, steering);
+            break;
+        }
+        main->setMoveToStatus(leftClear >= rightClear ? 11 : 9);
+        break;
+    case 3:
+        if (turningLeft)
+        {
+            if (facingPathDot > 0.9f)
+                main->setMoveToStatus(0);
+            else if (!frontOpen || blockedAhead)
+                main->setMoveToStatus(9);
+            else
+            {
+                throttle = 1.0f;
+                steering = -std::fabs(steering);
+            }
+            break;
+        }
+        main->setMoveToStatus(facingPathDot > 0.0f ? 2 : 11);
+        break;
+    case 11:
+        if (turningLeft)
+        {
+            main->setMoveToStatus(facingPathDot > 0.0f ? 3 : 9);
+            break;
+        }
+        if (facingPathDot > 0.9f)
+            main->setMoveToStatus(0);
+        else if (!backOpen)
+            main->setMoveToStatus(2);
+        else
+        {
+            throttle = -1.0f;
+            steering = -std::fabs(steering);
+        }
+        break;
+    case 2:
+        if (turningLeft)
+        {
+            main->setMoveToStatus(facingPathDot > 0.0f ? 3 : 9);
+            break;
+        }
+        if (facingPathDot > 0.9f)
+            main->setMoveToStatus(0);
+        else if (!frontOpen || blockedAhead)
+            main->setMoveToStatus(11);
+        else
+        {
+            throttle = 1.0f;
+            steering = std::fabs(steering);
+        }
+        break;
+    case 9:
+        if (!turningLeft)
+        {
+            main->setMoveToStatus(facingPathDot > 0.0f ? 2 : 11);
+            break;
+        }
+        if (facingPathDot > 0.9f && frontClear > closeRange)
+            main->setMoveToStatus(0);
+        else if (!backOpen)
+            main->setMoveToStatus(3);
+        else
+        {
+            throttle = -1.0f;
+            steering = std::fabs(steering);
+        }
+        break;
+    case 8:
+        if (openGround)
+        {
+            throttle = -1.0f;
+            const float flipped = steering * -1.0f;
+            steering = flipped;
+            const float size = std::fabs(flipped);
+            if (size > 1.5707963705062866f)
+                steering = (flipped > 0.0f ? 1.0f : (flipped < 0.0f ? -1.0f : 0.0f)) * (3.1415927410125732f - size);
+            break;
+        }
+        if (facingPathDot > -0.5f || probeRadius + 5.0f < remaining || backClear < closeRange)
+        {
+            main->setMoveToStatus(0);
+            throttle = 1.0f;
+            break;
+        }
+        if (cosine < -0.6f && hasCollided)
+        {
+            main->setMoveToStatus(pathLeft ? 3 : 2);
+            break;
+        }
+        reverseTurn(throttle, steering);
+        break;
+    case 6:
+        if (hasCollided && !(offPath && cosine < 0.3f))
+        {
+            if (touching && !offFacing && cosine > 0.0f)
+            {
+                main->setMoveToStatus(avoidSide == 2 ? 14 : 13);
+                break;
+            }
+            if (!(frontClear < closeRange))
+            {
+                steering = avoidAngle;
+                break;
+            }
+            const int other = avoidSide == 2 ? 1 : 2;
+            if (main->setAvoidSide(other) && !main->getIgnoreObstacles())
+            {
+                main->setMoveToStatus(0);
+                main->setIgnoreObstacles(true);
+            }
+            else
+            {
+                main->setMoveToStatus(avoidSide == 2 ? 13 : 14);
+            }
+            break;
+        }
+        main->setMoveToStatus(steering >= 0.0f ? 2 : 3);
+        break;
+    // Backing off and turning around an obstacle: a tank steers by its speed (at most 0.2), a car
+    // at full lock (2); a car stops backing off as soon as it touches the obstacle.
+    case 13:
+        if (!hasCollided || (offFacing && !pathLeft))
+            main->setMoveToStatus(6);
+        else if (!backOpen)
+            main->setMoveToStatus(4);
+        throttle = -1.0f;
+        steering = car ? 2.0f : turnStep * 0.2f;
+        break;
+    case 14:
+        if (!hasCollided || (offFacing && pathLeft))
+            main->setMoveToStatus(6);
+        else if (!backOpen)
+            main->setMoveToStatus(5);
+        throttle = -1.0f;
+        steering = car ? -2.0f : turnStep * -0.2f;
+        break;
+    case 4:
+        if (!hasCollided || (offFacing && !pathLeft))
+        {
+            main->setMoveToStatus(6);
+            break;
+        }
+        if (frontClear < closeRange || (touching && (car || cosine > 0.8f)))
+        {
+            main->setMoveToStatus(13);
+            break;
+        }
+        throttle = 1.0f;
+        steering = car ? -2.0f : turnStep * -0.2f;
+        break;
+    case 5:
+        if (!hasCollided || (offFacing && pathLeft))
+        {
+            main->setMoveToStatus(6);
+            break;
+        }
+        if (frontClear < closeRange || (touching && (car || cosine > 0.8f)))
+        {
+            main->setMoveToStatus(14);
+            break;
+        }
+        throttle = 1.0f;
+        steering = car ? 2.0f : turnStep * 0.2f;
+        break;
+    default:
+        break;
+    }
+    if (slowDown < maxSpeedFactor)
+        maxSpeedFactor = slowDown;
+    if (stoppedForUnit)
+        steering = -2.0f;
+    return true;
 }
 
 // 1, -1 or 0 by the sign. PE 100DE7B0.
@@ -734,8 +1874,8 @@ bool EntryTankMoveTo::execute(BotScript* script, Bot* bot, bool& finished, bool&
     float steering;
     float speedWeight;
     float maxSpeedFactor;
-    finished = tankSteering(bot, equipment, direction, distance, move, throttle, steering, speedWeight,
-                            maxSpeedFactor);
+    finished = vehicleSteering(false, bot, equipment, direction, distance, move, throttle, steering, speedWeight,
+                               maxSpeedFactor);   // PE 101C53E0
     if (throttle == 666.0f)
     {
         io::PlayerInput* const input = bot->playerInput();
@@ -803,18 +1943,15 @@ int EntryCarMoveTo::getTargetId()
 
 namespace {
 
-// The car's path-following steering (PE 101CB5C0, about 2,200 instructions): from the flat
-// direction to the steer point and its distance it traces the pathfinding map around the car
-// and chooses the throttle, steering angle, speed weight and maximum speed factor for driveCar,
-// or the throttle 666 to ask for a stop. [INFERRED] name and parameter roles, from
-// EntryCarMoveTo's use of them.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: car-steering] Recover the body from
-// PE 101CB5C0 and drive a car along a Dalian waypoint path.
-bool carSteering(Bot* /*bot*/, Information* /*equipment*/, const Vec2& /*direction*/, float /*distance*/,
-                 BAPAMove* /*move*/, float& /*throttle*/, float& /*steering*/, float& /*speedWeight*/,
-                 float& /*maxSpeedFactor*/)
+bool vehicleSteering(bool car, Bot* bot, Information* equipment, const Vec2& direction, float distance,
+                     BAPAMove* move, float& throttle, float& steering, float& speedWeight, float& maxSpeedFactor);
+
+// The car's path-following steering. PE 101CB5C0.
+bool carSteering(Bot* bot, Information* equipment, const Vec2& direction, float distance, BAPAMove* move,
+                 float& throttle, float& steering, float& speedWeight, float& maxSpeedFactor)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryCarMoveTo::execute (car steering, PE 101CB5C0)");
+    return vehicleSteering(true, bot, equipment, direction, distance, move, throttle, steering, speedWeight,
+                           maxSpeedFactor);
 }
 
 } // anonymous namespace
