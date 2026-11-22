@@ -858,6 +858,22 @@ public:
     /* +0x44 */ float m_heightOffset;
 };
 
+// Looks at a fixed world position from the bot's current equipment. Unlike the other look
+// statements it neither claims nor destroys its condition, as shipped. PE vtable 10284060.
+// [INFERRED] names.
+class BAPALookAtPosition : public BAPALook
+{
+public:
+    // PE 101B4840.
+    BAPALookAtPosition(const Vec3& position, Bot* bot, float deadZone, BAPCondition* until,
+                       unsigned long long inputMask, int id);
+    virtual ~BAPALookAtPosition();                                     // PE 101B4890
+    virtual Vec3 getTarget(bool& valid);                               // PE 101B48C0
+
+    /* +0x38 */ Vec3 m_position;
+    /* +0x44 */ Bot* m_bot;
+};
+
 // Type 6: an aim solution that the fire statements query. Executing it directly fails at once;
 // the derived classes solve for an object or a fixed position. The base takes an optional pair
 // of plan values; only the object aim reads them. PE vtable 10283EE8, ctor 101C87D0.

@@ -979,6 +979,118 @@ bool BAPConMagazine::evaluate(Bot*)
 BAPConditionType BAPConMagazine::getType() { return static_cast<BAPConditionType>(41); }
 BAPConMagazine::~BAPConMagazine() {}
 
+// ---- BAPConWeaponLocked ---------------------------------------------------------------------
+
+BAPConWeaponLocked::BAPConWeaponLocked(BotScriptValue<WeaponInfo*>* weapon, unsigned int target)
+    : m_weapon(weapon), m_target(target)
+{
+}
+
+bool BAPConWeaponLocked::evaluate(Bot* bot)
+{
+    IAIObject* const locked = m_weapon->m_value->getLockedTarget();
+    if (!locked)
+        return false;
+    return informationManager->getInformation(locked->getInformation(bot->getSide())) != 0;
+}
+
+BAPConditionType BAPConWeaponLocked::getType() { return static_cast<BAPConditionType>(47); }
+BAPConWeaponLocked::~BAPConWeaponLocked() {}
+
+// ---- BAPConLookWithin -----------------------------------------------------------------------
+
+BAPConLookWithin::BAPConLookWithin(BAPALook* look, float angle, bool flat)
+    : m_look(look), m_flat(flat)
+{
+    if (angle < 0.0f)
+        m_cosine = static_cast<float>(std::cos(0.0));
+    else if (angle > 3.14159274f)                           // PE 10283FE0
+        m_cosine = static_cast<float>(std::cos(static_cast<double>(3.14159274f)));
+    else
+        m_cosine = static_cast<float>(std::cos(static_cast<double>(angle)));
+}
+
+// The length guards fail only below their epsilon, so a NaN length passes on as shipped.
+bool BAPConLookWithin::evaluate(Bot* bot)
+{
+    if (!informationManager->getInformation(bot->getCurrentEquipment()))
+        return false;
+    bool valid;
+    Vec3 direction = m_look->getTarget(valid);
+    if (!valid)
+        return false;
+    float dot;
+    if (m_flat)
+    {
+        direction.y = 0.0f;
+        const float length = std::sqrt(direction.z * direction.z + direction.x * direction.x);
+        if (length < 1.0e-4f)                               // PE 1027EB38
+            return false;
+        const float inverse = 1.0f / length;
+        direction.x *= inverse;
+        direction.y = 0.0f * inverse;
+        direction.z *= inverse;
+        if (!bot->getPlayer())
+            return false;
+        const float* const camera =
+            static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation())->m;
+        Vec3 forward = {camera[8], 0.0f, camera[10]};
+        const float forwardLength = std::sqrt(forward.x * forward.x + forward.y * forward.y
+                                              + forward.z * forward.z);   // PE 1006EE90
+        if (forwardLength < 1.0e-4f)
+            return false;
+        const float forwardInverse = 1.0f / forwardLength;  // PE 1009B6B0
+        forward.x *= forwardInverse;
+        forward.y *= forwardInverse;
+        forward.z *= forwardInverse;
+        dot = forward.z * direction.z + forward.y * direction.y + forward.x * direction.x;
+    }
+    else
+    {
+        const float length = std::sqrt(direction.z * direction.z + direction.y * direction.y
+                                       + direction.x * direction.x);
+        if (length < 1.0e-3f)                               // PE 1027BED8
+            return false;
+        const float inverse = 1.0f / length;
+        direction.x *= inverse;
+        direction.y *= inverse;
+        direction.z *= inverse;
+        if (!bot->getPlayer())
+            return false;
+        const float* const camera =
+            static_cast<const Mat4*>(bot->getPlayer()->getCameraTransformation())->m;
+        dot = direction.z * camera[10] + direction.y * camera[9] + direction.x * camera[8];
+    }
+    return dot >= m_cosine;   // an unordered compare answers false
+}
+
+BAPConditionType BAPConLookWithin::getType() { return static_cast<BAPConditionType>(0); }
+BAPConLookWithin::~BAPConLookWithin() {}
+
+// ---- BAPConProjectileNear -------------------------------------------------------------------
+
+BAPConProjectileNear::BAPConProjectileNear(IPIArmament* armament, float range)
+    : m_armament(armament), m_rangeSq(range * range)
+{
+}
+
+// The equipment lookup is not null-checked, as shipped.
+bool BAPConProjectileNear::evaluate(Bot* bot)
+{
+    Vec3 projectile = {0.0f, 0.0f, 0.0f};
+    if (!m_armament->getProjectilePosition(projectile))
+        return false;
+    const Vec3& position =
+        informationManager->getInformation(bot->getCurrentEquipment())->getPosition();
+    const float dx = projectile.x - position.x;
+    const float dy = projectile.y - position.y;
+    const float dz = projectile.z - position.z;
+    return dz * dz + dx * dx + dy * dy < m_rangeSq;
+}
+
+BAPConditionType BAPConProjectileNear::getType() { return static_cast<BAPConditionType>(15); }
+BAPConProjectileNear::~BAPConProjectileNear() {}
+
 // ---- BAPConShared ---------------------------------------------------------------------------
 
 BAPConShared::BAPConShared(BAPCondition* inner)

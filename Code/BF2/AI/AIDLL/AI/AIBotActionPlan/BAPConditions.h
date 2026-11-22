@@ -21,6 +21,8 @@ class WeaponInfo;
 class AIStrategicObject;
 class Information;
 class BAPAimAt;
+class BAPALook;
+class IPIArmament;
 
 // Condition kinds as the printer spells them ("&&", "!", "true", ...). No enumerator name is
 // attested, so the values stay opaque.
@@ -620,6 +622,58 @@ private:
     /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
     /* +0x0C */ bool m_changed;
     /* +0x10 */ BotScriptValue<int>* m_shots;
+};
+
+// Kind 47: whether the weapon held in a plan value has locked onto an object the bot's side has
+// information about. The target handle is stored but not read, as shipped. PE vtable 10284020.
+// [INFERRED] names.
+class BAPConWeaponLocked : public BAPCondition
+{
+public:
+    // PE 101B4600.
+    BAPConWeaponLocked(BotScriptValue<WeaponInfo*>* weapon, unsigned int target);
+    virtual bool evaluate(Bot* bot);                     // PE 101B4680
+    virtual BAPConditionType getType();                  // PE 101B4640: 47
+    virtual ~BAPConWeaponLocked();
+
+private:
+    /* +0x08 */ BotScriptValue<WeaponInfo*>* m_weapon;
+    /* +0x0C */ unsigned int m_target;
+};
+
+// Kind 0: whether the bot's camera forward lies within an angle of a look statement's target
+// direction, in full 3D or flattened onto the ground plane. The angle is clamped to [0, pi] and
+// kept as its cosine. The camera comes from the bot's player. PE vtable 10283FF0.
+// [INFERRED] names.
+class BAPConLookWithin : public BAPCondition
+{
+public:
+    // PE 101B4390.
+    BAPConLookWithin(BAPALook* look, float angle, bool flat);
+    virtual bool evaluate(Bot* bot);                     // PE 101B4430
+    virtual BAPConditionType getType();                  // PE 101B4380: 0
+    virtual ~BAPConLookWithin();
+
+private:
+    /* +0x08 */ float m_cosine;
+    /* +0x0C */ BAPALook* m_look;
+    /* +0x10 */ bool m_flat;
+};
+
+// Kind 15: whether the armament has a projectile in flight closer than a range to the bot's
+// equipment. PE vtable 102840A0. [INFERRED] names.
+class BAPConProjectileNear : public BAPCondition
+{
+public:
+    // PE 101B4980.
+    BAPConProjectileNear(IPIArmament* armament, float range);
+    virtual bool evaluate(Bot* bot);                     // PE 101B4A00
+    virtual BAPConditionType getType();                  // PE 101B49C0: 15
+    virtual ~BAPConProjectileNear();
+
+private:
+    /* +0x08 */ IPIArmament* m_armament;
+    /* +0x0C */ float m_rangeSq;
 };
 
 // Kind 38: a value shared between copies. The original evaluates its inner condition and stores

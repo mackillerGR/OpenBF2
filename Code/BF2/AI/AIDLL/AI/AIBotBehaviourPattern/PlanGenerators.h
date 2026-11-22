@@ -308,6 +308,17 @@ private:
                                BotScriptValue<Vec3>* lookPosition, WeaponInfo* weapon, Information* own,
                                IPIControlInfo* control, Information* target, IPIPhysical* targetPhysical,
                                int guidance);
+    // Builds the plan for a soldier firing a guided weapon: hold a look on the target, close in or
+    // keep the range while the bot cannot fire, reload when no projectile of its own is near, and
+    // fire through the guided sequence once ready. PE 10106E90; [INFERRED] name.
+    BotScript* buildGuidedSoldierScript(Bot* bot, IPIControlInfo* controlArgument, const Vec3& firePosition);
+    // Builds the guided look-and-fire sequence: a look at the target (or at the bot's stored fire
+    // position without one), a trigger held until the magazine runs low, the lock is lost or the
+    // look drifts, and a zoom trigger when the weapon zooms. PE 101069D0; [INFERRED] name.
+    BotScript* buildGuidedFire(Bot* bot, FireInfanteryTarget* plan, BotScriptValue<WeaponInfo*>* weaponValue,
+                               BotScriptValue<unsigned int>* targetValue, BotScriptValue<Vec3>* lookPosition,
+                               WeaponInfo* weapon, Information* own, IPIControlInfo* control, Information* target,
+                               IPIPhysical* targetPhysical, int guidance);
 
     /* +0x28 */ FireInfanteryTarget* m_targetState;
     /* +0x2C */ FireInfanteryAim*    m_aim;

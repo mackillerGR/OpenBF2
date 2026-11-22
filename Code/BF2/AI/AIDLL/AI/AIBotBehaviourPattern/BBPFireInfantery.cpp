@@ -866,6 +866,9 @@ float lengthSq(const Vec3& v)
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
+// One degree in radians. PE 102A9CC0.
+const float kDegree = 0.0174532924f;
+
 // A one-input mask built as shipped: the shift is a 32-bit int (so only the low five bits of the
 // input count) and the result is sign-extended to 64 bits.
 unsigned long long inputMask32(int input)
@@ -874,6 +877,278 @@ unsigned long long inputMask32(int input)
 }
 
 } // anonymous namespace
+
+// PE 101069D0.
+BotScript* BBPFireInfantery::buildGuidedFire(Bot* bot, FireInfanteryTarget* plan,
+                                             BotScriptValue<WeaponInfo*>* weaponValue,
+                                             BotScriptValue<unsigned int>* /*targetValue*/,
+                                             BotScriptValue<Vec3>* lookPosition, WeaponInfo* weapon,
+                                             Information* /*own*/, IPIControlInfo* control, Information* target,
+                                             IPIPhysical* /*targetPhysical*/, int guidance)
+{
+    BAPContext* const context = bot->getScriptContext();
+    const unsigned int targetHandle = plan->m_target;
+    BAPParallel* const sequence = checkPointer(new BAPParallel(m_behaviourId, false, 14, false));
+
+    // Without the target's information the look falls back to the stored fire position, with a
+    // dead zone of half a degree.
+    BAPALook* look;
+    if (target)
+        look = checkPointer(new BAPALookAtObject(bot, targetHandle, 0.0f, checkPointer(new BAPConFalse),
+                                                 control->getLookControls(), m_behaviourId, lookPosition, 0.0f));
+    else
+        look = checkPointer(new BAPALookAtPosition(m_positions[bot->getBotId()], bot, kDegree * 0.5f,
+                                                   checkPointer(new BAPConFalse), control->getLookControls(),
+                                                   m_behaviourId));
+    sequence->addStatement(look);
+
+    // Release the trigger once the magazine is empty, a lock-on weapon has lost its lock, or the
+    // look strays beyond five degrees (guidance 2) or three degrees (otherwise).
+    BAPConAnd* const release = checkPointer(new BAPConAnd);
+    const int noShots = 0;
+    release->addCondition(checkPointer(
+        new BAPConMagazine(weaponValue, context->createVariable<int>(noShots, 0), false)));
+    if (guidance == 2 || guidance == 1)
+        release->addCondition(checkPointer(
+            new BAPConNot(checkPointer(new BAPConWeaponLocked(weaponValue, targetHandle)))));
+    const float window = guidance == 2 ? 5.0f * kDegree : kDegree * 3.0f;
+    release->addCondition(checkPointer(new BAPConNot(checkPointer(new BAPConLookWithin(look, window, false)))));
+
+    BAPTrigger* const fire = checkPointer(new BAPTrigger(weapon->getWeaponFire(), checkPointer(new BAPConTrue),
+                                                         release, inputMask32(weapon->getWeaponFire()),
+                                                         m_behaviourId, 0.0, true));
+    if (weapon->getWeaponZoom() != 0x40) {
+        BAPConFalse* const zoomRelease = new BAPConFalse;
+        BAPConTrue* const zoomUntil = new BAPConTrue;
+        BAPTrigger* const zoom = new BAPTrigger(weapon->getWeaponZoom(), checkPointer(zoomUntil),
+                                                checkPointer(zoomRelease), inputMask32(weapon->getWeaponZoom()),
+                                                m_behaviourId, 0.0, false);
+        BAPConNot* const notZoomed = new BAPConNot(checkPointer(new BAPConWeaponZoomed));
+        sequence->addStatement(checkPointer(new BAPIf(checkPointer(notZoomed), checkPointer(zoom), 0,
+                                                      m_behaviourId, true, false)));
+    }
+    sequence->addStatement(fire);
+    return sequence;
+}
+
+// PE 10106E90. The opening repeats the fire plan's (weapon, variables, reset), but the weapon index
+// is not checked against -1 and the result of the movement decision differs: the bot closes in
+// while it cannot fire and otherwise keeps the target between half the range and the minimum.
+// There is no squad share of the target at the close, as shipped.
+BotScript* BBPFireInfantery::buildGuidedSoldierScript(Bot* bot, IPIControlInfo* controlArgument,
+                                                      const Vec3& firePosition)
+{
+    BotMain* const main = static_cast<BotMain*>(bot);
+    FireInfanteryTarget* const plan = &m_targetState[bot->getBotId()];
+    if (bot->getDebugger()) {
+        // Retail calls the debugger's third slot; the debugger type is not recovered.
+        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bap-debugger]
+        BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildGuidedSoldierScript (script debugger reset)");
+    }
+    BAPContext* const context = bot->getScriptContext();
+    context->clear();
+    main->setTime276(fireTimer()->getGameTime());
+    dropPlan(bot);
+
+    // The equipment lookup is not checked, as shipped.
+    Information* const own = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIArmament* const armament = own->getArmament();
+    IPIControlInfo* const control = own->getControlInfo();
+    if (!armament || !own->getPhysical() || !control)
+        return 0;
+    IPIMobile* const mobile = own->getMobile();
+    if (mobile)
+        mobile->isTurnable();         // the results are unused, as shipped
+    control->getAimControls();
+    control->getDriveControls();
+    const Vec3& ownPosition = own->getPosition();
+    const unsigned int targetHandle = plan->m_target;
+    Information* const target = informationManager->getInformation(targetHandle);
+    IPIPhysical* const targetPhysical = target ? target->getPhysical() : 0;
+    if (!target || !targetPhysical)
+        return 0;
+
+    const int weaponIndex = m_weapons[bot->getBotId()];
+    WeaponInfo* const weapon = WeaponInfoManager::m_instance->getInformation(armament->getWeapon(weaponIndex));
+    armament->setActiveWeapon(weaponIndex, bot->getSide());
+
+    BotScriptValue<WeaponInfo*>* const weaponValue = context->createVariable<WeaponInfo*>(weapon, 0);
+    BotScriptValue<unsigned int>* const targetValue = context->createVariable<unsigned int>(targetHandle, 0);
+    const bool falseValue = false;
+    BotScriptValue<bool>* const aimValid = context->createVariable<bool>(falseValue, 0);
+    Vec3 initial = {0.0f, 1.0f, 0.0f};
+    BotScriptValue<Vec3>* const aimDirection = context->createVariable<Vec3>(initial, 0);
+    initial.x = initial.y = initial.z = 0.0f;
+    BotScriptValue<Vec3>* const lookPosition = context->createVariable<Vec3>(initial, 0);
+
+    const unsigned int id = m_behaviourId;
+    BAPSerial* const root = checkPointer(new BAPSerial(id, 0));
+    if (weapon->getWeaponActivate() != 0x40)
+        root->addStatement(checkPointer(new BAPChangeWeapon(bot, weaponIndex, id)));
+    BAPParallel* const sequence = checkPointer(new BAPParallel(id, true, -1, false));
+    root->addStatement(sequence);
+
+    const bool ownSoldier = (own->getObjectTypeFlags() >> 21) & 1;
+    if (ownSoldier) {
+        BAPOverrideSensingAgent* const sensing = new BAPOverrideSensingAgent;
+        BAPConNot* const notSprinting = new BAPConNot(checkPointer(new BAPConSprinting));
+        sequence->addStatement(checkPointer(new BAPIf(checkPointer(notSprinting), checkPointer(sensing), 0,
+                                                      id, true, false)));
+    } else {
+        sequence->addStatement(checkPointer(new BAPOverrideSensingAgent));
+    }
+    sequence->addStatement(checkPointer(new BAPResetControls(true, true, true, id)));
+    if (!ownSoldier) {
+        // The first argument is the bot pointer in retail, stored and never read; on a 64-bit
+        // port only its low half fits. [PLATFORM]
+        sequence->addStatement(new BAPUseFlareOnMissileLock(
+            static_cast<int>(reinterpret_cast<std::size_t>(bot)), 0x800000000000ULL, id));
+    }
+    const int guidance = weapon->getWeaponGuidanceType();
+
+    // Near a control point the bot may also fire from its approach. The equipment's mobile part
+    // is not null-checked here, as shipped.
+    BAPConShared* areaShared = 0;
+    AIStrategicArea* const area = static_cast<AIStrategicArea*>(
+        AIStrategicObjectManager::getInstance()->getClosestObject(ownPosition, bot->getSide(), false));
+    Vec3 approach = {0.0f, 0.0f, 0.0f};
+    if (area && area->m_controlPointId != static_cast<unsigned int>(-1)) {
+        area->getControlPointApproach(area, bot->getSide(), mobile->getVehicleNumber(),
+                                      own->getUnit()->getEquipmentType(), ownPosition, approach);
+        const float radius = area->m_size[bot->getSide()];
+        const Vec2& centre = area->getPosition(bot->getSide());
+        const Vec3 offset = {centre.x - approach.x, 0.0f, centre.y - approach.z};
+        if (radius * radius > lengthSq(offset)) {
+            BAPConAnd* const atArea = checkPointer(new BAPConAnd);
+            atArea->addCondition(checkPointer(new BAPConStrategicStatus(area, bot->getSide(), false)));
+            atArea->addCondition(checkPointer(new BAPConPositionDistance(approach, 40.0f, true)));
+            areaShared = checkPointer(new BAPConShared(atArea));
+        }
+    }
+
+    BAPConShared* const canFire = checkPointer(new BAPConShared(
+        checkPointer(new BAPConCanFireAt(targetHandle, controlArgument != 0))));
+    BAPConAnd* const ready = checkPointer(new BAPConAnd);
+    ready->addCondition(canFire->share());
+    if (areaShared) {
+        BAPConOr* const either = checkPointer(new BAPConOr);
+        either->addCondition(checkPointer(new BAPConObjectDistance(
+            targetHandle, weapon->getMinRange() * 0.9f, weapon->getMaxRange() * 1.1f, true, false)));
+        either->addCondition(areaShared->share());
+        ready->addCondition(either);
+    } else {
+        ready->addCondition(checkPointer(new BAPConObjectDistance(
+            targetHandle, weapon->getMinRange() * 0.9f, weapon->getMaxRange() * 1.1f, true, false)));
+    }
+
+    BotScript* fire = 0;
+    if (m_weapons[bot->getBotId()] != -1 && plan->m_int08)
+        fire = buildGuidedFire(bot, plan, weaponValue, targetValue, lookPosition, weapon, own, control, target,
+                               targetPhysical, guidance);
+    BotScript* const look = checkPointer(new BAPALookAtObject(bot, targetHandle, 0.0f, checkPointer(new BAPConFalse),
+                                                              control->getLookControls(), id, lookPosition, 0.0f));
+    BAPIf* const fireIf = checkPointer(new BAPIf(ready, fire, look, id, true, false));
+
+    BAPParallel* const body = checkPointer(new BAPParallel(id, 4, false));
+    body->addStatement(checkPointer(new BAPEvaluateCondition(canFire, id)));
+    body->addStatement(checkPointer(new BAPLookAtWrapper(targetHandle, lookPosition, true, guidance == 3,
+                                                         aimDirection, aimValid)));
+
+    BotScript* move = 0;
+    if (mobile) {
+        BAPConOr* const moveWhen = checkPointer(new BAPConOr);
+        moveWhen->addCondition(checkPointer(new BAPConNot(canFire->share())));
+        moveWhen->addCondition(checkPointer(new BAPConNot(checkPointer(new BAPConFireAllowed))));
+
+        bool targetMobile = target->getMobile() != 0;
+        if (!targetMobile && !target->isPrimary())
+            targetMobile = informationManager->getInformation(target->getPrimaryObject(bot->getSide()))
+                               ->getMobile() != 0;
+
+        // Unable to fire: close in, then forget the target and end the plan.
+        BotScript* closeIn;
+        if (targetMobile) {
+            const float nearest = weapon->getMinRange() * 1.1f;
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.5f;
+            closeIn = checkPointer(new BAPMoveToObjectFinding(bot, plan->m_target, 0.0f, mobile->getMaxSpeed(), slow,
+                                                              0, drive, id, 0, nearest, 1));
+        } else {
+            const float nearest = weapon->getMinRange() * 1.1f;
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.75f;
+            closeIn = checkPointer(new BAPMoveToFinding(bot, firePosition, mobile->getMaxSpeed(), slow, 0, drive,
+                                                        id, 0.5f, nearest));
+        }
+        BAPSerial* const closeInPlan = checkPointer(new BAPSerial(id, 300));
+        closeInPlan->addStatement(closeIn);
+        closeInPlan->addStatement(checkPointer(new BAPForgetTarget(plan->m_target)));
+        closeInPlan->addStatement(checkPointer(new BAPPlanEnd(id, 0, 0)));
+
+        // Able to fire: farther than half the range or nearer than the minimum, move to 0.85 of it.
+        BAPConObjectDistance* const tooFar = checkPointer(
+            new BAPConObjectDistance(targetHandle, weapon->getMaxRange() * 0.5f, true, false, true));
+        BAPConOr* const outOfBand = checkPointer(new BAPConOr);
+        outOfBand->addCondition(tooFar);
+        outOfBand->addCondition(checkPointer(
+            new BAPConObjectDistance(targetHandle, weapon->getMinRange(), true, false, false)));
+        BotScript* keep;
+        if (targetMobile) {
+            const float nearest = std::max(15.0f, weapon->getMinRange() * 1.1f);   // PE 10086630
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.5f;
+            const float fast = mobile->getMaxSpeed();
+            keep = checkPointer(new BAPMoveToObjectFinding(bot, plan->m_target, weapon->getMaxRange() * 0.85f, fast,
+                                                           slow, 0, drive, id, checkPointer(new BAPConFalse),
+                                                           nearest, 2));
+        } else {
+            const float nearest = std::max(15.0f, weapon->getMinRange() * 1.1f);
+            const float band = weapon->getMaxRange() * 0.85f;
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.75f;
+            keep = checkPointer(new BAPMoveToFinding(bot, firePosition, mobile->getMaxSpeed(), slow, 0, drive, id,
+                                                     band, nearest));
+        }
+        BAPIf* const keepIf = checkPointer(new BAPIf(outOfBand, keep, 0, id, false, false));
+        move = checkPointer(new BAPIf(moveWhen, closeInPlan, keepIf, id, true, false));
+    }
+
+    // Reload while the magazine is empty and no projectile of the bot's own is within 1000.
+    const int noShots = 0;
+    BAPConMagazine* const empty = checkPointer(
+        new BAPConMagazine(weaponValue, context->createVariable<int>(noShots, 0), false));
+    BAPTrigger* const reload = checkPointer(new BAPTrigger(0x20, checkPointer(new BAPConTrue),
+                                                           checkPointer(new BAPConFalse), 1ULL << 32, id, 0.0,
+                                                           false));
+    BAPConProjectileNear* const projectileNear = checkPointer(new BAPConProjectileNear(armament, 1000.0f));
+    BAPConAnd* const reloadWhen = checkPointer(new BAPConAnd);
+    reloadWhen->addCondition(empty);
+    reloadWhen->addCondition(checkPointer(new BAPConNot(projectileNear)));
+    body->addStatement(checkPointer(new BAPIf(reloadWhen, reload, 0, id, true, false)));
+
+    if (areaShared) {
+        const unsigned long long drive = control->getDriveControls();
+        const float slow = mobile->getMaxSpeed() * 0.75f;
+        BAPMoveToFinding* const toArea = checkPointer(new BAPMoveToFinding(
+            bot, approach, mobile->getMaxSpeed(), slow, 0, drive, id, 0.0f, 0.0f));
+        body->addStatement(checkPointer(new BAPIf(areaShared, toArea, move, id, false, false)));
+    } else {
+        body->addStatement(move);
+    }
+    body->addStatement(fireIf);
+    if (ownSoldier)
+        body->addStatement(checkPointer(new BAPMergeSoldierInputs(id)));
+
+    BAPConAnd* const alive = checkPointer(new BAPConAnd);
+    alive->addCondition(checkPointer(new BAPConNot(checkPointer(new BAPConObjectHealthBelow(targetHandle, 0.0f)))));
+    sequence->addStatement(checkPointer(new BAPWhile(alive, body, false, id)));
+
+    const int wrapperWeapon = weapon ? m_weapons[bot->getBotId()] : -1;
+    BAPFireWrapper* const wrapper = checkPointer(new BAPFireWrapper(
+        bot, targetHandle, m_flagA, plan->m_bool15, wrapperWeapon, -1, root, id));
+    wrapper->m_owner = this;
+    return wrapper;
+}
 
 // PE 10106230.
 BotScript* BBPFireInfantery::buildDirectFire(Bot* bot, FireInfanteryTarget* plan,
@@ -1054,10 +1329,7 @@ BotScript* BBPFireInfantery::buildScript(Bot* bot, IPIControlInfo* controlArgume
     // The weapon is not null-checked here, as shipped.
     const int guidance = weapon->getWeaponGuidanceType();
     if (guidance && ((own->getObjectTypeFlags() >> 21) & 1)) {
-        // Retail returns the guided soldier plan (PE 10106E90: bot, the caller's control, fire
-        // position), not recovered yet.
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bbp-fire-infantery-guided]
-        BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildScript (guided soldier plan)");
+        return buildGuidedSoldierScript(bot, controlArgument, firePosition);
     }
 
     BotScriptValue<WeaponInfo*>* const weaponValue = context->createVariable<WeaponInfo*>(weapon, 0);

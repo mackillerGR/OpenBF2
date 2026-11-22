@@ -2396,6 +2396,40 @@ BAPALookAtObject::~BAPALookAtObject()
         delete m_until;
 }
 
+BAPALookAtPosition::BAPALookAtPosition(const Vec3& position, Bot* bot, float deadZone,
+                                       BAPCondition* until, unsigned long long inputMask, int id)
+    : BAPALook(deadZone, until, inputMask, id)
+    , m_position(position)
+    , m_bot(bot)
+{
+}
+
+// The condition is not destroyed, as shipped.
+BAPALookAtPosition::~BAPALookAtPosition() {}
+
+// The normalised direction from the bot's current equipment to the position, or a zero vector
+// with `valid` cleared when the equipment is unknown.
+Vec3 BAPALookAtPosition::getTarget(bool& valid)
+{
+    Information* const equipment = informationManager->getInformation(m_bot->getCurrentEquipment());
+    Vec3 direction;
+    if (!equipment)
+    {
+        valid = false;
+        direction.x = 0.0f;
+        direction.y = 0.0f;
+        direction.z = 0.0f;
+        return direction;
+    }
+    valid = true;
+    const Vec3& from = equipment->getPosition();
+    direction.x = m_position.x - from.x;
+    direction.y = m_position.y - from.y;
+    direction.z = m_position.z - from.z;
+    normaliseVector(direction);
+    return direction;
+}
+
 // PE 101AD890. The direction from the camera of the bot's current equipment to the target, or
 // (1, 0, 0) with `valid` cleared for an unknown object. The equipment is not null-checked, as
 // shipped.
