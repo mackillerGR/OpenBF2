@@ -1384,9 +1384,47 @@ BotScript* BBPFireInfantery::buildScript(Bot* bot, IPIControlInfo* controlArgume
     }
 
     if (!mobile) {
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bbp-fire-infantery-builder]
-        // Recover the plan for a fixed equipment (PE 1010BC79).
-        BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildScript (fixed equipment)");
+        // ---- A fixed equipment (PE 1010BC79) ----
+        // Without a weapon or a fire mode there is no plan. Otherwise: the sensing override, a
+        // reload while the magazine is empty (for a weapon without automatic reload and other
+        // than a single magazine), the aim or look wrapper, and the fire sequence while aimed.
+        if (m_weapons[bot->getBotId()] == -1 || !plan->m_int08)
+            return 0;
+        if (ownSoldier) {
+            BAPOverrideSensingAgent* const sensing = new BAPOverrideSensingAgent;
+            BAPConNot* const notSprinting = new BAPConNot(checkPointer(new BAPConSprinting));
+            sequence->addStatement(checkPointer(new BAPIf(checkPointer(notSprinting), checkPointer(sensing), 0,
+                                                          m_behaviourId, true, false)));
+        } else {
+            sequence->addStatement(checkPointer(new BAPOverrideSensingAgent));
+        }
+        BAPParallel* const body = checkPointer(new BAPParallel(m_behaviourId, 7, false));
+        if (!weapon->hasAutoReload() && weapon->getNumberOfMags() != 1) {
+            const int noShots = 0;
+            BAPConMagazine* const empty = checkPointer(
+                new BAPConMagazine(weaponValue, context->createVariable<int>(noShots, 0), false));
+            BAPTrigger* const reload = checkPointer(new BAPTrigger(0x20, checkPointer(new BAPConTrue),
+                                                                   checkPointer(new BAPConFalse), 1ULL << 32,
+                                                                   m_behaviourId, 0.0, false));
+            body->addStatement(checkPointer(new BAPIf(empty, reload, 0, m_behaviourId, true, false)));
+        }
+        BotScript* fire;
+        if (!guidance) {
+            body->addStatement(checkPointer(new BAPAimingWrapper(aimDirection, aimValid, aimPosition,
+                                                                 equipmentHandle, targetHandle, true)));
+            fire = buildDirectFire(bot, plan, weaponValue, targetValue, aimValid, aimDirection, aimPosition,
+                                   lookPosition, weapon, own, control, target, targetPhysical, 0);
+        } else {
+            body->addStatement(checkPointer(new BAPLookAtWrapper(targetHandle, lookPosition, true, guidance == 3,
+                                                                 aimDirection, aimValid)));
+            fire = buildGuidedFire(bot, plan, weaponValue, targetValue, lookPosition, weapon, own, control,
+                                   target, targetPhysical, guidance);
+        }
+        BAPConAimOnTarget* const aimed = checkPointer(
+            new BAPConAimOnTarget(targetHandle, equipmentHandle, aimValid, aimDirection, false));
+        body->addStatement(checkPointer(new BAPIf(aimed, fire, 0, m_behaviourId, true, false)));
+        sequence->addStatement(body);
+        return finishScript(bot, plan, weapon, targetHandle, root);
     }
     if (!plan->m_bool14) {
         // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bbp-fire-infantery-builder]
