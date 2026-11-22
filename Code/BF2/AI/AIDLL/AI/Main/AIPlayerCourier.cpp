@@ -7,6 +7,11 @@
 #include "../../../../Core/ClassManager.h"
 #include "CommonSingletonServer.h"
 #include "AIDllFrontier.h"
+#include "IBotManager.h"
+#include "../AIBot/BotMain.h"
+#include "../AIKnowledge/Information.h"
+#include "../AIKnowledge/InformationManager.h"
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
 
 namespace dice {
 namespace hfe {
@@ -38,24 +43,53 @@ AIPlayerCourier::~AIPlayerCourier()
 {
 }
 
-int AIPlayerCourier::getSelectedVehicle(int)
+namespace {
+
+// The engine object of a handle's information, or null.
+world::IObject* engineObjectOf(unsigned int handle)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerCourier::getSelectedVehicle");
+    Information* const information = informationManager->getInformation(handle);
+    if (!information)
+        return 0;
+    return information->getAIObject()->getObject();
 }
 
-int AIPlayerCourier::getRepairTarget(int)
+} // anonymous namespace
+
+// PE 100BF0E0. The vehicle the player's bot is changing into, or null.
+world::IObject* AIPlayerCourier::getSelectedVehicle(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerCourier::getRepairTarget");
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId);
+    if (!bot)
+        return 0;
+    return engineObjectOf(bot->getChangeTarget());
 }
 
-int AIPlayerCourier::getReviveTarget(int)
+// PE 100BF140. Reads the bot's bridge-repair target, as shipped.
+world::IObject* AIPlayerCourier::getRepairTarget(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerCourier::getReviveTarget");
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId);
+    if (!bot)
+        return 0;
+    return engineObjectOf(bot->getBridgeRepairTarget());
 }
 
-int AIPlayerCourier::getMineDefuseTarget(int)
+// PE 100BF1A0.
+world::IObject* AIPlayerCourier::getReviveTarget(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayerCourier::getMineDefuseTarget");
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId);
+    if (!bot)
+        return 0;
+    return engineObjectOf(bot->getReviveTarget());
+}
+
+// PE 100BF080. The bot's mine target handle, or -1 without a bot.
+unsigned int AIPlayerCourier::getMineDefuseTarget(int playerId)
+{
+    Bot* const bot = IBotManager::instance->getBotFromPlayerId(playerId);
+    if (!bot)
+        return static_cast<unsigned int>(-1);
+    return static_cast<BotMain*>(bot)->getMineTarget();
 }
 
 } // namespace ai
