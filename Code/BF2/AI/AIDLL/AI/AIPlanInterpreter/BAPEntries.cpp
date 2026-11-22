@@ -17,6 +17,7 @@
 #include "../AIKnowledge/IPIControlInfo.h"
 #include "../../../AIInterface/BFKnowledge/AIPlayer.h"
 #include <cmath>
+#include <cstring>
 #include "../AIBot/BotMain.h"
 #include "../AIBotActionPlan/BAPStatements.h"
 #include "../AIKnowledge/Information.h"
@@ -431,10 +432,7 @@ int EntryTankMoveToObject::getTargetId()
     return 9;
 }
 
-bool EntryTankMoveToObject::execute(BotScript *, Bot *, bool&, bool&)
-{
-    BF2_AI_FRONTIER("dice::hfe::ai::EntryTankMoveToObject::execute");
-}
+// EntryTankMoveToObject::execute follows EntryTankMoveTo::execute below.
 
 
 EntryTankMoveToDirection::EntryTankMoveToDirection()
@@ -1906,6 +1904,117 @@ bool EntryTankMoveTo::execute(BotScript* script, Bot* bot, bool& finished, bool&
     return true;
 }
 
+
+// PE 10138DE0. EntryTankMoveTo toward the move's object: physics is enabled when off (with no
+// forcing setting), an unknown object fails unfinished, and the move is asked whether it has
+// finished on every tick rather than once a second. The object's radius goes to the steering
+// bit for bit, and the steer direction is normalised past 1e-6 instead of 1e-5.
+bool EntryTankMoveToObject::execute(BotScript* script, Bot* bot, bool& finished, bool& failed)
+{
+    Information* const equipment = informationManager->getInformation(bot->getCurrentEquipment());
+    IPIMobile* const mobile = equipment->getMobile();
+    IPIControlInfo* const control = equipment->getControlInfo();
+    IPIPhysical* const physical = equipment->getPhysical();
+    if (!mobile || !control || !physical)
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    IAIObjectPhysical* const physics = equipment->getAIObject()->getPhysical();
+    if (!physics->hasPhysicsEnabled())
+        physics->enablePhysics(equipment->getSide());
+    BAPAMove* const move = static_cast<BAPAMove*>(script);
+    Information* const target = informationManager->getInformation(move->getTargetObject());
+    if (!target)
+    {
+        failed = true;
+        finished = false;
+        return true;
+    }
+    if (move->isFinished(bot))
+    {
+        failed = true;
+        finished = true;
+        return true;
+    }
+
+    failed = false;
+    Vec2 steer;
+    steer.x = steer.y = 0.0f;
+    const float targetRadius = target->getPhysical()->getRadius();
+    int radiusBits;
+    std::memcpy(&radiusBits, &targetRadius, sizeof radiusBits);
+    bool steerFailed;
+    finished = move->getSteering(steer, failed, steerFailed, radiusBits);
+    if (!finished || steerFailed || failed)
+    {
+        const bool stop = !finished;
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;   // PE 1006EE50
+        finished = resetVehicleControls(input, true, false, false, forward, s_tankBrakeLimit);
+        if (stop)
+            failed = true;
+        return true;
+    }
+
+    // Two reads: z comes from the first, x from the second, as shipped.
+    const Vec3& first = equipment->getPosition();
+    Vec2 flatPosition;
+    flatPosition.x = equipment->getPosition().x;
+    flatPosition.y = first.z;
+    equipment->getTransformation();   // read twice and dropped, as shipped
+    equipment->getTransformation();
+    Vec2 direction;
+    direction.x = steer.x - flatPosition.x;
+    direction.y = steer.y - flatPosition.y;
+    const float distance = std::sqrt(direction.y * direction.y + direction.x * direction.x);
+    if (distance > 9.999999974752427e-07f)   // PE 1027B9D0
+    {
+        const float inverse = 1.0f / distance;
+        direction.x = direction.x * inverse;
+        direction.y = direction.y * inverse;
+    }
+    float turnFactor = 1.0f;
+    float turn;
+    if (std::fabs(mobile->getSpeedMagnitude()) > 3.0f && move->getPathTurn(turn))
+    {
+        const float sharpness = std::max(std::fabs(turn) - 0.35f, 0.0f) * 2.5f;   // PE 10086630
+        turnFactor = 1.0f - std::min(1.0f, sharpness) * 0.7f;                     // PE 100C1A20
+    }
+    float throttle;
+    float steering;
+    float speedWeight;
+    float maxSpeedFactor;
+    finished = vehicleSteering(false, bot, equipment, direction, distance, move, throttle, steering, speedWeight,
+                               maxSpeedFactor);   // PE 101C53E0
+    if (throttle == 666.0f)
+    {
+        io::PlayerInput* const input = bot->playerInput();
+        const Vec3& speed = mobile->getSpeed();
+        const Vec3 facing = equipment->getFaceing();
+        const float forward = speed.z * facing.z + speed.y * facing.y + speed.x * facing.x;
+        finished = resetVehicleControls(input, true, false, false, forward, s_tankBrakeLimit);
+        failed = true;
+        return true;
+    }
+    if (!finished)
+        return true;
+    const float maxSpeed = mobile->getMaxSpeed();
+    const float dx = steer.x - flatPosition.x;
+    const float dz = steer.y - flatPosition.y;
+    const float remainingSquared = dz * dz + dx * dx;
+    float approach = 1.0f;
+    const float clearance = remainingSquared - physical->getSmallestRadius() - 0.5f;
+    if (clearance < 196.0f)
+        approach = std::max(0.35f, clearance / 196.0f);
+    const float cruise = std::min(approach, turnFactor) * maxSpeed;
+    finished = driveTank(equipment, control, mobile, physical, bot->playerInput(), &direction, cruise, throttle,
+                         steering, speedWeight, maxSpeedFactor);
+    return true;
+}
 
 EntryTankTurnTo::EntryTankTurnTo()
 {
