@@ -8,6 +8,7 @@
 #include "../../../Core/Debug.h"        // the no-settings report
 
 #include "AIFrontier.h"
+#include "AIPlayer.h"
 
 #include "../../AIDLL/AI/Main/AISettingsInterfaces.h"  // IAISettings - the script override
 #include "../../../Game/GeneralSettings.h"                 // the menu's bot settings
@@ -23,6 +24,7 @@
 #include "../../../IO/Network/INetworkable.h"                 // INetworkable::m_networkableId
 #include "../../../Game/Objects/IPlayer.h"                  // getId
 #include "../../../Game/Objects/IObject.h"                  // getAbsolutePosition, getTemplate
+#include "../../../Game/Objects/Projectiles/GenericProjectile.h"   // getClosestHostileMine
 #include "../../../Game/Objects/ControlPointTemplate.h"     // getRadius, getUnableToChangeTeam
 #include "../../../Game/Objects/Game/ControlPoint.h"        // getTeam, getTakeOverCounter
 #include "../../../Game/GameLogic/ScoreSystem/ScoreManager.h" // scoreManager, TeamScore::m_tickets
@@ -134,9 +136,67 @@ int BFGame::getTickets(int team) const
     return static_cast<world::IScoreManager*>(world::scoreManager)->getTeamScore(team)->m_tickets;
 }
 
+// Client PE 816600. Scans at most 100 of the mines near the player's soldier, skipping friendly
+// ones and the ignored ids, and reports the closest: its id, position and up axis. `found` is the
+// closest mine's visibility: false when its radius trigger type is 2. Returns whether any mine was
+// taken; the player is not null-checked.
 int BFGame::getClosestHostileMine(IAIPlayer* player, Vec3 from, bool& found, Vec3& position, Vec3& normal, unsigned int& id, std::vector<unsigned int>& ignore) const
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFGame::getClosestHostileMine");
+    bool any = false;
+    world::IPlayer* const owner = player->getPlayer();
+    const int side = player->getSide();
+    std::vector<world::IObject*> mines;
+    owner->getCloseMines(mines);
+    float closest = 3.40282347e+38f;
+    if (!mines.empty())
+    {
+        int checked = 0;
+        for (std::vector<world::IObject*>::iterator it = mines.begin(); it != mines.end(); ++it)
+        {
+            if (++checked > 100)
+                break;
+            world::IObject* const mine = *it;
+            // [INFERRED] the IProjectileObject face's +0x60 slot is GenericProjectile::getTeam, the
+            // interface's only implementer; that face stays undeclared, so the concrete owner is used.
+            world::GenericProjectile* const projectile = static_cast<world::GenericProjectile*>(
+                static_cast<world::IProjectileObject*>(mine->queryInterface(::dice::hfe::world::IID_IProjectileObject)));
+            if (projectile->getTeam() == side)
+                continue;
+            const unsigned int mineId = mine->getObjectId();
+            bool ignored = false;
+            for (std::vector<unsigned int>::const_iterator skip = ignore.begin(); skip != ignore.end(); ++skip)
+            {
+                if (mineId == *skip)
+                {
+                    ignored = true;
+                    break;
+                }
+            }
+            if (ignored)
+                continue;
+            const Vec3& at = mine->getAbsolutePosition();
+            const float dx = from.x - at.x;
+            const float dy = from.y - at.y;
+            const float dz = from.z - at.z;
+            const float distanceSq = dz * dz + dy * dy + dx * dx;
+            if (!(distanceSq < closest))
+                continue;
+            closest = distanceSq;
+            id = mineId;
+            position = at;
+            any = true;
+            const Mat4& transformation = mine->getAbsoluteTransformation();
+            normal.x = transformation.m[8];
+            normal.y = transformation.m[9];
+            normal.z = transformation.m[10];
+            found = true;
+            world::IProjectileDetonationComp* const detonation = static_cast<world::IProjectileDetonationComp*>(
+                mine->queryComponent(::dice::hfe::world::IID_IProjectileDetonationComp, ::dice::hfe::world::IID_IProjectileDetonationComp));
+            if (detonation->getRadiusTriggerType() == 2)
+                found = false;
+        }
+    }
+    return any;
 }
 
 // Only gameLogic is guarded.
