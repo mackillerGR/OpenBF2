@@ -4,8 +4,12 @@
 
 #include <algorithm>   // std::min - spawnBots' bot budget
 #include <string>
+#if defined(__ANDROID__)
+#include <cstdio>
+#endif
 
-#include "../../../AIInterface/BFKnowledge/IAIObject.h"           // updateAIObject
+#include "../../../AIInterface/BFKnowledge/IAIObject.h"
+#include "../../../AIInterface/BFKnowledge/IAIObjectPlugIn.h"            // IAIObjectUnit           // updateAIObject
 #include "AIDllFrontier.h"                                        // the twenty named stops below
 #include "../AIUtils/checkPointer.h"                       // the ctor's dead null check
 #include "../AIBotBehaviour/CustomCurve.h"                 // SCurve / JCurve / DecleiningSlopeCurve
@@ -209,6 +213,11 @@ void AIMain::registerFreeBot(Bot* /*bot*/)
 // Activates the bot associated with a player ID.
 bool AIMain::activateBot(int playerId, int side, const std::string& name)
 {
+#if defined(__ANDROID__)
+    // [CHOSEN, not recovered] Diagnostic for the phone's exported log.
+    std::fprintf(stderr, "[AI] activateBot id=%d side=%d name=%s\n", playerId, side, name.c_str());
+    std::fflush(stderr);
+#endif
     IAIObjectEnvironment* const environment =
         static_cast<IAIObjectEnvironment*>(CommonSingletonServer::m_iaiObjectEnvironment);
 
@@ -497,14 +506,32 @@ double AIMain::getAISystemQuotient() const
     return m_aiSystemQuotient;
 }
 
-void AIMain::setPlayerExitedVehicle(IAIObject* /*o*/, int /*a*/)
+// PE 100D3B80. A human leaving a unit stamps the unit's last possession time with the game time
+// and allows bots on its primary object again. Bots and unknown players change nothing.
+void AIMain::setPlayerExitedVehicle(IAIObject* object, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::setPlayerExitedVehicle");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!object || !object->isUnit() || !player || player->getIsAIPlayer())
+        return;
+    IAIObjectUnit* const unit = object->getUnit();
+    unit->setLastPlayerPossesionTime(static_cast<IBFTimer*>(CommonSingletonServer::m_iBFTimer)->getGameTime());
+    object->getPrimaryObject()->setIsAllowedByBots(true);
 }
 
-void AIMain::setPlayerEnteredVehicle(IAIObject* /*o*/, IAIObject* /*v*/, int /*a*/)
+// PE 100D3C00. A human moving from one unit to a unit of another primary object gives the unit
+// he left a possession time of -1000.
+void AIMain::setPlayerEnteredVehicle(IAIObject* object, IAIObject* vehicle, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::setPlayerEnteredVehicle");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!vehicle || !vehicle->isUnit() || !object || !object->isUnit() || !player || player->getIsAIPlayer())
+        return;
+    IAIObject* const vehiclePrimary = vehicle->getPrimaryObject();
+    IAIObject* const objectPrimary = object->getPrimaryObject();
+    if (!vehiclePrimary || !objectPrimary || vehiclePrimary == objectPrimary)
+        return;
+    object->getUnit()->setLastPlayerPossesionTime(-1000.0);   // PE 1027B288
 }
 
 // Initializes the AI synchronously from the level script and returns a status message.

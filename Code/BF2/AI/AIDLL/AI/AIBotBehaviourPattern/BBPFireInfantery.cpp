@@ -1512,11 +1512,14 @@ BotScript* BBPFireInfantery::buildScript(Bot* bot, IPIControlInfo* controlArgume
                 m_behaviourId, false, aimValid, aimDirection));
             fireIf = checkPointer(new BAPIf(ready, fireSequence, holdAim, m_behaviourId, true, false));
         } else {
-            // Retail builds the guided look-and-fire sequence here (PE 101069D0: bot, plan, weapon
-            // and target variables, look position, weapon, own, control, target, its physical
-            // part, guidance) and holds a look at the target while not ready.
-            // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bbp-fire-infantery-guided]
-            BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildScript (guided fire while moving)");
+            // PE 10108E11: the guided sequence, with a look held on the target while not ready.
+            BotScript* const fireSequence = buildGuidedFire(bot, plan, weaponValue, targetValue, lookPosition,
+                                                            weapon, own, control, target, targetPhysical,
+                                                            guidance);
+            BotScript* const holdLook = checkPointer(new BAPALookAtObject(
+                bot, targetHandle, 0.0f, checkPointer(new BAPConFalse), control->getLookControls(),
+                m_behaviourId, lookPosition, 0.0f));
+            fireIf = checkPointer(new BAPIf(ready, fireSequence, holdLook, m_behaviourId, true, false));
         }
 
         BAPParallel* const body = checkPointer(new BAPParallel(m_behaviourId, 4, false));

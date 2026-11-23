@@ -423,7 +423,19 @@ void AIEventListener::handleEvent(EventCategory category,
             }
             return;
         case 0xEu:
-            unwrittenArm("category 3 id 14 - vehicle armament release", (int)category, id);
+            {
+                // PE 008150BB. The payload is the seat's AI object; one that borrowed its
+                // occupant's armament returns it, and both side handles are reset.
+                IAIObject* const seat = static_cast<IAIObject*>(userData);
+                if (seat && seat->getUnit() && seat->getUnit()->mustBorrowArmament(seat))
+                {
+                    seat->resetArmament();
+                    IAIInformationCourier* const information = static_cast<IAIInformationCourier*>(
+                        CommonSingletonServer::m_iaiInformationCourier);
+                    information->resetArmament(seat->getHandle(1));
+                    information->resetArmament(seat->getHandle(2));
+                }
+            }
             return;
         case 0xFu:
             unwrittenArm("category 3 id 15 - commander request (artillery/uav/supply/vehicle drop),"

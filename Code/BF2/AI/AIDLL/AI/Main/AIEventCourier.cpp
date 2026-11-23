@@ -107,9 +107,13 @@ void AIEventCourier::eventPlayerEnterVehicle(int playerId, IAIObject* vehicle, I
     IBotManager::instance->setBotChangedVehicle(playerId, vehicle);
 }
 
-int AIEventCourier::eventPlayerExitVehicle(IAIObject *, int)
+// PE 100BF360, a tail call into IAIMain::setPlayerExitedVehicle.
+// [CHOSEN, not recovered] The tail call leaves no defined result and no caller reads one, so this
+// returns zero.
+int AIEventCourier::eventPlayerExitVehicle(IAIObject* object, int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerExitVehicle");
+    IAIMain::m_instance->setPlayerExitedVehicle(object, playerId);
+    return 0;
 }
 
 void AIEventCourier::eventDrawDebug()
