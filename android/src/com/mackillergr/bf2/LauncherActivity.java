@@ -34,7 +34,7 @@ public class LauncherActivity extends Activity {
     private TextView status;
     private Spinner levels, resolution, graphics;
     private EditText server, name, cdKey;
-    private CheckBox touch, turnip, skipMovies;
+    private CheckBox touch, turnip, skipMovies, bots;
 
     private Button button(LinearLayout parent, String label, View.OnClickListener action) {
         Button b = new Button(this);
@@ -87,6 +87,8 @@ public class LauncherActivity extends Activity {
         turnip.setChecked(prefs.getBoolean("turnip", true)); root.addView(turnip);
         skipMovies = new CheckBox(this); skipMovies.setText("Παράλειψη βίντεο εισαγωγής"); skipMovies.setTextColor(Color.WHITE);
         skipMovies.setChecked(prefs.getBoolean("skipMovies", true)); root.addView(skipMovies);
+        bots = new CheckBox(this); bots.setText("Bots στο τοπικό παιχνίδι (δοκιμαστικό AI)"); bots.setTextColor(Color.WHITE);
+        bots.setChecked(prefs.getBoolean("bots", true)); root.addView(bots);
         button(root, "Έναρξη", new View.OnClickListener() { @Override public void onClick(View v) { start(true); } });
         button(root, "Απευθείας σε χάρτη / διακομιστή (χωρίς μενού)", new View.OnClickListener() { @Override public void onClick(View v) { start(false); } });
         button(root, "Εξαγωγή log", new View.OnClickListener() { @Override public void onClick(View v) { exportLog(); } });
@@ -189,6 +191,7 @@ public class LauncherActivity extends Activity {
             "--gfx", String.valueOf(graphics.getSelectedItemPosition()),
             "--cdkey", cdKey.getText().toString().trim()));
         if (skipMovies.isChecked()) args.add("--skipmovies");
+        if (bots.isChecked()) args.add("--bots");
         if (menu) args.add("--menu");
         else if (host.isEmpty()) args.addAll(Arrays.asList("--hosted", "--level", level.toString()));
         else args.addAll(Arrays.asList("--connect", host));
@@ -199,6 +202,7 @@ public class LauncherActivity extends Activity {
             .putBoolean("touch", touch.isChecked())
             .putBoolean("turnip", turnip.isChecked())
             .putBoolean("skipMovies", skipMovies.isChecked())
+            .putBoolean("bots", bots.isChecked())
             .putString("cdkey", cdKey.getText().toString().trim()).apply();
         Intent i = new Intent(this, GameActivity.class);
         i.putExtra("args", args.toArray(new String[0]));

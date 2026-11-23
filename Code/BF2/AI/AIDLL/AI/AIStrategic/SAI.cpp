@@ -956,7 +956,7 @@ bool SAI::hostileTakeoveInProgress(AIStrategicObject*& object, Vec2& position)
     for (std::vector<AIStrategicObject*>::const_iterator it = objects.begin(); it != objects.end(); ++it)
     {
         candidate = *it;
-        if (candidate && candidate->hasObjectTypeFlag(0x10) && candidate->isEnemyTakingOverBase(m_side) &&
+        if (candidate && candidate->hasObjectTypeFlag(AIStrategicObject::ControlPoint) && candidate->isEnemyTakingOverBase(m_side) &&
             candidate->getControlPointTakeOverCounter() < 0.75f)
         {
             object = candidate;

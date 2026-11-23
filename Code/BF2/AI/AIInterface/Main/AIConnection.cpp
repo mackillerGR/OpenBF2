@@ -1,6 +1,9 @@
 // [INFERRED] Source placement.
 
 #include <cstdio>
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 #include "AIConnection.h"
 #include "../AIInstance.h"                         // cross-port IAI clear dispatch
 #include "../../../Core/PluginDll.h"
@@ -88,14 +91,22 @@ bool AIConnection::init(std::string& libraryName)
         // the simple-singleton name "AI". Reading it straight back out of the registry is how the
         // handle is returned. ClassManager vtable +0x5C.
         m_data->m_ai = classManager->getSimpleSingleton(std::string("AI"));
+#if !DEDICATED && !defined(_WIN32)
+        // [CHOSEN, not recovered] Diagnostic for the portable client's log.
+        std::fprintf(stderr, "[AI] %s loaded, AI singleton %p\n", libraryName.c_str(), m_data->m_ai);
+        std::fflush(stderr);
+#endif
     }
 #if !DEDICATED && !defined(_WIN32)
-    // [CHOSEN, not recovered] The bot library has no client port yet: games run without bots.
-    // [RETIRE-WHEN: portable-aidll] Remove when the portable client ships the AI library.
+    // [CHOSEN, not recovered] A portable client without the bot library runs without bots instead
+    // of aborting, and logs why the library did not load.
+    // [RETIRE-WHEN: portable-aidll] Remove when every portable client package ships the AI library.
     else
     {
-        std::fprintf(stderr, "[FRONTIER] dice::hfe::ai::AIConnection::init: no %s, no bots\n",
-                     libraryName.c_str());
+        const char* const reason = ::dlerror();
+        std::fprintf(stderr, "[FRONTIER] dice::hfe::ai::AIConnection::init: no %s, no bots (%s)\n",
+                     libraryName.c_str(), reason ? reason : "initDll refused or no error text");
+        std::fflush(stderr);
     }
 #else
     else if (libraryName.compare("") != 0)

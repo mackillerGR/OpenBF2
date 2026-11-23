@@ -756,7 +756,7 @@ void installAndroidCrashReport()
 static std::string androidCommandLine(int argc, char** argv)
 {
     std::string mod, width = "1280", height = "720", name, level, server, libraryDir, driver;
-    bool hosted = false, menu = false, skipMovies = false;
+    bool hosted = false, menu = false, skipMovies = false, bots = false;
     int graphicsMode = 0;
     for (int i = 1; i < argc; ++i)
     {
@@ -764,6 +764,7 @@ static std::string androidCommandLine(int argc, char** argv)
         if (option == "--hosted") { hosted = true; continue; }
         if (option == "--menu") { menu = true; continue; }
         if (option == "--skipmovies") { skipMovies = true; continue; }
+        if (option == "--bots") { bots = true; continue; }
         if (i + 1 >= argc) break;
         const char* const value = argv[++i];
         if (option == "--mod") mod = value;
@@ -860,6 +861,10 @@ static std::string androidCommandLine(int argc, char** argv)
         }
         line += " +hostServer 1 +port 16567 +loadLevel " + level + " +gameMode gpm_cq +maxPlayers 16"
             + " +mapList " + mapList + " +config " + settings;
+        // [CHOSEN, not recovered] The launcher's bot switch: the retail +ai flag loads libaidll.so.
+        if (bots)
+            line += " +ai 1";
+        std::fprintf(stderr, "Hosted game: level %s, bots %s\n", level.c_str(), bots ? "on" : "off");
     }
     else
     {
