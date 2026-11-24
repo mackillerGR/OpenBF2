@@ -752,6 +752,29 @@ void Soldier::applyAnimationsOnSkeleton(float dt, bool updateGeometry)
             const Mat4* const bone = (base < 0) ? &Mat4::getIdentity()
                                                 : &skeleton->m_transforms[base];
             item->setRelativeTransformation(*bone);                           // slot 59 +0xEC
+#if defined(__ANDROID__) || defined(BF2_TMPTRACE_3P)
+            // [TEMP] [CHOSEN, not recovered] Diagnostic for third-person weapons drawn above
+            // remote soldiers on Android: bone 64 in soldier space and the item's world offset.
+            // [RETIRE-WHEN: weapon-3p-diag] Remove once the misplaced weapon is explained and fixed.
+            if (m_characterMode == 1)
+            {
+                static int weapon3pReports = 0;
+                if ((weapon3pReports++ % 900) == 0)
+                {
+                    const Mat4& b = skeleton->m_transforms[64];
+                    const Mat4& itemWorld = item->getAbsoluteTransformation();
+                    std::fprintf(stderr,
+                                 "[TEMP][WEAPON3P] #%d bones=%d bone64=(%.2f %.2f %.2f) up=(%.2f %.2f %.2f) "
+                                 "soldier=(%.2f %.2f %.2f) item-soldier=(%.2f %.2f %.2f)\n",
+                                 weapon3pReports, skeleton->m_boneCount, b.m[12], b.m[13], b.m[14],
+                                 b.m[4], b.m[5], b.m[6], soldierTransform->m[12], soldierTransform->m[13],
+                                 soldierTransform->m[14], itemWorld.m[12] - soldierTransform->m[12],
+                                 itemWorld.m[13] - soldierTransform->m[13],
+                                 itemWorld.m[14] - soldierTransform->m[14]);
+                    std::fflush(stderr);
+                }
+            }
+#endif
             item->getAbsoluteTransformation();                                // slot 33 forces the
                                                                               // recompute; discarded
             hackSetFov(item, m_characterMode ? -1.0f : *fov1p, true);
