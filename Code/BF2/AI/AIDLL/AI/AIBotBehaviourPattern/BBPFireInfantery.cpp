@@ -1653,9 +1653,132 @@ BotScript* BBPFireInfantery::buildScript(Bot* bot, IPIControlInfo* controlArgume
         return finishScript(bot, plan, weapon, targetHandle, root);
     }
     if (heavy) {
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: bbp-fire-infantery-builder]
-        // Recover the heavy weapon plan (PE 10109B68).
-        BF2_AI_FRONTIER("dice::hfe::ai::BBPFireInfantery::buildScript (heavy weapon)");
+        // ---- A heavy weapon (PE 10109B68) ----
+        // While the target lives: hold the aim on it and run the deployment once. Close to
+        // contact range, unpack with alternate fire while the weapon is in state one, fire, lock
+        // turning, move until the weapon reports ready, back off to thirty metres, then, in a
+        // crouched pose, pack again and fire once the weapon is back in state one; unlock turning.
+        bool heavyTargetMobile = target->getMobile() != 0;   // recomputed, as shipped
+        if (!heavyTargetMobile && !target->isPrimary())
+            heavyTargetMobile = informationManager->getInformation(target->getPrimaryObject(bot->getSide()))
+                                    ->getMobile() != 0;
+        {
+            BAPOverrideSensingAgent* const sensing = new BAPOverrideSensingAgent;
+            BAPConNot* const notSprinting = new BAPConNot(checkPointer(new BAPConSprinting));
+            sequence->addStatement(checkPointer(new BAPIf(checkPointer(notSprinting), checkPointer(sensing), 0,
+                                                          m_behaviourId, true, false)));
+        }
+        const int id = m_behaviourId;
+        BAPParallel* const body = checkPointer(new BAPParallel(id, 4, false));
+        BAPConAnd* const alive = checkPointer(new BAPConAnd);
+        alive->addCondition(checkPointer(
+            new BAPConNot(checkPointer(new BAPConObjectHealthBelow(targetHandle, 0.0f)))));
+        BAPWhile* const loop = checkPointer(new BAPWhile(alive, body, false, id));
+        {
+            Vec3 zero = {0.0f, 0.0f, 0.0f};
+            body->addStatement(checkPointer(new BAPAimAtObject(bot, targetHandle, zero, checkPointer(new BAPConFalse),
+                                                               control->getAimControls(), id, false, 0, 0)));
+        }
+        BAPSerial* const deploy = checkPointer(new BAPSerial(id, 1));
+        const float contact = targetPhysical->getSmallestRadius() + physical->getSmallestRadius();
+
+        if (heavyTargetMobile) {
+            {
+                const unsigned long long drive = control->getDriveControls();
+                const float slow = mobile->getMaxSpeed() * 0.5f;
+                deploy->addStatement(checkPointer(new BAPMoveToObjectFinding(
+                    bot, plan->m_target, contact, mobile->getMaxSpeed(), slow, 0, drive, id, 0, 0.0f, 1)));
+            }
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.5f;
+            BAPMoveToObjectFinding* const follow = checkPointer(new BAPMoveToObjectFinding(
+                bot, plan->m_target, 0.0f, mobile->getMaxSpeed(), slow, 0, drive, id, 0, 0.0f, 3));
+            BAPConTimer* const settle = checkPointer(new BAPConTimer(0.20000000298023224, false, false, false));
+            deploy->addStatement(checkPointer(new BAPWhile(checkPointer(new BAPConNot(settle)), follow, false, id)));
+        } else {
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.75f;
+            deploy->addStatement(checkPointer(new BAPMoveToFinding(bot, firePosition, mobile->getMaxSpeed(), slow, 0,
+                                                                   drive, id, 0.0f, 0.0f)));
+        }
+
+        {
+            BAPConFalse* const release = new BAPConFalse;
+            BAPConTrue* const until = new BAPConTrue;
+            BAPTrigger* const unpack = new BAPTrigger(weapon->getWeaponAltFire(), checkPointer(until),
+                                                      checkPointer(release),
+                                                      inputMask32(weapon->getWeaponAltFire()), id, 0.0, true);
+            BAPConWeaponStateOne* const stateOne = new BAPConWeaponStateOne(weaponValue);
+            deploy->addStatement(checkPointer(new BAPWhile(checkPointer(stateOne), checkPointer(unpack), false, id)));
+        }
+        {
+            BAPConFalse* const release = new BAPConFalse;
+            BAPConTrue* const until = new BAPConTrue;
+            deploy->addStatement(checkPointer(new BAPTrigger(weapon->getWeaponFire(), checkPointer(until),
+                                                             checkPointer(release),
+                                                             inputMask32(weapon->getWeaponFire()), id, 0.0, true)));
+        }
+        deploy->addStatement(checkPointer(new BAPICTurnLock(true)));
+
+        BotScript* approach;
+        if (heavyTargetMobile) {
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.5f;
+            approach = checkPointer(new BAPMoveToObjectFinding(bot, plan->m_target, 0.0f, mobile->getMaxSpeed(), slow,
+                                                               0, drive, id, 0, 0.0f, 2));
+        } else {
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.75f;
+            approach = checkPointer(new BAPMoveToFinding(bot, firePosition, mobile->getMaxSpeed(), slow, 0, drive, id,
+                                                         0.0f, 0.0f));
+        }
+        BAPConWeaponReady* const ready = checkPointer(new BAPConWeaponReady(weaponValue));
+        deploy->addStatement(checkPointer(new BAPWhile(checkPointer(new BAPConNot(ready)), approach, false, id)));
+
+        const float clearance = contact + 9.0f;   // PE 1027E4D8
+        if (heavyTargetMobile) {
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.5f;
+            deploy->addStatement(checkPointer(new BAPMoveToObjectFinding(
+                bot, plan->m_target, 30.0f, mobile->getMaxSpeed(), slow, 0, drive, id, 0, clearance, 2)));
+        } else {
+            const unsigned long long drive = control->getDriveControls();
+            const float slow = mobile->getMaxSpeed() * 0.75f;
+            deploy->addStatement(checkPointer(new BAPMoveToFinding(bot, firePosition, mobile->getMaxSpeed(), slow, 0,
+                                                                   drive, id, 30.0f, clearance)));
+        }
+
+        BAPParallel* const fireStage = checkPointer(new BAPParallel(id, -1, false));
+        fireStage->addStatement(checkPointer(new BAPSoldierPose(2, checkPointer(new BAPConTrue), id, true)));
+        BAPWhile* packLoop;
+        {
+            BAPConFalse* const release = new BAPConFalse;
+            BAPConTrue* const until = new BAPConTrue;
+            BAPTrigger* const pack = new BAPTrigger(weapon->getWeaponAltFire(), checkPointer(until),
+                                                    checkPointer(release),
+                                                    inputMask32(weapon->getWeaponAltFire()), id, 0.0, false);
+            BAPConNot* const notStateOne = new BAPConNot(checkPointer(new BAPConWeaponStateOne(weaponValue)));
+            packLoop = checkPointer(new BAPWhile(checkPointer(notStateOne), checkPointer(pack), false, id));
+        }
+        BAPSerial* const shots = checkPointer(new BAPSerial(id, -1));
+        shots->addStatement(packLoop);
+        shots->addStatement(checkPointer(new BAPIdle(
+            checkPointer(new BAPConTimer(0.699999988079071, false, false, false)), 0, id)));
+        {
+            BAPConFalse* const release = new BAPConFalse;
+            BAPConWeaponStateOne* const stateOne = new BAPConWeaponStateOne(weaponValue);
+            BAPTrigger* const shot = new BAPTrigger(weapon->getWeaponFire(), checkPointer(stateOne),
+                                                    checkPointer(release), inputMask32(weapon->getWeaponFire()),
+                                                    id, 0.0, false);
+            shots->addStatement(checkPointer(checkPointer(shot)));
+        }
+        fireStage->addStatement(shots);
+        deploy->addStatement(fireStage);
+        deploy->addStatement(checkPointer(new BAPICTurnLock(false)));
+        body->addStatement(deploy);
+        body->addStatement(checkPointer(new BAPMergeSoldierInputs(id)));
+        sequence->addStatement(loop);
+        return finishScript(bot, plan, weapon, targetHandle, root);
     }
 
     // ---- A known target, a weapon that is not heavy (PE 1010A7E2) ----
