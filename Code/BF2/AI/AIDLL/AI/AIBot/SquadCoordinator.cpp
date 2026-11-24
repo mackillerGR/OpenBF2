@@ -1386,7 +1386,7 @@ void SquadCoordinator::removeSquadMemberFire(SquadMember* member)
     }
 }
 
-// Stop on the first engine-recognized leader; later members
+// PE 101A4450. Stop on the first engine-recognized leader; later members
 // are not visited. No found leader leaves the old index intact. A first leader skips the
 // change arm, but the single-member trailing-position reset still runs.
 void SquadCoordinator::updateSquadLeader()
@@ -1410,11 +1410,22 @@ void SquadCoordinator::updateSquadLeader()
 
     if (oldLeader != m_i96 && oldLeader != -1 && !m_squadMembers.empty())
     {
+        // PE 101A44FC. The formation rejoins the new leader, the squad position and member paths
+        // follow; a human leader of a squad with others in it, on a side without a commanding
+        // player, drops the squad's assignment and maneuver state.
         m_squadMembers[m_i96]->updateMemberPos();
-        // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-        // Next: formation->joinSquadLeader, updateSquadPosition, updateSquadPaths
-        // then the human-leader/commander policy. Those movement bodies remain unrecovered.
-        BF2_AI_FRONTIER("dice::hfe::ai::SquadCoordinator::updateSquadLeader (SquadFormation::joinSquadLeader)");
+        m_formation->joinSquadLeader();
+        updateSquadPosition();
+        clearMemberPaths();
+        SquadMember* const leader = m_squadMembers[m_i96];
+        if (leader && !leader->isBot() && m_squadMembers.size() > 1
+            && !IAIMain::m_instance->getSAI(m_side + 1)->isPlayerCommander())
+        {
+            m_strategicAreaAssignment = 0;
+            m_i40 = 4;
+            m_i44 = 0;
+            m_i120 = 0;
+        }
     }
     if (m_squadMembers.size() == 1)
         m_formation->resetTrailingPositions();
