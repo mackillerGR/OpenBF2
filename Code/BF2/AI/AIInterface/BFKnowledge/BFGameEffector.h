@@ -28,13 +28,16 @@ public:
 
     virtual int enterVehicle(IAIPlayer* player, IAIObject* vehicle) = 0;
     virtual int exitVehicle(IAIPlayer* player) = 0;
-    virtual int terminatePlayer(int playerId) = 0;
-    virtual int terminatePlayer(IAIPlayer* player) = 0;
+    // PE 81F380 / 81F3C0 leave the void IGameServer::destroyPlayer result in eax; no return
+    // value is materialized, so neither overload returns one.
+    virtual void terminatePlayer(int playerId) = 0;
+    virtual void terminatePlayer(IAIPlayer* player) = 0;
     virtual int addBot(int& a, int& b, std::string& name) = 0;
     virtual int respawnBot(IAIPlayer* player) = 0;
     virtual void forceSpawnBot(IAIPlayer* player, const Vec3& position, const Vec3& rotation) = 0;
     virtual int giveDamage(IAIObject* target, world::IPlayer* from, int type, float amount) = 0;
-    virtual int playEffect(const Vec3& position, int a, int b) = 0;
+    // PE 81FCF0 materializes no return value after the void IGameLogic::playEffect call.
+    virtual void playEffect(const Vec3& position, int a, int b) = 0;
     virtual void playSoundEffects(double dt) = 0;
     virtual int suicide(IAIPlayer* player) = 0;
 };
@@ -47,21 +50,29 @@ public:
 
     virtual int enterVehicle(IAIPlayer* player, IAIObject* vehicle);
     virtual int exitVehicle(IAIPlayer* player);
-    virtual int terminatePlayer(int playerId);
-    virtual int terminatePlayer(IAIPlayer* player);
+    virtual void terminatePlayer(int playerId);
+    virtual void terminatePlayer(IAIPlayer* player);
     virtual int addBot(int& a, int& b, std::string& name);
     virtual int respawnBot(IAIPlayer* player);
     virtual void forceSpawnBot(IAIPlayer* player, const Vec3& position, const Vec3& rotation);
     virtual int giveDamage(IAIObject* target, world::IPlayer* from, int type, float amount);
-    virtual int playEffect(const Vec3& position, int a, int b);
+    virtual void playEffect(const Vec3& position, int a, int b);
     virtual void playSoundEffects(double dt);
     virtual int suicide(IAIPlayer* player);
 
 private:
     /* +0x00 */ // vptr
-    /* +0x04 */ int m_unknown04;         // [UNRESOLVED] - the constructor zeroes all three
-    /* +0x08 */ int m_unknown08;
-    /* +0x0C */ int m_unknown0C;
+    // A queued material effect: position plus the material pair passed to
+    // MaterialManager::getEffectTemplate. 20 bytes in the PE. [INFERRED] field names.
+    struct PendingEffect
+    {
+        Vec3 position;
+        int materialA;
+        int materialB;
+    };
+    // Effects queued by playEffect and replayed, then cleared, by playSoundEffects.
+    // PE +0x04 (MSVC 7.1 vector: allocator, first +0x08, last +0x0C, end +0x10).
+    std::vector<PendingEffect> m_pendingEffects;
 };
 
 } // namespace ai
