@@ -75,7 +75,7 @@ public:
     enum { kOCDataBuckets = 313 };
 
     ClusterNodeManager();
-    ~ClusterNodeManager();       // , [FRONTIER]
+    ~ClusterNodeManager();       // PE 10171350
 
     // PE 10170340 / 10170350.
     void setQuadTree(QuadTree* quadTree) { m_quadTree = quadTree; }

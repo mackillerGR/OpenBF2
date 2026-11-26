@@ -135,6 +135,14 @@ bool Thread::stop()
 {
     void* threadReturn;                              // read by pthread_join, never used
 
+    // [PLATFORM] [CHOSEN, not recovered] The ELF joins without checking `running`, so stopping a
+    // thread that was never started (AutoRecorder without sv.autoDemoHook) passes the ctor's
+    // uninitialised tid. The 2005 LinuxThreads libc rejected that handle with ESRCH and the ELF
+    // returned false; current glibc and Android's bionic crash on it instead. Returning false for
+    // a thread that is not running reproduces the original platform's result.
+    if (!m_impl->running)
+        return false;
+
     if (pthread_join(m_impl->tid, &threadReturn) != 0)
         return false;                                // `running` deliberately not cleared here
 

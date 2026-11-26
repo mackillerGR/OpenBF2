@@ -18,6 +18,8 @@
 #include "../AIUtils/checkPointer.h"
 #include "../AIUtils/DebugRendering/AIRenderUtil.h"   // setDraw clears the debug rendering
 #include "../AIPlanInterpreter/PlanInterpreter.h"
+#include "../AIBotBehaviour/BotBehaviour.h"
+#include "../AIBotBehaviourPattern/PlanGenerator.h"
 #include "../AIPlanInterpreter/BAPStatementType.h"
 #include "AIConsole.h"
 #include "BotBehaviourManager.h"
@@ -721,11 +723,43 @@ void AISettings::reset()
 }
 
 
-// [FRONTIER] Destruction requires cleanup of owned settings collections.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding AISettings operation.
+// PE 100C7E70. Deletes every behaviour, plan generator, plan interpreter and vehicle material
+// manager; the remaining members destroy themselves, and the per-vehicle modifier arrays are not
+// freed, as shipped.
+// [UNRESOLVED] Retail first deletes the object behind static 102C05E4 when it is set. Its
+// constructor (PE 1017E5F0) has no caller in the shipped image, so the static stays null and
+// the step is omitted here.
 AISettings::~AISettings()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AISettings::~AISettings");
+    for (unsigned int vehicle = 0; vehicle < m_behaviours.size(); ++vehicle)
+    {
+        for (unsigned int i = 0; i < m_behaviours[vehicle].size(); ++i)
+        {
+            if (m_behaviours[vehicle][i])
+                delete m_behaviours[vehicle][i];
+        }
+    }
+
+    for (unsigned int vehicle = 0; vehicle < m_planGenerators.size(); ++vehicle)
+    {
+        for (unsigned int i = 0; i < m_planGenerators[vehicle].size(); ++i)
+        {
+            if (m_planGenerators[vehicle][i])
+                delete m_planGenerators[vehicle][i];
+        }
+    }
+
+    for (unsigned int vehicle = 0; vehicle < m_planInterpreters.size(); ++vehicle)
+    {
+        if (m_planInterpreters[vehicle])
+            delete m_planInterpreters[vehicle];
+    }
+
+    for (unsigned int vehicle = 0; vehicle < m_vehicleMaterialManagers.size(); ++vehicle)
+    {
+        if (m_vehicleMaterialManagers[vehicle])
+            delete m_vehicleMaterialManagers[vehicle];
+    }
 }
 
 // Console bindings for bot population and startup settings.

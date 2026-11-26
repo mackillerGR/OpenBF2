@@ -71,12 +71,11 @@ AIStrategicObject::AIStrategicObject(float radius, float f148)
     m_category = -1;
 }
 
-// [FRONTIER] Destruction requires ordered statistics and container teardown.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when the destructor is recovered.
+// PE 100E9590. The four statistics objects are deleted in order; the sets go with the members.
 AIStrategicObject::~AIStrategicObject()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicObject::~AIStrategicObject");
+    for (int i = 0; i < 4; ++i)
+        delete m_statistics[i];
 }
 
 // native set size, side is one-based.

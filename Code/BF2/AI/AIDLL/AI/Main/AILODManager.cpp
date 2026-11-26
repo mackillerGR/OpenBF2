@@ -29,12 +29,11 @@ AILODManager::AILODManager(float basicLODDistance, float f36)
         m_instance = this;
 }
 
-// [FRONTIER] LOD-manager teardown remains unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when ordered destruction is recovered.
+// PE 10089740. Clears the singleton when it is this instance; the containers destroy themselves.
 AILODManager::~AILODManager()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AILODManager::~AILODManager");
+    if (m_instance == this)
+        m_instance = 0;
 }
 
 // Updates players, clears their statistics, and enables LOD regardless of its previous setting.

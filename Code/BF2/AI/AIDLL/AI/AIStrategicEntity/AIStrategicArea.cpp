@@ -186,13 +186,20 @@ void AIStrategicArea::addNeighbouringObject(AIStrategicObject* object)
     m_neighbouringObjects[count] = object;
 }
 
-// Eleven hundred bytes: the per-map array, four lists, the name, and whatever the twenty-eight
-// unwritten slots own. Not reachable before shutdown - `AIStrategicObjectManager`'s destructor is
-// the only caller and it already carries a guarded seam for its area delete loop.
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
+// PE 100E8300. The per-map array and the per-group arrays are deleted, and the flank list is
+// cleared before its own destruction clears it again.
 AIStrategicArea::~AIStrategicArea()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIStrategicArea::~AIStrategicArea");
+    delete[] m_mapData;
+    delete[] m_flagsA;
+    delete[] m_flagsB;
+    delete[] m_listsA;
+    delete[] m_listsB;
+    delete[] m_mapsA;
+    delete[] m_mapsB;
+    delete[] m_mapsC;
+    delete[] m_mapsD;
+    m_list392.clear();
 }
 
 // Returns type code zero. [UNRESOLVED] Its meaning is not established as a StrategicObjectType.

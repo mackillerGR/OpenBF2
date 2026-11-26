@@ -781,12 +781,14 @@ void BotManager::setSystemQuotient(unsigned a, unsigned b, unsigned c)
 // [FRONTIER] Active-bot counting requires the remaining state predicates.
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding BotManager operation.
 
-// [FRONTIER] Bot-manager destruction remains unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when owned bot and scheduler teardown is recovered.
+// PE 101912A0. The pool and queues are torn down by reset, then the queues reset left in place are
+// deleted - the sensing queue reset never replaced, and the two priority queues it rebuilt.
 BotManager::~BotManager()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::~BotManager");
+    reset();
+    delete m_queuePriorityA;
+    delete m_queuePriorityB;
+    delete m_queueSensing;
 }
 
 // [FRONTIER] Remaining bot-manager virtual operations stop visibly when reached.
@@ -1185,9 +1187,40 @@ void BotManager::removeMineTarget(unsigned int)
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::removeMineTarget");
 }
 
+// PE 10190B40. Deletes every pooled bot and its info, empties the pool and roster, rebuilds the
+// two priority queues (the sensing queue is deleted only by the destructor) and restores the
+// scheduling defaults - which differ from the constructor's. Always true.
 bool BotManager::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotManager::reset");
+    m_planCursor = 0;
+    for (std::vector<BotInfo*>::iterator it = m_botInfos.begin(); it != m_botInfos.end(); ++it)
+    {
+        BotInfo* const info = *it;
+        if (!info)
+            continue;
+        delete info->m_bot;
+        delete info;
+    }
+    m_botInfos.resize(0, 0);
+    m_bots.resize(0, 0);
+    delete m_queuePriorityA;
+    delete m_queuePriorityB;
+    m_list56.clear();
+
+    setLodLevelTicks(3, 2, 1);
+    setLodLevelPriority(3, 2, 1);
+    const double plannedFull = 0.5, plannedMedium = 1.0, plannedLight = 3.0;
+    setPlannedDecisionMakingThreshold(plannedFull, plannedMedium, plannedLight);
+    const double unplannedFull = 0.3, unplannedMedium = 0.8, unplannedLight = 2.0;
+    setUnplannedDecisionMakingThreshold(unplannedFull, unplannedMedium, unplannedLight);
+    setDecisionMakingInterleave(2, 2);
+    setSensingQuotient(1, 1);
+    setSystemQuotient(30, 40, 30);
+
+    m_queuePriorityA = new BotQueue;
+    m_queuePriorityB = new BotQueue;
+    m_tickCount180 = 0;
+    return true;
 }
 
 // PE 10191230.

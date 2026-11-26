@@ -5,6 +5,9 @@
 #include "AIPlayer.h"
 
 #include "AIFrontier.h"
+#include "../AIInstance.h"                            // g_aiInstance, isShuttingDown
+#include "../../AIDLL/AI/Main/AISettings.h"            // IAISettingsModifier::setBotNameUnused
+#include "../../../Game/IGameLogic.h"                 // gameLogic->killPlayer
 
 #include "../../AIDLL/AI/Main/CommonSingletonServer.h"
 #include "../../AIDLL/AI/AIUtils/checkPointer.h"
@@ -63,9 +66,13 @@ AIPlayer::AIPlayer()
 
 // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
 // Destruction remains unimplemented; AIPlayerFactory::destroy reaches this boundary.
+// PE 8265C0. While the AI is up and not shutting down, an AI-controlled player's name is handed
+// back to the bot-name pool.
 AIPlayer::~AIPlayer()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::~AIPlayer");
+    if (g_aiInstance && !aiInstance()->isShuttingDown() && m_player && m_player->getIsAIPlayer())
+        static_cast<IAISettingsModifier*>(CommonSingletonServer::m_iaiSettingsModifier)
+            ->setBotNameUnused(m_player->getName());
 }
 
 // Delegates to the wrapped engine player through the typed interface.
@@ -294,10 +301,14 @@ int AIPlayer::getNumShotsFired(IWeapon*)
     return 0;
 }
 
+// PE 8260D0. Unless the AI is shutting down, a live player is killed through the game logic.
+// The AI singleton is not null-checked.
 void AIPlayer::removePlayerFromGame()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIPlayer::removePlayerFromGame"
-                    " - read except for the singleton at ds:0x8AC37F8");
+    if (aiInstance()->isShuttingDown())
+        return;
+    if (m_player && m_player->getIsAlive())
+        gameLogic->killPlayer(m_player, true, false);
 }
 
 void AIPlayer::setName(const std::string&)

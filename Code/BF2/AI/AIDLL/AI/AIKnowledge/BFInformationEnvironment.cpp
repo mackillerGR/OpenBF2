@@ -102,9 +102,13 @@ BFInformationEnvironment::BFInformationEnvironment()
 // [FRONTIER] Unimplemented environment queries and modifiers stop by name.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
+// PE 10192D20. Deletes every grid, the second vector's first; null slots are skipped.
 BFInformationEnvironment::~BFInformationEnvironment()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BFInformationEnvironment::~BFInformationEnvironment");
+    for (std::vector<IAIInformationGrid*>::iterator it = m_gridsB.begin(); it != m_gridsB.end(); ++it)
+        delete *it;
+    for (std::vector<IAIInformationGrid*>::iterator it = m_gridsA.begin(); it != m_gridsA.end(); ++it)
+        delete *it;
 }
 
 namespace {

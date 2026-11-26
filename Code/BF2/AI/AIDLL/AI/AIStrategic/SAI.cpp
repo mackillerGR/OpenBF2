@@ -370,12 +370,17 @@ SAI::SAI(int side, int, int, Vec2, Vec2)
 }
 
 // [FRONTIER] Strategy and distribution operations remain incomplete.
-// [FRONTIER] Destruction stops until ordered teardown is implemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace each stop when its corresponding behavior is recovered.
+// PE 101457A0. The commander interface and both statistics objects are deleted, then the four
+// state arrays; the containers go with the members.
 SAI::~SAI()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SAI::~SAI");
+    delete m_commander;
+    delete m_enemyStats;
+    delete m_friendlyStats;
+    delete[] m_stateA;
+    delete[] m_stateB;
+    delete[] m_stateC;
+    delete[] m_stateD;
 }
 
 

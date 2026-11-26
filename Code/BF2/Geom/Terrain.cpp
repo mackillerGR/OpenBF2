@@ -1874,10 +1874,11 @@ namespace {
 // dword_1023DDBC + 0x1A4 - the texture word of the Ra constants' WaterMap holder (+0x1A0), which
 // setupWater's 3D arm fills with the water volume. Re-read at every use, as the shipped body
 // re-reads the global.
-inline dx9rend::EngineTexture*& raWaterMapTexture()
+// The block stores its texture words packed, so the read goes through the holder accessor rather
+// than a native pointer at +0x1A4, which spans two words on a 64-bit port.
+inline dx9rend::EngineTexture* raWaterMapTexture()
 {
-    return *reinterpret_cast<dx9rend::EngineTexture**>(
-        static_cast<unsigned char*>(dx9rend::g_raShaderConstants) + 0x1A4);
+    return dx9rend::raShaderConstantsGetEngineTexture(0x1A0);
 }
 
 // A parameter handle's release: vslot +0x08 of the ShaderParameter init() took a reference on
@@ -1982,19 +1983,9 @@ void Terrain::releaseWater()
             ::renddx9abi::engineFree(again);
         }
     }
-    {
-        dx9rend::EngineTexture*& slot = raWaterMapTexture();
-        dx9rend::EngineTexture* const held = slot;
-        if (held)
-        {
-            if (!--held->refCount)
-            {
-                dx9rend::textureDtor(held);
-                ::renddx9abi::engineFree(held);
-            }
-            slot = 0;
-        }
-    }
+    // The holder's own release: drops its reference and clears the word, as the shipped body does
+    // inline, and leaves an empty holder untouched.
+    dx9rend::raShaderConstantsSetEngineTexture(0x1A0, 0);
 
     TerrainWaterFrameList* const frames = m_waterTextureList;
     if (frames)

@@ -90,7 +90,7 @@ public:
 
     QTSearchNodeManager();
     explicit QTSearchNodeManager(QuadTree* quadTree);
-    ~QTSearchNodeManager();                      // [FRONTIER]
+    ~QTSearchNodeManager();                      // PE 1016FAD0
 
     void setQuadTree(QuadTree* quadTree) { m_quadTree = quadTree; }          // PE 1016EDC0
     // A node for the polygon, from the spare list when it has one; a recycled node keeps its

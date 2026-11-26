@@ -74,7 +74,7 @@ class BFInformationEnvironment : public IAIInformationEnvironment,
 {
 public:
     BFInformationEnvironment();                  // - , complete
-    virtual ~BFInformationEnvironment();         // [FRONTIER]
+    virtual ~BFInformationEnvironment();
 
     // IAIInformationEnvironment. All-information, Vec3/Vec2 radius and rectangle wrappers written.
     virtual void getFriendlyUnits(std::vector<unsigned int>&, const Vec3&, Bot*, float) const;

@@ -366,12 +366,45 @@ void QTSearchNodeManager::buildPath(QTPath* path, QTSearchNode* goal)
     path->m_cost = goal->m_cost;
 }
 
-// [FRONTIER] Node-manager table and cache-chain teardown remains unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when all owned-resource cleanup is recovered.
+// PE 1016FAD0. Frees the spare nodes, then every state in the table with the node it holds, then
+// the spare states, the table and the goal. Only the spare nodes and the goal lower the
+// allocation count, as shipped.
 QTSearchNodeManager::~QTSearchNodeManager()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::QTSearchNodeManager::~QTSearchNodeManager");
+    while (m_nodeCache)
+    {
+        QTSearchNode* const node = m_nodeCache;
+        m_nodeCache = node->m_next;
+        delete node;
+        --m_allocatedNodes;
+    }
+
+    for (int i = 0; i < kCacheEntries; ++i)
+    {
+        State* state = m_table[i].m_head;
+        while (state)
+        {
+            State* const next = state->m_next;
+            delete state->m_node;
+            delete state;
+            state = next;
+        }
+    }
+
+    while (m_stateCache)
+    {
+        State* const state = m_stateCache;
+        m_stateCache = state->m_next;
+        delete state;
+    }
+
+    delete[] m_table;
+
+    if (m_goal)
+    {
+        delete m_goal;
+        --m_allocatedNodes;
+    }
 }
 
 } // namespace ai

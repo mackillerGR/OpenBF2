@@ -189,14 +189,15 @@ void staticMeshGeomsDestroyRange(char* first, char* last)
 {
     for (char* p = first; p != last; p += sizeof(StaticMeshGeom))
     {
-        vc71::vector_layout* distances = reinterpret_cast<vc71::vector_layout*>(p + 0x10);
+        // Typed rather than at the raw +0x10, which is the middle of `lods` on a 64-bit port.
+        vc71::vector_layout* distances = &reinterpret_cast<StaticMeshGeom*>(p)->lodDistances;
         if (distances->first)
             ::renddx9abi::engineFree(distances->first);
         distances->first = 0;
         distances->last  = 0;
         distances->end   = 0;
 
-        vc71::vector_layout* lods = reinterpret_cast<vc71::vector_layout*>(p);
+        vc71::vector_layout* lods = &reinterpret_cast<StaticMeshGeom*>(p)->lods;
         if (lods->first)
             ::renddx9abi::engineFree(lods->first);
         lods->first = 0;

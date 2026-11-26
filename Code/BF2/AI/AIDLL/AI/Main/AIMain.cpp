@@ -186,9 +186,18 @@ AIMain::AIMain()
     m_sai[2] = 0;
 }
 
+// PE 100D6540. Every side's strategic AI from side one is deleted and cleared, then the bot
+// manager; the containers go with the members.
 AIMain::~AIMain()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::~AIMain");
+    const IAISettings* settings = static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    for (int side = 1; side < settings->getNSides() + 1; ++side)
+    {
+        delete m_sai[side];
+        m_sai[side] = 0;
+        settings = static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    }
+    delete m_botManager;
 }
 
 // The twenty remaining virtual slots, in vtable order. Addresses and sizes are in the [FRONTIER]

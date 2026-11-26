@@ -93,12 +93,42 @@ Strategy* StrategyManager::getForcedStrategy(int team)
     return m_forcedStrategy[team - 1];
 }
 
-// [FRONTIER] Remaining strategy-management operations require strategy and condition behavior.
-// reset is also reached by destruction.
-// [RETIRE-WHEN: aidll-02-skeleton] Replace each stop when its corresponding behavior is recovered.
+// PE 10099990. Clears the forced strategies and the debug flag, then deletes every strategy,
+// prerequisite and condition. The object modifiers and the areas are left untouched. The retail
+// name string reads "No Strategiws", unlike the constructor's "No Strategies"; the typo is
+// preserved. [UNRESOLVED] The retail body ends with `mov al, 1`, which suggests a bool return;
+// the declared void signature is kept until a caller is shown to read it.
 void StrategyManager::reset()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::StrategyManager::reset");
+    m_forcedStrategy[0] = 0;
+    m_forcedStrategy[1] = 0;
+    m_enableDebug = false;
+
+    for (std::map<std::string, Strategy*>::iterator it = m_strategies.begin();
+         it != m_strategies.end(); )
+    {
+        delete it->second;
+        m_strategies.erase(it++);
+    }
+    m_activeStrategyName = std::string("No Strategiws");
+    m_activeStrategy = 0;
+
+    for (std::map<std::string, StrategyPrerequisite*>::iterator it = m_prerequisites.begin();
+         it != m_prerequisites.end(); )
+    {
+        delete it->second;
+        m_prerequisites.erase(it++);
+    }
+    m_activePrerequisiteName = std::string("No Prerequisites");
+    m_activePrerequisite = 0;
+
+    for (std::map<std::string, StrategyCondition*>::iterator it = m_conditions.begin();
+         it != m_conditions.end(); )
+    {
+        delete it->second;
+        m_conditions.erase(it++);
+    }
+    m_activeCondition = m_conditions.end();
 }
 
 // PE 10095A00. Callers in the strategy evaluators discard the result.

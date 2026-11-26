@@ -31,12 +31,76 @@ ClusterNodeManager::ClusterNodeManager()
     m_ocDataHash->m_nodeManager = this;
 }
 
-// [FRONTIER] Cleanup of the hash, buckets, and OCData chain remains unimplemented.
-// [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: aidll-02-skeleton]
-// Replace the stop when ordered node-manager teardown is recovered.
+// PE 10171350. Frees the spare nodes and the free open/closed records, then walks the hash and
+// frees every record with its node, then the hash, its buckets and the goal. Each walked record
+// lowers both counts even when it holds no node, as shipped.
+// [CHOSEN, not recovered] Retail reads a walked record's successor after freeing it; the value
+// is read before the free here, which yields the same walk without the use-after-free.
 ClusterNodeManager::~ClusterNodeManager()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::ClusterNodeManager::~ClusterNodeManager");
+    while (m_spareNodes)
+    {
+        ClusterNode* const node = m_spareNodes;
+        m_spareNodes = node->m_next;
+        delete node;
+        --m_allocatedNodes;
+    }
+
+    while (m_freeOCData)
+    {
+        OCData* const data = m_freeOCData;
+        m_freeOCData = data->m_next;
+        delete data;
+        --m_allocatedOCData;
+    }
+
+    typedef Hash<OCData, ClusterNodeManager, OCData> OCDataHash;
+    OCDataHash* const hash = m_ocDataHash;
+    OCDataHash::Bucket* bucket;
+    OCData* data;
+    if (hash->m_count > 0)
+    {
+        bucket = hash->m_firstUsed;
+        hash->m_walkBucket = bucket;
+        data = bucket->m_head;
+        hash->m_walkNode = data;
+    }
+    else
+    {
+        hash->m_walkBucket = hash->m_endBucket;
+        hash->m_walkNode = hash->m_endNode;
+        hash->m_walkHash = hash->m_endHash;
+        bucket = hash->m_walkBucket;
+        data = hash->m_walkNode;
+    }
+    while (bucket != m_ocDataHash->m_endBucket || data != m_ocDataHash->m_endNode)
+    {
+        OCData* const next = data->m_next;
+        delete data->m_node;
+        delete data;
+        --m_allocatedOCData;
+        --m_allocatedNodes;
+
+        data = next;
+        if (!data)
+        {
+            bucket = bucket->m_next;
+            if (bucket)
+                data = bucket->m_head;
+        }
+    }
+
+    if (m_ocDataHash)
+    {
+        delete[] m_ocDataHash->m_buckets;
+        delete m_ocDataHash;
+    }
+
+    if (m_goalNode)
+    {
+        delete m_goalNode;
+        --m_allocatedNodes;
+    }
 }
 
 ClusterNode* ClusterNode::getFirstSuccessor(ClusterNodeManager* manager, int& kind, unsigned short& edge)

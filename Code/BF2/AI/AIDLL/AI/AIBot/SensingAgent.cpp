@@ -59,9 +59,11 @@ SensingAgent::SensingAgent(BotMain* owner, unsigned char /*behaviourCount*/)
 // [FRONTIER] Remaining sensing-plan operations require implementation.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
+// PE 101B0F80. Deletes the senses and the script context; the plan is not deleted here.
 SensingAgent::~SensingAgent()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::SensingAgent::~SensingAgent");
+    delete m_senses;
+    delete m_bapContext;
 }
 
 // Deletes the owned plan and marks planning state for refresh.

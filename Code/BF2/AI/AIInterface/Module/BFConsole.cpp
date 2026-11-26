@@ -738,7 +738,7 @@ void BFConsole::createSingletons()
         // The literal 6 is the binary's, at this the only call site.
         WeaponTemplateManager* weaponTemplates = new WeaponTemplateManager(6);   // 0x24
         checkPointer(weaponTemplates);
-        KitTemplateManager* kitTemplates = new KitTemplateManager;          // 0x2C
+        KitTemplateManager* kitTemplates = new KitTemplateManager;          // 0x30
         checkPointer(kitTemplates);
         BFGraphCreator* graphCreator = new BFGraphCreator;                  // 4
         checkPointer(graphCreator);
@@ -842,11 +842,31 @@ void BFConsole::aiMainInit()
     AITemplateManager::m_instance->createWreckTemplates();
 }
 
+// BF2.exe PE 80D830. Drops the in-flight projectiles, rebuilds the four template managers in the
+// order createSingletons builds them, and puts the game back into precaching.
 void BFConsole::reset()
 {
-    std::fprintf(stderr, "[FRONTIER] dice::hfe::ai::BFConsole::reset reached\n");
-    std::fflush(stderr);
-    std::abort();
+    if (CommonSingletonServer::m_iBFCollisionHandler)
+        static_cast<IBFCollisionHandler*>(CommonSingletonServer::m_iBFCollisionHandler)
+            ->removeAllProjectiles();
+
+    if (AITemplateManager::m_instance)
+        delete AITemplateManager::m_instance;
+    if (AITemplatePlugInManager::m_instance)
+        delete AITemplatePlugInManager::m_instance;
+    if (WeaponTemplateManager::m_instance)
+        delete WeaponTemplateManager::m_instance;
+    if (KitTemplateManager::m_instance)
+        delete KitTemplateManager::m_instance;
+
+    checkPointer(new AITemplateManager);
+    checkPointer(new AITemplatePlugInManager);
+    // The literal 6 matches createSingletons.
+    checkPointer(new WeaponTemplateManager(6));
+    checkPointer(new KitTemplateManager);
+
+    if (CommonSingletonServer::m_iaiGame)
+        static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame)->setIsPrecaching(true);
 }
 
 void BFConsole::addAIRadioMessage(const std::string& /*name*/, float, float, float)

@@ -85,9 +85,12 @@ BotNavigation::BotNavigation(BotMain* owner)
 // [FRONTIER] Remaining navigation operations stop until implemented.
 // [RETIRE-WHEN: aidll-02-skeleton] Remove when the corresponding implementation is complete and validated.
 
+// PE 10175B20. Path resources go back to their owners through reset, then both paths are deleted.
 BotNavigation::~BotNavigation()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotNavigation::~BotNavigation");
+    reset();
+    delete m_polygonPath;
+    delete m_clusterPath;
 }
 
 // PE 101742E0.

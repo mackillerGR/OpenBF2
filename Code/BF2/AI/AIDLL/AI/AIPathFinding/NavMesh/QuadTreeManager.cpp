@@ -22,11 +22,13 @@ QuadTreeManager::QuadTreeManager()
     // m_numberOfIslands deliberately not initialised - the binary steps over it.
 }
 
-// [FRONTIER] Manager destruction requires the remaining quad-tree and debug-mesh cleanup.
-// [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding QuadTreeManager operation.
+// PE 10156970. Frees the islands and both debug-mesh lists; the remaining containers destroy
+// themselves.
 QuadTreeManager::~QuadTreeManager()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::~QuadTreeManager");
+    destroyQuadTrees();
+    unloadDebugMeshes();
+    unloadDebugClusterMeshes();
 }
 
 // Returns the selected island or cluster graph. The caller must supply a valid island index.
@@ -191,14 +193,28 @@ void QuadTreeManager::loadGTSDebugMeshes(const std::string&)
     BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::loadGTSDebugMeshes");
 }
 
+// PE 10154B90. Retail removes each mesh from the list, releases its render buffer through the
+// render utilities and frees its six arrays and the mesh, then clears the list. Only the empty
+// case is written: the per-mesh release needs the DebugMesh layout, and every builder that fills
+// the list is itself still a frontier, so a non-empty list cannot be reached in this tree.
+// [FRONTIER] [RETIRE-WHEN: aidll-debug-meshes] Write the per-mesh release with the builders.
 void QuadTreeManager::unloadDebugMeshes()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::unloadDebugMeshes");
+    if (!m_debugMeshes.empty())
+        BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::unloadDebugMeshes (non-empty mesh list)");
+    m_debugMeshes.clear();
 }
 
+// PE 10154AC0. Retail removes each mesh from the list, releases its render buffer through the
+// render utilities and frees its six arrays and the mesh, then clears the list. Only the empty
+// case is written: the per-mesh release needs the DebugMesh layout, and every builder that fills
+// the list is itself still a frontier, so a non-empty list cannot be reached in this tree.
+// [FRONTIER] [RETIRE-WHEN: aidll-debug-meshes] Write the per-mesh release with the builders.
 void QuadTreeManager::unloadDebugClusterMeshes()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::unloadDebugClusterMeshes");
+    if (!m_debugClusterMeshes.empty())
+        BF2_AI_FRONTIER("dice::hfe::ai::QuadTreeManager::unloadDebugClusterMeshes (non-empty mesh list)");
+    m_debugClusterMeshes.clear();
 }
 
 void QuadTreeManager::triangulateDebugMeshes(std::list<DebugMesh*>&)

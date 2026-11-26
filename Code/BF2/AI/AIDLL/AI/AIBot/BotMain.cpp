@@ -17,6 +17,7 @@
 #include "../../../AIInterface/BFKnowledge/BFCollisionHandler.h"
 #include "BotSenses.h"
 #include "CommunicationAgent.h"
+#include "../../../AIInterface/BFKnowledge/AIPlayerFactory.h"     // the destructor's destroy
 #include "BotSubObjects.h"
 #include "../AIBotBehaviour/UrgencyMerger.h"
 #include "../AIBotBehaviour/BotBehaviour.h"
@@ -241,9 +242,29 @@ float* BotMain::maBasicWeights = 0;
 
 // [FRONTIER] Remaining bot lifecycle operations stop by name.
 // [RETIRE-WHEN: aidll-02-skeleton] Complete and validate the corresponding BotMain operation.
+// PE 10183ED0. The bot deletes what it owns - including the memory and the two callbacks it
+// was handed - and has the player factory destroy its AI player after the player removes itself
+// from the game. The fire-correction block is freed without a null test.
 BotMain::~BotMain()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::BotMain::~BotMain");
+    delete m_waypoints;
+    delete[] m_behaviours;
+    delete[] m_behaviourUrgencies;
+    delete m_memory;
+    delete m_deathCallBack;
+    delete m_spawnCallBack;
+    delete m_bapContext;
+    if (m_player)
+    {
+        m_player->removePlayerFromGame();
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->destroy(m_player);
+    }
+    delete m_navigation;
+    delete m_squad;
+    delete m_sensingAgent;
+    delete m_communication;
+    m_squadMember = 0;
+    delete m_fireCorrection;
 }
 
 // PE 1017ECE0. Resets this bot's state in the plan generator of each behaviour that has one,

@@ -261,12 +261,11 @@ Strategy::Strategy(const std::string& name)
     m_specificObjectModifiers.resize(0, 0.0f);
 }
 
-// [TEMP] [CHOSEN, not recovered] Strategies are destroyed only by StrategyManager::reset, which
-// remains a frontier. [RETIRE-WHEN: strategy-dtor] Replace with the PE destructor body once the
-// manager teardown is recovered and a level reload exercises it.
+// PE 100DE2D0. Only the modifier tree is released explicitly; the remaining members destroy
+// themselves.
 Strategy::~Strategy()
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::Strategy::~Strategy");
+    delete m_treeModifiers;
 }
 
 // PE 100DDE70.
