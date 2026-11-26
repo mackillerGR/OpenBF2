@@ -534,13 +534,16 @@ bool SquadMember::avoidArtillery(Vec3 position, double /*elapsed*/, int zoneSide
 
     m_havePath = true;
     m_flag4B = true;
-    // A one-point list for the waypoint class built by PE 1012CDF0 (vtable 1027F92C, 0x2C
-    // bytes): (tolerance 0, 60, 2, points), each point carrying a -1 handle. The class's update
-    // and current-waypoint bodies are not recovered, so the bot is not given it.
-    // [FRONTIER] [TEMP] [CHOSEN, not recovered] [RETIRE-WHEN: handled-waypoint-list]
-    // Recover PE 1012C870/1012C8C0/1012C780 and validate a bot fleeing artillery; then pass the
-    // list to Bot::setWaypoints and record the flee position when `found`.
-    BF2_AI_FRONTIER("dice::hfe::ai::SquadMember::avoidArtillery (waypoint list PE 1012CDF0)");
+    // PE 1017CCB9: a one-point strategic list (tolerance 0, 60, 2) with no strategic object.
+    std::list<StrategicWaypointList::Point> points;
+    StrategicWaypointList::Point point;
+    point.position = target;
+    point.strategicObject = static_cast<unsigned int>(-1);
+    points.push_back(point);
+    m_bot->setWaypoints(checkPointer(new StrategicWaypointList(0.0f, 60.0f, 2, points)));
+    if (found)
+        manager->setValidArtilleryFleePos(this, target);
+    return true;
 }
 
 // The armament section of PE 1017DAC0. A soldier whose active weapon is a primary or secondary
