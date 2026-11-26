@@ -39,7 +39,8 @@ public:
     // Returns whether the player was activated or queued successfully.
     virtual bool        activateBot(int playerId, int side, const std::string& name) = 0; // +0x14
     virtual void        deactivateBot(int& a, int b)                 = 0;   // +0x18
-    virtual void        deactivateBot(int a)                         = 0;   // +0x1C
+    // PE 100D3410 returns AL: false when the player had no dead bot to deactivate.
+    virtual bool        deactivateBot(int playerId)                  = 0;   // +0x1C
     virtual void        newPlayerCreated(bool b)                     = 0;   // +0x20
     virtual void        reactivateBot(int a)                         = 0;   // +0x24
     virtual void        switchSides(int a)                           = 0;   // +0x28
@@ -85,7 +86,7 @@ public:
     virtual void        registerFreeBot(Bot* bot);
     virtual bool        activateBot(int playerId, int side, const std::string& name);
     virtual void        deactivateBot(int& a, int b);
-    virtual void        deactivateBot(int a);
+    virtual bool        deactivateBot(int playerId);
     virtual void        newPlayerCreated(bool b);
     virtual void        reactivateBot(int a);
 

@@ -842,6 +842,26 @@ Bot* BotManager::getBotFromPlayerId(int playerId) const
     return getBotFromId(static_cast<unsigned int>(m_botByPlayerId[playerId]));
 }
 
+// PE 1018ED70. The bot's name is released for reuse whether or not it is deactivated; only a dead
+// bot is queued as deactivated, flagged, detached from its engine player and unmapped from the
+// player id. Returns the bot id, or -1 without a bot or for a living one.
+int BotManager::deactivateBotFromPlayerId(int playerId)
+{
+    Bot* const bot = getBotFromPlayerId(playerId);
+    if (!bot)
+        return -1;
+    static_cast<IAISettingsModifier*>(CommonSingletonServer::m_iaiSettingsModifier)
+        ->setBotNameUnused(bot->getPlayer()->getName());
+    const unsigned int botId = bot->getBotId();
+    if (!bot->isDead())
+        return -1;
+    m_deactivatedBots.push_back(botId);
+    bot->setAsDeactivated(true);
+    bot->getPlayer()->setPlayer(0);
+    m_botByPlayerId[playerId] = -1;
+    return static_cast<int>(botId);
+}
+
 Bot* BotManager::getBotFromName(const std::string&) const
 {
     BF2_AI_FRONTIER("dice::hfe::ai::BotManager::getBotFromName");

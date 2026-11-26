@@ -462,6 +462,28 @@ SquadMember* SquadManager::getSquadMember(int playerId, int side)
     return 0;
 }
 
+// Takes a departing player out of the first squad on its side that holds it: the member is
+// destroyed, the engine squad is left, and the leader is re-chosen. The side is one-based and
+// unchecked. PE 1012B140; [INFERRED] name.
+void SquadManager::removeSquadMember(int playerId, int side)
+{
+    std::vector<SquadCoordinator*>& coordinators = m_coordinators[side - 1];
+    for (unsigned int i = 0; i < coordinators.size(); ++i)
+    {
+        SquadCoordinator* const coordinator = coordinators[i];
+        int memberIndex;
+        SquadMember* const member = coordinator->getSquadMember(playerId, memberIndex);
+        if (!member)
+            continue;
+        IAIPlayer* const player = member->getPlayer();
+        coordinator->deleteSquadMember(memberIndex);
+        static_cast<IBFSquad*>(CommonSingletonServer::m_iBFSquad)
+            ->exitSquad(coordinator->getSquadId() + 1, player);
+        coordinator->updateSquadLeader();
+        return;
+    }
+}
+
 // The side is one-based and unchecked. Keep the live
 // unsigned-index scan and reload the coordinator entry after a successful member query.
 // The member index output is not consumed, and null coordinator entries are not guarded.

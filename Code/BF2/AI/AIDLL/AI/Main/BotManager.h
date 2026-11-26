@@ -204,7 +204,8 @@ public:
     // Returns whether the player's bot was reactivated on the requested side.
     bool reactivateBot(int playerId, int side, const std::string& name);
     void deactivateBot(int id);
-    void deactivateBotFromPlayerId(int playerId);                   // indexes m_botByPlayerId
+    // Returns the deactivated bot's id, or -1. PE 1018ED70.
+    int deactivateBotFromPlayerId(int playerId);                    // indexes m_botByPlayerId
 
 private:
 // Three priority queues hold pending bot work. Native container sizes depend on the compiler ABI.

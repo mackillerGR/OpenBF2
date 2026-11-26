@@ -167,6 +167,8 @@ SquadMember::~SquadMember()
     m_bot = 0;
 }
 
+void SquadMember::deleteRequest() { delete m_request; }
+
 IAIPlayer* SquadMember::getPlayer() { return m_player; }
 int SquadMember::getSide() { return m_side + 1; }
 

@@ -980,6 +980,26 @@ void SquadCoordinator::removeSquadMember(int index)
     m_formation->rebuildSlots();
 }
 
+// Removes and destroys the member at index, as removeSquadMember does, but also frees its request
+// record and, after the vector entry is gone, clears a bot's squad member before deleting the member.
+// No range guard. PE 101A4650; [INFERRED] name.
+void SquadCoordinator::deleteSquadMember(int index)
+{
+    SquadMember* member = m_squadMembers[index];
+    removeSquadMemberFire(member);
+    member->deleteRequest();
+    if (m_formation->isInFormation(member->getMemberIndex()))
+        m_formation->leaveFormation(member->getMemberIndex());
+    m_squadMembers.erase(m_squadMembers.begin() + index);
+    if (member->isBot())
+        member->getBot()->setSquadMember(0);
+    delete member;
+    for (unsigned int i = 0; i < m_squadMembers.size(); ++i)
+        m_squadMembers[i]->setMemberIndex(static_cast<int>(i));
+    updateSquadLeader();
+    m_formation->rebuildSlots();
+}
+
 // Writes the order position of the strategic object with the greatest gravity at m_v28 for the
 // member's vehicle type; false, leaving the output alone, without a member, an object or a mobile
 // unit vehicle. PE 101A1960; the name is [INFERRED].

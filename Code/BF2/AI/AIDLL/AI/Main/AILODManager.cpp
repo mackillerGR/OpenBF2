@@ -97,9 +97,13 @@ void AILODManager::updateBot(Bot*)
     BF2_AI_FRONTIER("dice::hfe::ai::AILODManager::updateBot");
 }
 
-void AILODManager::removePlayer(int)
+// PE 10089940. Forgets the player in both containers and drops it as the tracked player.
+void AILODManager::removePlayer(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AILODManager::removePlayer");
+    if (m_i44 == playerId)
+        m_i44 = -1;
+    m_playerStats.erase(playerId);
+    m_set16.erase(playerId);
 }
 
 } // namespace ai

@@ -12,6 +12,7 @@
 #include "../AIStrategicEntity/AIStrategicObjectManager.h"   // postLoadInitAreas
 #include "AIMain.h"                                            // IAIMain::spawnBots
 #include "../AIBot/SquadManager.h"                              // squad notification forwarders
+#include "AILODManager.h"                                       // eventPlayerDisconnect
 #include "../AIBot/SquadMember.h"                               // eventPlayerKilled
 #include "IBotManager.h"                                        // the bot lifecycle forwarders
 #include "../AIBot/BotMain.h"                                    // event_isRepaired
@@ -91,14 +92,23 @@ void AIEventCourier::eventPlayerCreated(bool isAI)
         IAIMain::m_instance->newPlayerCreated(isAI);      // IAIMain vtable +0x20
 }
 
+// Empty in retail: PE 100BF280 is a lone ret 4.
 void AIEventCourier::eventChangedKit(KitType)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventChangedKit");
 }
 
-void AIEventCourier::eventPlayerDisconnect(int)
+// PE 100BF2F0. The LOD manager forgets the player; a bot's player is deactivated, any other
+// player is handled as a departing human. No bot-manager null guard.
+void AIEventCourier::eventPlayerDisconnect(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIEventCourier::eventPlayerDisconnect");
+    if (AILODManager::m_instance)
+        AILODManager::m_instance->removePlayer(playerId);
+    if (!IAIMain::m_instance)
+        return;
+    if (IBotManager::instance->getBotFromPlayerId(playerId))
+        IAIMain::m_instance->deactivateBot(playerId);
+    else
+        IAIMain::m_instance->reactivateBot(playerId);
 }
 
 // PE 100BF340. The vehicle that was left is not used.

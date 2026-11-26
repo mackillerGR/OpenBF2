@@ -43,6 +43,7 @@ public:
     void newSquadLeader(int side, int squadId);
     void playerJoinsSquad(int playerId, int squadId, int side);
     void playerLeavesSquad(int playerId, int squadId, int side); // [INFERRED] name; PE 1012B230
+    void removeSquadMember(int playerId, int side);              // [INFERRED] name; PE 1012B140
     void resetSquads();                     // [INFERRED] name; PE 1012B810
     void unAssignSquads(int side);          // [INFERRED] name; PE 1012AC70, one-based side
     int releaseSquadsFromArea(int areaIndex, int side); // [INFERRED] name; PE 1012AC00

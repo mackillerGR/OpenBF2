@@ -267,9 +267,20 @@ void AIMain::deactivateBot(int& /*a*/, int /*b*/)
     BF2_AI_FRONTIER("dice::hfe::ai::AIMain::deactivateBot(int&, int)");
 }
 
-void AIMain::deactivateBot(int /*a*/)
+// PE 100D3410. The player leaves its squad, then its bot, if dead, is deactivated and taken off
+// its side's strategic AI. The player is not null-checked.
+bool AIMain::deactivateBot(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::deactivateBot(int)");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    SquadManager::m_instance->removeSquadMember(playerId, player->getSide());
+    const int botId = m_botManager->deactivateBotFromPlayerId(playerId);
+    if (botId == -1)
+        return false;
+    Bot* const bot = m_botManager->getBotFromId(static_cast<unsigned int>(botId));
+    if (m_sai[bot->getSide()])
+        m_sai[bot->getSide()]->removeBot(bot);
+    return true;
 }
 
 // Updates population counts when a player is created.
@@ -349,9 +360,22 @@ void AIMain::newPlayerCreated(bool isAI)
     }
 }
 
-void AIMain::reactivateBot(int /*a*/)
+// PE 100D4F10. A departing human player: the human count drops, the player leaves its squad and,
+// when humans count toward the bot limit, bots are spawned to refill a short population.
+void AIMain::reactivateBot(int playerId)
 {
-    BF2_AI_FRONTIER("dice::hfe::ai::AIMain::reactivateBot");
+    IAIPlayer* const player =
+        static_cast<IAIPlayerFactory*>(CommonSingletonServer::m_iaiPlayerFactory)->getPlayerFromId(playerId);
+    if (!player)
+        return;
+    --m_humanCount;
+    SquadManager::m_instance->removeSquadMember(playerId, player->getSide());
+    const IAISettings* const settings = static_cast<const IAISettings*>(CommonSingletonServer::m_iaiSettings);
+    if (!settings->getmaxBotsIncludeHumans())
+        return;
+    IAIGame* const game = static_cast<IAIGame*>(CommonSingletonServer::m_iaiGame);
+    if (m_botCount + m_humanCount < game->getMaxNumberOfPlayers())
+        spawnBots();
 }
 
 void AIMain::switchSides(int /*a*/)

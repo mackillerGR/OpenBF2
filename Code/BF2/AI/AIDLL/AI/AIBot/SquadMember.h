@@ -83,6 +83,9 @@ public:
         m_request->m_handle = handle;
     }
     // PE 1017BB70: no action, no handle. [INFERRED] name.
+    // Frees the request record without clearing the pointer; only deleteSquadMember calls it.
+    // [INFERRED] name. PE 1017BAA0.
+    void deleteRequest();
     void clearRequest() { m_request->m_action = 0; m_request->m_handle = static_cast<unsigned int>(-1); }
     // Leaves the squad formation if the member holds a slot. PE 1017BAC0; [INFERRED] name.
     void leaveFormation();

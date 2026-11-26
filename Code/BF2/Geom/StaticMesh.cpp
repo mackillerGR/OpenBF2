@@ -1249,8 +1249,11 @@ StaticMesh::~StaticMesh()
             for (unsigned int i = 0; i < count; ++i)
             {
                 unsigned char* const material = first + sizeof(StaticMeshMaterial) * i;
-                dx9rend::EngineTexture*& slot =
-                    *reinterpret_cast<dx9rend::EngineTexture**>(material + 332);
+                // Retail +0x14C is the parameter block's +0x120 CubeMap holder; the portable
+                // layout widens the block, so the field is reached the way the water draw does.
+                dx9rend::EngineTexture*& slot = *reinterpret_cast<dx9rend::EngineTexture**>(
+                    dx9rend::Ra::raMaterialFieldBytes(
+                        reinterpret_cast<StaticMeshMaterial*>(material)->m_parameters, 0x120));
                 if (slot)
                     dx9rend::textureReleaseRef(slot);   // nulls the slot itself
             }
