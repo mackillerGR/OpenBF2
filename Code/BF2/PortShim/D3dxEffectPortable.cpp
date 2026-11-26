@@ -91,6 +91,9 @@ struct Pass
     std::vector<std::unique_ptr<Param>> annotations;
     std::vector<StateAssign> states;
     ShaderRef vertex, pixel;
+    // Indices into states of those whose value names a parameter; built on first commit.
+    std::vector<size_t> parameterStates;
+    bool parameterStatesBuilt = false;
 };
 
 struct Technique
@@ -394,6 +397,7 @@ public:
     bool buildPass(Pass* pass);
     Shader* resolve(const ShaderRef& ref);
     void applyPass(Pass* pass);
+    void reapplyParameterStates(Pass* pass);
     void uploadConstants(Pass* pass);
     void uploadOne(Shader* shader);
     void applySampler(Param* sampler, unsigned stage);
@@ -1565,6 +1569,49 @@ void Effect::applyPass(Pass* pass)
     uploadConstants(pass);
 }
 
+// [CHOSEN, not recovered] D3DX contract: CommitChanges propagates parameter changes made inside an
+// active pass to the device, and that includes pass states whose value is a parameter, such as
+// `AlphaBlendEnable = (AlphaBlendEnable)` in the Ra shaders. Without this, such a state kept the
+// value the parameter had at BeginPass, so an entry drawn later in the same pass (the first-person
+// "Alpha" scope material) used the previous entry's blend state. Only states that name a
+// parameter are re-issued; constants and shaders are handled by uploadConstants as before.
+void Effect::reapplyParameterStates(Pass* pass)
+{
+    if (!pass->parameterStatesBuilt)
+    {
+        pass->parameterStatesBuilt = true;
+        for (size_t i = 0; i < pass->states.size(); ++i)
+        {
+            const StateAssign& state = pass->states[i];
+            if (state.name == "sampler" || state.name == "texture" || state.name == "vertexshader"
+                || state.name == "pixelshader" || state.name.find("shaderconstant") != string::npos)
+                continue;
+            if (stateTable().find(state.name) == stateTable().end())
+                continue;
+            string text;
+            for (char c : state.value)
+                if (!std::isspace(static_cast<unsigned char>(c)) && c != '<' && c != '>')
+                    text.push_back(c);
+            while (text.size() > 1 && text.front() == '(' && text.back() == ')')
+                text = text.substr(1, text.size() - 2);
+            if (param(text.c_str()))
+                pass->parameterStates.push_back(i);
+        }
+    }
+    for (size_t i : pass->parameterStates)
+    {
+        const StateAssign& state = pass->states[i];
+        const auto info = stateTable().find(state.name);
+        unsigned value = 0;
+        if (!stateValue(info->second, state.value, &value))
+            continue;
+        const unsigned stage = static_cast<unsigned>(state.index);
+        if (info->second.kind == 0) setRenderState(info->second.id, value);
+        else if (info->second.kind == 1) setStageState(stage, info->second.id, value);
+        else setSamplerState(stage, info->second.id, value);
+    }
+}
+
 // ----- the vtable -------------------------------------------------------------------------------
 
 Effect* self(void* p) { return static_cast<Effect*>(p); }
@@ -1956,7 +2003,11 @@ long fxBeginPass(void* e, unsigned index)
 long fxCommitChanges(void* e)
 {
     Effect* const fx = self(e);
-    if (fx->activePass) fx->uploadConstants(fx->activePass);
+    if (fx->activePass)
+    {
+        fx->reapplyParameterStates(fx->activePass);
+        fx->uploadConstants(fx->activePass);
+    }
     return kOk;
 }
 
