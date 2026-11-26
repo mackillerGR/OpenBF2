@@ -2,6 +2,7 @@
 
 #include "BF2.h"
 
+#include "../../Core/ShutdownTrace.h"            // [TEMP] android-exit-diag
 #include "BF2Engine.h"                              // [INFERRED] path: Game/Main/BF2Engine.cpp is
                                                     // attested, so a matching header is assumed.
 #include "../../Core/System.h"                      // [INFERRED] Core/System.cpp attested (anon-ns)
@@ -605,8 +606,10 @@ static int __stdcall bf2Main(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR
         window->removeMessageHandler(bf2MessageHandler);    // slot +0x34
 #endif
 
+    BF2_SHUTDOWN_STEP("bf2Main: main loop left");
     delete bf2;                                     // ~BF2 -> shutdown(): engine->shutdown(), delete engine
     g_system->storeAndTurnOffFPUExceptions();       // PE slot +0x28 (ELF +0x2C)
+    BF2_SHUTDOWN_STEP("bf2Main: returning");
     return 0;
 }
 

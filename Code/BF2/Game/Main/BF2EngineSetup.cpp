@@ -50,6 +50,7 @@ class IArchiveHandler;
 #include <vector>
 
 #include "../../Core/SmartItf.h"
+#include "../../Core/ShutdownTrace.h"   // [TEMP] android-exit-diag
 
 namespace dice {
 namespace hfe {
@@ -324,11 +325,14 @@ void BF2EngineSetup::shutdownNetwork()
 // The AI teardown here is broader than shutdownAI and must not be replaced by that helper.
 bool BF2EngineSetup::shutdownModules()
 {
+    BF2_SHUTDOWN_STEP("shutdownModules: network");
     shutdownNetwork();
+    BF2_SHUTDOWN_STEP("shutdownModules: log");
     m_engine->closeLog();               // BF2EngineSetup+0 -> BF2Engine::closeLog, 0x813BC58
 
     // The AI module - s_lateModules[1] in the ELF, see the note on aiInterfaceModule above. Nulled
     // here, which is what stops the reverse walk below from tearing it down a second time.
+    BF2_SHUTDOWN_STEP("shutdownModules: AI interface");
     if (aiInterfaceModule)
     {
         aiInterfaceModule->close();                     // IModule vtable +0x1C
@@ -347,6 +351,7 @@ bool BF2EngineSetup::shutdownModules()
         if (!s_lateModules[i])
             continue;
 
+        BF2_SHUTDOWN_STEP("shutdownModules: late module %d", i);
         s_lateModules[i]->close();
         s_lateModules[i]->release();
         classManager->unregisterServer(s_lateModules[i]);
@@ -358,6 +363,7 @@ bool BF2EngineSetup::shutdownModules()
         if (!s_modules[i])
             continue;
 
+        BF2_SHUTDOWN_STEP("shutdownModules: module %d", i);
         s_modules[i]->close();
         s_modules[i]->release();
         classManager->unregisterServer(s_modules[i]);
@@ -368,6 +374,7 @@ bool BF2EngineSetup::shutdownModules()
     // Note it clears the vector but does NOT free its buffer, and the slots were already nulled
     // one by one above; both facts are preserved.
     s_modules.clear();
+    BF2_SHUTDOWN_STEP("shutdownModules done");
 
     return true;
 }

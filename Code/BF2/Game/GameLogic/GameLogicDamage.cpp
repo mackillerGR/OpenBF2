@@ -1,5 +1,6 @@
 // Damage calculation and server-side application. [INFERRED] source path.
 
+#include <cstdio>
 #include "GameLogicDamage.h"
 
 #include <cmath>
@@ -455,6 +456,24 @@ void GameLogicDamage::serverGiveDamage(IObject* object, float damage, IPlayer* a
             if (attacker && attacker->getScoreData())                             // +0x174 - twice, unused
                 attacker->getScoreData();
             IObject* killerWeapon = (vehicle && vehicleKill) ? 0 : weapon;
+#if defined(__ANDROID__) || defined(BF2_TMPTRACE_KILLS)
+            // [TEMP] [CHOSEN, not recovered] Kill tally for the Android team-kill report.
+            // [RETIRE-WHEN: android-teamkill-diag] Remove once device logs settle whether bots
+            // team-kill more than they should.
+            if (attacker && attacker != victim)
+            {
+                static unsigned int s_teamKills = 0, s_enemyKills = 0;
+                const bool same = attacker->getTeam() == victim->getTeam();
+                ++(same ? s_teamKills : s_enemyKills);
+                const IObject* const shown = killerWeapon ? killerWeapon : vehicle;
+                std::fprintf(stderr, "[TEMP][KILLTALLY] attacker team %d -> victim team %d %s via %s "
+                             "(team kills %u, enemy kills %u)\n",
+                             attacker->getTeam(), victim->getTeam(), same ? "TEAMKILL" : "kill",
+                             shown && shown->getTemplate() ? shown->getTemplate()->getName().c_str() : "?",
+                             s_teamKills, s_enemyKills);
+                std::fflush(stderr);
+            }
+#endif
             {
                 python::PyRef args = python::buildArgs(victim, attacker, killerWeapon, assists, vehicle);
                 python::pythonHost()->handleEvent(static_cast<ScriptEvent>(1), args.get());

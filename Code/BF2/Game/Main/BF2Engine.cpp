@@ -93,6 +93,7 @@
 #include "../../Menu/IMenuLogic.h"          // menuLogic
 #include "../../Sound/BfSound/MusicPlayer.h"
 #include "../../IO/Input/PlayerInput.h"     // updateInput's per-tick copy
+#include "../../Core/ShutdownTrace.h"   // [TEMP] android-exit-diag
 #include <shellapi.h>                       // ShellExecuteA - restartBF2 / activateMod / browseModHomepage
 #endif
 
@@ -611,6 +612,7 @@ bool BF2Engine::shutdown()
 {
     // 1. Stop the server-liveness watchdog. byteC4 is the flag its loop polls; it is raised under
     //    mutex1 so the thread observes it before Thread::stop() waits on the join.
+    BF2_SHUTDOWN_STEP("BF2Engine::shutdown begin");
     if (checkServerAliveThread)
     {
         mutex1.lock();                  // _ZN4dice3hfe5Mutex4lockEv (0x83D2DA0), direct call at
@@ -653,7 +655,9 @@ bool BF2Engine::shutdown()
     frameEventManager->unregisterEventHandler((EventCategory)10, this);
     eventManager->unregisterEventHandler((EventCategory)11, this);
 
+    BF2_SHUTDOWN_STEP("shutdownGame begin");
     shutdownGame(true);                 // the bool argument is 1 (0x8131d2c-0x8131d31)
+    BF2_SHUTDOWN_STEP("shutdownGame done");
 
     // 6. World teardown. None of this has a counterpart in init() or initEngine(): mainTerrain and
     //    the object templates are created by level loading, so shutdown() is doing double duty as
@@ -670,8 +674,10 @@ bool BF2Engine::shutdown()
     world::SupplyDropManager::Instance();
     world::SupplyDropManager::Release();
 
+    BF2_SHUTDOWN_STEP("templates deleted");
     shutdownSettingsRepostitory();      // mirrors init()'s initSettingsRepostitory()
     shutdownEngine();
+    BF2_SHUTDOWN_STEP("BF2Engine::shutdown done");
 
     return true;
 }
@@ -1077,13 +1083,16 @@ void BF2Engine::shutdownGame(bool activateMenuAfter)   // bool from BF2.exe 0x40
 
     if (game)                                   // re-tested at 0x8138090 - it cannot have changed
     {
+        BF2_SHUTDOWN_STEP("shutdownGame: game->shutdown");
         game->shutdown();                                   // IGame vtable +0x1C, 0x81381d0
+        BF2_SHUTDOWN_STEP("shutdownGame: game shut down");
         classManager->unregisterSingleton("Game");           // ClassManager vtable +0x48, 0x81381fc
         game = 0;
     }
 
     if (gameLogic)                              // tested at 0x813809e
     {
+        BF2_SHUTDOWN_STEP("shutdownGame: gameLogic release");
         gameLogic->release();                                // IGameLogic vtable +0x08, 0x81381bc
         gameLogic = 0;
     }
@@ -1105,6 +1114,7 @@ void BF2Engine::shutdownGame(bool activateMenuAfter)   // bool from BF2.exe 0x40
     mapList->clear(false);
     mapList->save();
     if (activateMenuAfter && !quitNextFrameFlag && !byte51)
+        BF2_SHUTDOWN_STEP("shutdownGame: activateMenu");
         activateMenu(0);
 #endif
 }
@@ -1548,10 +1558,12 @@ bool BF2Engine::shutdownEngine()
         delete demo;
     demo = 0;
 
+    BF2_SHUTDOWN_STEP("shutdownEngine: window");
     if (window)                     // +0x10, virtual delete (vtable +4 in the ELF's type - see BF2Window.h)
         delete window;              // BF2Window: the game window, null in a dedicated image
     window = 0;
 
+    BF2_SHUTDOWN_STEP("shutdownEngine: render");
     if (bf2Render)                  // +0x18, virtual delete (vtable +4), 0x81394b0. type attested
         delete bf2Render;           //   from Demo::beginMainLoop's mangled parameter list;
     bf2Render = 0;                  //   [INFERRED] the field name
@@ -1570,6 +1582,7 @@ bool BF2Engine::shutdownEngine()
                                         // no `test`/`jz` between the load and the call, unlike every
                                         // other teardown in this function.
 
+    BF2_SHUTDOWN_STEP("shutdownEngine: modules");
     bf2EngineSetup->shutdownModules();      // +0x0C, non-virtual. This is the call that reaches
                                             // BF2Engine::closeLog() - see closeLog above.
     if (bf2EngineSetup)
