@@ -188,7 +188,7 @@ private:
     /* 164 */ int                 dwordA4; // [UNRESOLVED] Constructor sets -1; shutdown does not reset it.
 
     /* 168 */ Demo*               demo; // Owned demo controller.
-    /* 172 */ MusicPlayer*        musicPlayer; // Client-only allocation; original shutdown does not delete it.
+    /* 172 */ MusicPlayer*        musicPlayer; // Client-only allocation; the client's shutdown deletes it.
 #if !DEDICATED
     struct MovieEntry // Client-only movie queue payload.
     {

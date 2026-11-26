@@ -81,6 +81,7 @@
 #include <cstring>                          // memcpy - updateInput's sample copy
 #include <cstdio>                           // std::fprintf - the [FRONTIER] stop in startGame's client branch
 #include <cstdlib>                          // std::abort   - the same stop
+#include "../../Core/ShutdownTrace.h"   // [TEMP] android-exit-diag
 #if !DEDICATED
 #include "BF2ClientSeams.h"                 // [FRONTIER] client collaborators without recovered classes
 #include "../LocalProfileManager.h"        // native client startup interface
@@ -93,7 +94,6 @@
 #include "../../Menu/IMenuLogic.h"          // menuLogic
 #include "../../Sound/BfSound/MusicPlayer.h"
 #include "../../IO/Input/PlayerInput.h"     // updateInput's per-tick copy
-#include "../../Core/ShutdownTrace.h"   // [TEMP] android-exit-diag
 #include <shellapi.h>                       // ShellExecuteA - restartBF2 / activateMod / browseModHomepage
 #endif
 
@@ -659,6 +659,14 @@ bool BF2Engine::shutdown()
     shutdownGame(true);                 // the bool argument is 1 (0x8131d2c-0x8131d31)
     BF2_SHUTDOWN_STEP("shutdownGame done");
 
+#if !DEDICATED
+    // BF2.exe 0x408E32: the client deletes its music player here; its destructor removes the
+    // ECMenu handler the constructor registered.
+    if (musicPlayer)
+        delete musicPlayer;
+    musicPlayer = 0;
+#endif
+
     // 6. World teardown. None of this has a counterpart in init() or initEngine(): mainTerrain and
     //    the object templates are created by level loading, so shutdown() is doing double duty as
     //    an engine teardown and a world teardown.
@@ -669,10 +677,44 @@ bool BF2Engine::shutdown()
 
     world::objectTemplateManager->deleteAll(false);                    // vtable +0x38, argument 0
 
+#if !DEDICATED
+    // BF2.exe 0x408E91: the client empties the renderer's geometry-template registry.
+    // The manager header carries x86 renderer layouts, so the call goes through the same
+    // slot adapter SimpleObjectTemplate::getAnchorPos uses for +0x18.
+    if (g_geometryTemplateManager)
+    {
+#if defined(_MSC_VER) || defined(BF2_PORTABLE_CLIENT)
+        typedef void (__thiscall* ClearFn)(void*);
+#else
+        typedef void (*ClearFn)(void*);
+#endif
+        void* const manager = g_geometryTemplateManager;
+        reinterpret_cast<ClearFn>((*reinterpret_cast<void***>(manager))[0x28 / 4])(manager);
+    }
+#endif
+
     // Instance() is called and its result discarded, purely to force the singleton into existence
     // so that Release() has something to tear down. Faithful to the binary, odd as it reads.
     world::SupplyDropManager::Instance();
     world::SupplyDropManager::Release();
+
+#if !DEDICATED
+    // BF2.exe 0x408EAA: the client deletes the HUD manager, whose destructor removes its event
+    // handlers and input filter.
+    if (hudManager)
+        delete hudManager;
+    hudManager = 0;
+
+    // BF2.exe 0x408EC0 calls the VoIP client's +0x68 slot. The VoIP client is never constructed
+    // in this tree (RW-94), so the slot is reached only once it is.
+    // [FRONTIER] [RETIRE-WHEN: client-voip-optional] Declare and call the +0x68 method.
+    if (bf2VoipClient)
+    {
+        std::fprintf(stderr, "[FRONTIER] dice::hfe::BF2Engine::shutdown (BF2VoipClient +0x68) reached\n");
+        std::fflush(stderr);
+        std::abort();
+    }
+#endif
 
     BF2_SHUTDOWN_STEP("templates deleted");
     shutdownSettingsRepostitory();      // mirrors init()'s initSettingsRepostitory()

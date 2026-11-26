@@ -16,7 +16,7 @@ public:
     ~BfNewListBoxNode() override;
     TypeDescriptor* getType() override;
     unsigned int getObjectSize() override;
-    bool streamProperties(System*, Stream*) override; // 7C33E0 [FRONTIER]
+    bool streamProperties(System*, Stream*) override; // 7C33E0
     bool updateSelf(System*, const NodeState*, const Rect*, float) override;
     void paintSelf(System*, const NodeState*, const Rect*, const Rect*, RenderContext*) override;
     bool onEvent1(System*, const Rect*, const NodeState*, int, int, int) override; // 7C40A0 [FRONTIER]

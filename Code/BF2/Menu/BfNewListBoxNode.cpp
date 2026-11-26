@@ -138,13 +138,39 @@ bool BfNewListBoxNode::scrollDownOneRow(System*)
     return true;
 }
 
-// [FRONTIER] [TEMP] [CHOSEN, not recovered] Remaining stream and event methods stop on invocation.
-// [RETIRE-WHEN: hud-list-box-frame] Replace after all remaining list-box stream and event operations are implemented and validated.
-bool BfNewListBoxNode::streamProperties(System*, Stream*)
+// BF2.exe 0x7C33E0. The +0x48 word is streamed twice, first as the font and then as the select
+// action, as shipped. A streamed data object gets this node as its owner.
+bool BfNewListBoxNode::streamProperties(System* system, Stream* stream)
 {
-    std::fprintf(stderr, "[FRONTIER] dice::meme::BfNewListBoxNode::streamProperties reached\n");
-    std::fflush(stderr);
-    std::abort();
+    if (!Node::streamProperties(system, stream)) return false;
+    if (!stream->streamData(system, reinterpret_cast<Data*&>(m_data), "Listbox data",
+                            ListBoxData::getClassType())) return false;
+    if (m_data)
+        m_data->m_node = this;
+    if (!stream->streamFont(system, &m_font048, "Font")) return false;
+    if (!stream->streamAction(system, m_selectAction, "Select action", nullptr)) return false;
+    if (!stream->streamAction(system, m_focusAction, "Focus action", nullptr)) return false;
+    if (!stream->streamSound(system, &m_sound068, "Step sound")) return false;
+    if (!stream->streamSound(system, &m_sound06c, "Select sound")) return false;
+    if (!stream->streamSound(system, &m_sound070, "Failed select sound")) return false;
+    if (!stream->streamFloat(&m_rowHeight, "Row height")) return false;
+    if (!stream->streamBool(&m_selectable, "IsSelectable")) return false;
+    if (!stream->streamBool(&m_border, "Border or not")) return false;
+    if (!stream->streamFloat(&m_background.r, "Background color red")) return false;
+    if (!stream->streamFloat(&m_background.g, "Background color green")) return false;
+    if (!stream->streamFloat(&m_background.b, "Background color blue")) return false;
+    if (!stream->streamFloat(&m_background.a, "Background color alpha")) return false;
+    if (!stream->streamFloat(&m_scrollWidth, "Scrollbar width")) return false;
+    if (!stream->streamFloat(&m_frame.r, "Frame color red")) return false;
+    if (!stream->streamFloat(&m_frame.g, "Frame color green")) return false;
+    if (!stream->streamFloat(&m_frame.b, "Frame color blue")) return false;
+    if (!stream->streamFloat(&m_frame.a, "Frame color alpha")) return false;
+    if (!stream->streamFloat(&m_selection.r, "Select color red")) return false;
+    if (!stream->streamFloat(&m_selection.g, "Select color green")) return false;
+    if (!stream->streamFloat(&m_selection.b, "Select color blue")) return false;
+    if (!stream->streamFloat(&m_selection.a, "Select color alpha")) return false;
+    if (!stream->streamBool(&m_field109, "Show tooltip")) return false;
+    return stream->streamFloat(&m_scrollOffset, "Scrollbar offset from border") != false;
 }
 bool BfNewListBoxNode::updateSelf(System* system, const NodeState* state,
                                   const Rect* bounds, float delta)

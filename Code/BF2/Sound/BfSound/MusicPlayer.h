@@ -16,6 +16,8 @@ class MusicPlayer : public IEventListener
 {
 public:
     MusicPlayer();
+    // Removes the ECMenu handler the constructor registered.
+    ~MusicPlayer();
     // Changes between idle, mod music, and map music using the supplied level path.
     void setState(int mode, const char* levelPath);
     // Ignores dedicated mode and categories other than 10; event 3 starts map music and 5 stops it.
