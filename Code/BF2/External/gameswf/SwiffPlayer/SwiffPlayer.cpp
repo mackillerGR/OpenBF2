@@ -3084,6 +3084,23 @@ void as_profile_logout(const gameswf::fn_call& fn)
     }
 }
 
+// SwiffPlayer.dll 0x1004CA70. Saves the current profile, or the global settings when no profile
+// is logged in, then queues the host's quit request. The profile manager is not null-checked.
+void as_logic_quit(const gameswf::fn_call& fn)
+{
+    SWF_AS_TRACE("as_logic_quit");
+    BusyHost cursorHost = busyOpen();
+    ISwiffHost* h = g_swiffPlayerInstance->getSwiffHost();                           // +0x5C
+    ILocalProfileManager* lpm = static_cast<ILocalProfileManager*>(
+        classManager->getSingleton(renddx9abi::HostString("LocalProfileManager")));
+    if (lpm->getCurrentProfile())                                                    // +0x44
+        (void)lpm->saveCurrentProfile();                                             // +0x40
+    else
+        (void)lpm->saveGlobalSettings();                                             // +0xC4
+    (void)h->requestQuit();                                                          // +0xB0
+    busyClose(cursorHost);
+}
+
 void as_logic_disconnectGame(const gameswf::fn_call& fn)
 {
     SWF_AS_TRACE("as_logic_disconnectGame");
@@ -9013,6 +9030,7 @@ static void registerAsMethods(SwiffAsNamespace* general, SwiffAsNamespace** ns,
         }
         else if (::strcmp(n, "Logic") == 0)
         {
+            ns[i]->registerNativeCompatibleMethod<as_logic_quit>("quit");                       // 1004DF60
             ns[i]->registerNativeCompatibleMethod<as_logic_disconnectGame>("disconnectGame");
             ns[i]->registerNativeCompatibleMethod<as_logic_isGameRunning>("isGameRunning");
             ns[i]->registerNativeCompatibleMethod<as_logic_getActivateReason>("getActivateReason");
