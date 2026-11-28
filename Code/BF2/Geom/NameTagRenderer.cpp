@@ -192,7 +192,10 @@ void destroyVc71Map(vc71::map_layout& map, unsigned int nodeSize)
     unsigned char* const head = reinterpret_cast<unsigned char*>(map.head);
     if (head)
     {
-        eraseVc71Subtree(reinterpret_cast<unsigned char**>(head)[1], nodeSize - 3);
+        // The flag offset follows construct(): retail nodeSize - 3, moved by the wider links of a
+        // 64-bit port.
+        eraseVc71Subtree(reinterpret_cast<unsigned char**>(head)[1],
+                         nodeSize - 3 + vc71::nodeGrowth(nodeSize));
         unsigned char** const links = reinterpret_cast<unsigned char**>(head);
         links[0] = head;
         links[1] = head;
