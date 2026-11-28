@@ -1371,15 +1371,86 @@ unsigned int SkinnedMeshTemplate::getClassId() const
     return 0x870CA652u;
 }
 
-void SkinnedMeshTemplate::setLodDistance(int, int, float)
+// Stores one LOD switch distance. With geoms loaded it writes the geom record's distance vector
+// (+0x10), shifted down by the lods readLods skipped (+0x70); before loading it grows the base's
+// pending +0x60 vector<vector<float>>, zero-filled. Unlike the StaticMesh sibling the pending arm
+// has no 25 m default fill, and the lodSwitch message carries no bound.
+// Evidence: user-supplied 1.50 RendDX9.dll, vtable 0x1021C160 slot +0x30 = 0x10110070 (the tree's
+// reference build places it at 0x1010FAA0).
+void SkinnedMeshTemplate::setLodDistance(int geom, int lod, float distance)
 {
-    RD9_FRONTIER("dice::hfe::geom::SkinnedMeshTemplate::setLodDistance (PE 0x1010FAA0)", 0x30);
+    // `fcomp 0; test ah, 5; jnp` - a NaN distance passes, as in the StaticMesh body.
+    if (geom < 0 || lod < 0 || distance < 0.0f)
+    {
+        ::renddx9abi::logf("SkinnedMeshTemplate.cpp:255: Negative subgeometry lodswitch or "
+                           "distance %s", m_name.c_str());
+        return;
+    }
+
+    const unsigned int geomCount = m_vector0DC.first
+        ? static_cast<unsigned int>(m_vector0DC.last - m_vector0DC.first) / kSkinnedGeomBytes
+        : 0u;
+    if (geomCount != 0)
+    {
+        if (static_cast<unsigned int>(geom) >= geomCount)
+        {
+            ::renddx9abi::logf("SkinnedMeshTemplate.cpp:263:  Invalid Subgeometry %s",
+                               m_name.c_str());
+            return;
+        }
+
+        const int skipped = reinterpret_cast<const int*>(m_geomInts.first)[geom];
+        vc71::vector_layout& distances = *reinterpret_cast<vc71::vector_layout*>(
+            m_vector0DC.first + kSkinnedGeomBytes * geom + kSkinnedVectorBytes);
+        const int stored = distances.first
+            ? static_cast<int>((distances.last - distances.first) / sizeof(float))
+            : 0;
+        if (lod >= skipped + stored)
+        {
+            ::renddx9abi::logf("SkinnedMeshTemplate.cpp:271:  Invalid lodSwitch %s",
+                               m_name.c_str());
+            return;
+        }
+        if (lod >= skipped)
+            reinterpret_cast<float*>(distances.first)[lod - skipped] = distance;
+        return;
+    }
+
+    // the not-yet-loaded arm: sub_100EE8D0 grows the outer vector, sub_100ECF00 the inner one
+    // with a 0.0f fill.
+    static const vc71::vector_layout kEmptyDistances = { 0, 0, 0, 0 };
+    const unsigned int outerSize = m_lodDistances.first
+        ? static_cast<unsigned int>(m_lodDistances.last - m_lodDistances.first)
+              / sizeof(vc71::vector_layout)
+        : 0u;
+    if (outerSize < static_cast<unsigned int>(geom + 1))
+        vectorResizeRaw(m_lodDistances, static_cast<unsigned int>(geom + 1),
+                        sizeof(vc71::vector_layout), &kEmptyDistances);
+
+    vc71::vector_layout& inner =
+        reinterpret_cast<vc71::vector_layout*>(m_lodDistances.first)[geom];
+    const unsigned int innerSize = inner.first
+        ? static_cast<unsigned int>((inner.last - inner.first) / sizeof(float))
+        : 0u;
+    if (innerSize < static_cast<unsigned int>(lod + 1))
+    {
+        const float zero = 0.0f;
+        vectorResizeRaw(inner, static_cast<unsigned int>(lod + 1), sizeof(float), &zero);
+    }
+    reinterpret_cast<float*>(inner.first)[lod] = distance;
 }
 
-float SkinnedMeshTemplate::getLodDistance(int, int)
+// Returns a loaded geom's switch distance without the skipped-lod shift, or -1 before loading.
+// Evidence: user-supplied 1.50 RendDX9.dll, vtable 0x1021C160 slot +0x34 = 0x1010F0E0.
+float SkinnedMeshTemplate::getLodDistance(int geom, int lod)
 {
-    RD9_FRONTIER("dice::hfe::geom::SkinnedMeshTemplate::getLodDistance (PE 0x1010EB10)", 0x34);
-    return 0.0f;
+    if (m_vector0DC.first && m_vector0DC.last != m_vector0DC.first)
+    {
+        const vc71::vector_layout& distances = *reinterpret_cast<const vc71::vector_layout*>(
+            m_vector0DC.first + kSkinnedGeomBytes * geom + kSkinnedVectorBytes);
+        return reinterpret_cast<const float*>(distances.first)[lod];
+    }
+    return -1.0f;
 }
 
 unsigned int SkinnedMeshTemplate::getMemoryUsage(int)

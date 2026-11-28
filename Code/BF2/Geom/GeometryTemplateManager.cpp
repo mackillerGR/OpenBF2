@@ -769,6 +769,20 @@ void setCompressVertexData(bool value) { setTemplateBool(0x78, value); }
 int getMaxTextureRepeat() { return getTemplateInt(0x8C); }
 void setMaxTextureRepeat(int value) { setTemplateInt(0x88, value); }
 
+// setSubGeometryLodDistance geom lod distance: the active template's setLodDistance (+0x30) with
+// the three arguments as given (executor 0x100B3108, binding vtable 0x1020E180 in the user-supplied
+// 1.50 RendDX9.dll). Object .tweak files use it to place every LOD switch; without it each StaticMesh
+// keeps the 25 m-per-lod defaults. Like setLightmapSizeAll, the executor fetches the template again
+// without a null check.
+void setSubGeometryLodDistance(int geom, int lod, float distance)
+{
+    activeGeometryTemplate()->setLodDistance(geom, lod, distance);
+}
+
+BF2_CONSOLE_METHOD_3_STATIC_ACTIVE(setSubGeometryLodDistance, setSubGeometryLodDistance,
+                                   activeGeometryTemplate() != 0, int, int, float,
+                                   kGeometryTemplateConsoleTag)
+
 // setLightmapSizeAll geom lod size: the active template's setLightmapSize (+0x70) with the three
 // arguments as given; a StaticMesh template stores the size only while lightmapOverride is set.
 // The executor fetches the template again without a null check.
